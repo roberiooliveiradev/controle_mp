@@ -1,0 +1,17 @@
+Flask==3.0.3
+Flask[async]==3.0.3
+
+python-dotenv==1.0.1
+SQLAlchemy==2.0.32
+greenlet
+psycopg2-binary
+
+asyncpg
+
+pydantic
+pydantic[email]
+pydantic-settings
+
+gunicorn==23.0.0
+
+PyJWT

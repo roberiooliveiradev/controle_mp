@@ -1,0 +1,37 @@
+# app/infrastructure/database/models/request_item_model.py
+
+from datetime import datetime
+
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.infrastructure.database.base_model import BaseModel
+
+
+class RequestItemModel(BaseModel):
+    __tablename__ = "tbRequestItem"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    request_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tbRequest.id"), nullable=False
+    )
+
+    product_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tbProduct.id"), nullable=True
+    )
+
+    request_type_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tbRequestType.id"), nullable=False
+    )
+
+    request_status_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tbRequestStatus.id"), nullable=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

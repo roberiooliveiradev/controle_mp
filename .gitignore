@@ -1,0 +1,92 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+.env/
+.env.*
+**/.env
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# =========================
+# Flask
+# =========================
+instance/
+*.log
+
+# =========================
+# Database / Migrations
+# =========================
+*.db
+*.sqlite3
+*.sql
+alembic/versions/__pycache__/
+
+# =========================
+# Node / Frontend (Vite / React)
+# =========================
+node_modules/
+dist/
+build/
+.cache/
+.vite/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains
+.idea/
+*.iml
+
+# =========================
+# Docker (se usar futuramente)
+# =========================
+docker-compose.override.yml
+
+# =========================
+# Arquivos sensíveis
+# =========================
+*.pem
+*.key
+*.crt
+
+# =========================
+# Testes e relatórios
+# =========================
+coverage.xml
+reports/
+
+# =========================
+# Outros
+# =========================
+*.bak
+*.tmp

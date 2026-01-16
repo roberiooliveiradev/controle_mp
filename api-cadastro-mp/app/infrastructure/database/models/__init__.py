@@ -1,0 +1,13 @@
+from app.infrastructure.database.models.user_model import UserModel  # noqa: F401
+from app.infrastructure.database.models.role_model import RoleModel  # noqa: F401
+from app.infrastructure.database.models.revoked_token_model import RevokedTokenModel  # noqa: F401
+from app.infrastructure.database.models.request_model import RequestModel  # noqa: F401
+from app.infrastructure.database.models.request_item_model import RequestItemModel  # noqa: F401
+from app.infrastructure.database.models.request_item_field_model import RequestItemFieldModel  # noqa: F401
+from app.infrastructure.database.models.refresh_token_model import RefreshTokenModel  # noqa: F401
+from app.infrastructure.database.models.audit_log_model import AuditLogModel  # noqa: F401
+from app.infrastructure.database.models.conversation_model import ConversationModel  # noqa: F401
+from app.infrastructure.database.models.conversation_participant_model import ConversationParticipantModel  # noqa: F401
+from app.infrastructure.database.models.message_file_model import MessageFileModel  # noqa: F401
+from app.infrastructure.database.models.message_model import MessageModel  # noqa: F401
+from app.infrastructure.database.models.message_type_model import MessageTypeModel  # noqa: F401
