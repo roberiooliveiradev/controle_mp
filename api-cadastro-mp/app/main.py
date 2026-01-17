@@ -1,4 +1,6 @@
 from flask import Flask
+from flask_cors import CORS
+
 
 from app.api.middlewares.error_handler import register_error_handlers
 from app.api.routes import register_routes
@@ -14,6 +16,14 @@ def create_app() -> Flask:
 
 
 app = create_app()
+
+
+CORS(
+    app,
+    resources={r"/api/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}},
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

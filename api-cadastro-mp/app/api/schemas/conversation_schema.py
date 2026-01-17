@@ -1,7 +1,7 @@
 # app/api/schemas/conversation_schema.py
 from datetime import datetime
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel, Field, field_serializer
+from app.api.schemas._datetime_serializer import serialize_dt
 
 class UserMiniResponse(BaseModel):
     id: int
@@ -18,6 +18,10 @@ class ConversationResponse(BaseModel):
 
     created_by: UserMiniResponse
     assigned_to: UserMiniResponse | None
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_dates(self, value: datetime | None):
+        return serialize_dt(value)
 
 
 class ConversationListItemResponse(ConversationResponse):

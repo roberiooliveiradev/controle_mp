@@ -3,8 +3,8 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
-
+from pydantic import BaseModel, Field, field_serializer
+from app.api.schemas._datetime_serializer import serialize_dt
 
 class UserMiniResponse(BaseModel):
     id: int
@@ -21,12 +21,18 @@ class MessageFileResponse(BaseModel):
     sha256: Optional[str] = None
     created_at: datetime
 
-
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime):
+        return serialize_dt(value)
 class RequestMiniResponse(BaseModel):
     id: int
     message_id: int
     created_by: int
     created_at: datetime
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value: datetime):
+        return serialize_dt(value)
 
 
 class MessageResponse(BaseModel):
@@ -45,6 +51,9 @@ class MessageResponse(BaseModel):
     # leitura do usuário autenticado
     is_read: bool
 
+    @field_serializer("created_at", "updated_at")
+    def serialize_dates(self, value: datetime | None):
+        return serialize_dt(value)
 
 class CreateMessageFileInput(BaseModel):
     original_name: str = Field(min_length=1, max_length=255)

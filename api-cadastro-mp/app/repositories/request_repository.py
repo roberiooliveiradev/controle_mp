@@ -30,6 +30,21 @@ class RequestRepository(BaseRepository[RequestModel]):
         )
         return self._session.execute(stmt).scalars().first()
 
+    # ✅ NOVO
+    def get_by_message_ids(self, message_ids: list[int]) -> dict[int, RequestModel]:
+        """
+        Retorna um dict {message_id: RequestModel} para as mensagens informadas.
+        """
+        if not message_ids:
+            return {}
+
+        stmt = select(RequestModel).where(
+            RequestModel.message_id.in_(message_ids),
+            RequestModel.is_deleted.is_(False),
+        )
+        rows = self._session.execute(stmt).scalars().all()
+        return {r.message_id: r for r in rows}
+
     def soft_delete(self, request_id: int) -> bool:
         stmt = (
             update(RequestModel)

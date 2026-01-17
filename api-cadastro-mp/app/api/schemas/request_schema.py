@@ -3,7 +3,8 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
+from app.api.schemas._datetime_serializer import serialize_dt
 
 # -------- Fields --------
 class CreateRequestItemFieldInput(BaseModel):
@@ -30,6 +31,9 @@ class RequestItemFieldResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
+    @field_serializer("created_at", "updated_at")
+    def serialize_dates(self, value: datetime | None):
+        return serialize_dt(value)
 
 # -------- Items --------
 class CreateRequestItemInput(BaseModel):
@@ -55,6 +59,9 @@ class RequestItemResponse(BaseModel):
     updated_at: Optional[datetime] = None
     fields: List[RequestItemFieldResponse] = []
 
+    @field_serializer("created_at", "updated_at")
+    def serialize_dates(self, value: datetime | None):
+        return serialize_dt(value)
 
 # -------- Request --------
 class CreateRequestInput(BaseModel):
@@ -69,3 +76,7 @@ class RequestResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     items: List[RequestItemResponse] = []
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_dates(self, value: datetime | None):
+        return serialize_dt(value)
