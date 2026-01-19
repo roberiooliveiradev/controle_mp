@@ -11,6 +11,14 @@ from app.repositories.message_file_repository import MessageFileRepository
 from app.repositories.request_repository import RequestRepository
 from app.repositories.message_type_repository import MessageTypeRepository
 
+from datetime import timezone
+
+from app.infrastructure.realtime.socketio_server import socketio
+
+from app.core.interfaces.message_notifier import (
+    MessageNotifier,
+    MessageCreatedEvent,
+)
 
 class Role(IntEnum):
     ADMIN = 1
@@ -27,14 +35,17 @@ class MessageService:
         msg_repo: MessageRepository,
         file_repo: MessageFileRepository,
         req_repo: RequestRepository,
-        type_repo: MessageTypeRepository,  # ✅ NOVO
+        type_repo: MessageTypeRepository,
+        notifier: MessageNotifier,  
     ) -> None:
         self._conv_repo = conv_repo
         self._part_repo = part_repo
         self._msg_repo = msg_repo
         self._file_repo = file_repo
         self._req_repo = req_repo
-        self._type_repo = type_repo  # ✅ NOVO
+        self._type_repo = type_repo
+        self._notifier = notifier 
+
 
     def _get_conversation_or_404(self, conversation_id: int):
         row = self._conv_repo.get_row_by_id(conversation_id)
@@ -185,6 +196,17 @@ class MessageService:
         # marca conversa como “atividade recente”
         self._conv_repo.touch(conversation_id)
 
+        # WebSocket: nova mensagem criada
+        event = MessageCreatedEvent(
+            conversation_id=conversation_id,
+            message_id=msg.id,
+            sender_id=user_id,
+            body=msg.body,
+            created_at_iso=msg.created_at.astimezone(timezone.utc).isoformat(),
+        )
+        self._notifier.notify_message_created(event)
+
+
         return msg
 
     def delete_message(self, *, conversation_id: int, message_id: int, user_id: int, role_id: int) -> None:
@@ -219,4 +241,15 @@ class MessageService:
             return 0
 
         self._part_repo.set_last_read(conversation_id=conversation_id, user_id=user_id, last_read_message_id=max_id)
+
+        socketio.emit(
+            "conversation:read",
+            {
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+                "last_read_message_id": max_id,
+            },
+            room=f"conversation:{conversation_id}",
+        )
+
         return 1

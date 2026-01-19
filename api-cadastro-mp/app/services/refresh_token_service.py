@@ -30,7 +30,7 @@ class RefreshTokenService:
             user_id=user_id,
             token_hash=_sha256(refresh_token),
             jti=str(claims["jti"]),
-            issued_at=datetime.utcnow(),
+            issued_at=datetime.now(timezone.utc),
             expires_at=expires_at,
             revoked_at=None,
             replaced_by_jti=None,
@@ -51,7 +51,7 @@ class RefreshTokenService:
             raise UnauthorizedError("Refresh token inválido ou revogado.")
 
         # expiração adicional (além do jwt.decode)
-        if stored.expires_at < datetime.utcnow():
+        if stored.expires_at < datetime.now(timezone.utc):
             self._repo.revoke(token_id=stored.id, reason="expired")
             raise UnauthorizedError("Refresh token expirado.")
 

@@ -20,6 +20,11 @@ from app.repositories.request_repository import RequestRepository
 from app.repositories.message_type_repository import MessageTypeRepository  
 from app.services.message_service import MessageService
 
+from app.infrastructure.realtime.socketio_message_notifier import (
+    SocketIOMessageNotifier,
+)
+
+
 bp_msg = Blueprint(
     "messages",
     __name__,
@@ -82,6 +87,7 @@ def _build_service(session) -> MessageService:
         file_repo=MessageFileRepository(session),
         req_repo=RequestRepository(session),
         type_repo=MessageTypeRepository(session),  
+        notifier=SocketIOMessageNotifier(),
     )
 
 

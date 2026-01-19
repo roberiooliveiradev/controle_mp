@@ -1,6 +1,10 @@
 Flask==3.0.3
 flask-cors
 
+flask-socketio==5.3.6
+python-socketio==5.11.4
+eventlet==0.36.1
+
 python-dotenv==1.0.1
 SQLAlchemy==2.0.32
 greenlet
@@ -15,3 +19,4 @@ pydantic-settings
 gunicorn==23.0.0
 
 PyJWT
+

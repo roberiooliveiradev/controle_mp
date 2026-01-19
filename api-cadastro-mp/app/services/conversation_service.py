@@ -5,6 +5,10 @@ from app.core.exceptions import NotFoundError, ForbiddenError
 from app.infrastructure.database.models.conversation_model import ConversationModel
 from app.repositories.conversation_repository import ConversationRepository
 
+from app.core.interfaces.conversation_notifier import ConversationNotifier
+from datetime import timezone
+from app.core.interfaces.conversation_notifier import ConversationCreatedEvent
+
 
 class Role(IntEnum):
     ADMIN = 1
@@ -13,8 +17,14 @@ class Role(IntEnum):
 
 
 class ConversationService:
-    def __init__(self, conversation_repository: ConversationRepository) -> None:
+    def __init__(
+        self,
+        conversation_repository: ConversationRepository,
+        notifier: ConversationNotifier, 
+    ) -> None:
         self._repo = conversation_repository
+        self._notifier = notifier
+
 
     def _can_access(self, *, role_id: int, user_id: int, created_by: int) -> bool:
         if role_id in (Role.ADMIN, Role.ANALYST):
@@ -49,7 +59,19 @@ class ConversationService:
             assigned_to=assigned_to,
             has_flag=has_flag,
         )
-        return self._repo.add(model)
+
+        conv = self._repo.add(model)
+
+        event = ConversationCreatedEvent(
+            conversation_id=conv.id,
+            title=conv.title,
+            created_by=conv.created_by,
+            assigned_to=conv.assigned_to,
+            created_at_iso=conv.created_at.astimezone(timezone.utc).isoformat(),
+        )
+
+        self._notifier.notify_conversation_created(event)
+        return conv
 
     def update_conversation(
         self,

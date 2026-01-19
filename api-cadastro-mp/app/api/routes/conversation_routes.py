@@ -13,7 +13,18 @@ from app.api.schemas.conversation_schema import (
     UserMiniResponse,
 )
 
+from app.infrastructure.realtime.socketio_conversation_notifier import (
+    SocketIOConversationNotifier,
+)
+
 bp_conv = Blueprint("conversations", __name__, url_prefix="/conversations")
+
+def _build_service(session) -> ConversationService:
+    """Centraliza a criação do ConversationService."""
+    return ConversationService(
+        ConversationRepository(session),
+        notifier=SocketIOConversationNotifier(),
+    )
 
 
 def _auth_user():
@@ -49,8 +60,13 @@ def list_conversations():
     user_id, role_id = _auth_user()
 
     with db_session() as session:
-        service = ConversationService(ConversationRepository(session))
-        rows = service.list_conversations(user_id=user_id, role_id=role_id, limit=limit, offset=offset)
+        service = _build_service(session)
+        rows = service.list_conversations(
+            user_id=user_id,
+            role_id=role_id,
+            limit=limit,
+            offset=offset,
+        )
 
     payload = []
     for row in rows:
@@ -68,7 +84,10 @@ def create_conversation():
     payload = CreateConversationRequest.model_validate(request.get_json(force=True))
 
     with db_session() as session:
-        service = ConversationService(ConversationRepository(session))
+        service = ConversationService(
+            ConversationRepository(session),
+            notifier=SocketIOConversationNotifier(),
+        )
         conv = service.create_conversation(
             title=payload.title,
             created_by=user_id,
@@ -87,8 +106,12 @@ def get_conversation(conversation_id: int):
     user_id, role_id = _auth_user()
 
     with db_session() as session:
-        service = ConversationService(ConversationRepository(session))
-        row = service.get_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        service = _build_service(session)
+        row = service.get_conversation(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role_id=role_id,
+        )
 
     return jsonify(_row_to_response(row)), 200
 
@@ -100,7 +123,7 @@ def update_conversation(conversation_id: int):
     payload = UpdateConversationRequest.model_validate(request.get_json(force=True))
 
     with db_session() as session:
-        service = ConversationService(ConversationRepository(session))
+        service = _build_service(session)
         service.update_conversation(
             conversation_id=conversation_id,
             user_id=user_id,
@@ -120,7 +143,7 @@ def delete_conversation(conversation_id: int):
     user_id, role_id = _auth_user()
 
     with db_session() as session:
-        service = ConversationService(ConversationRepository(session))
+        service = _build_service(session)
         service.delete_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
     return ("", 204)
