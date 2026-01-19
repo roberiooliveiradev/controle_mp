@@ -6,7 +6,6 @@ import { Layout } from "../ui/Layout";
 
 import LoginPage from "../../pages/LoginPage";
 import ConversationsPage from "../../pages/ConversationsPage";
-import ConversationDetailPage from "../../pages/ConversationDetailPage";
 
 export function AppRouter() {
   return (
@@ -23,8 +22,10 @@ export function AppRouter() {
           }
         >
           <Route index element={<Navigate to="/conversations" replace />} />
+
+          {/* mesma página para /conversations e /conversations/:id */}
           <Route path="conversations" element={<ConversationsPage />} />
-          <Route path="conversations/:id" element={<ConversationDetailPage />} />
+          <Route path="conversations/:id" element={<ConversationsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
