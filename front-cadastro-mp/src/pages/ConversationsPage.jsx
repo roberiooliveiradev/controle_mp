@@ -23,8 +23,16 @@ const MIN_LEFT = 260;
 const MAX_LEFT = 620;
 const DIVIDER_W = 8;
 
+const MESSAGE_TYPE_TEXT = 1;
+const MESSAGE_TYPE_REQUEST = 2;
+
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
+}
+
+function hasFiles(e) {
+  const types = e.dataTransfer?.types;
+  return types && Array.from(types).includes("Files");
 }
 
 export default function ConversationsPage() {
@@ -41,6 +49,11 @@ export default function ConversationsPage() {
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState("");
 
+  // drag & drop anexos
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const dragDepthRef = useRef(0);
+  const [incomingFiles, setIncomingFiles] = useState([]);
+
   const selectedId = id ? Number(id) : null;
   const myUserId = user?.id;
 
@@ -50,7 +63,7 @@ export default function ConversationsPage() {
   );
 
   // -------------------------
-  // ✅ Create conversation (sem flag)
+  // Create conversation
   // -------------------------
   const [newTitle, setNewTitle] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
@@ -73,7 +86,7 @@ export default function ConversationsPage() {
 
       setNewTitle("");
 
-      // atualiza lista
+      // atualiza lista (tenta refetch; fallback local)
       try {
         const data = await listConversationsApi({ limit: 50, offset: 0 });
         setConversations(Array.isArray(data) ? data : data?.items ?? []);
@@ -216,14 +229,7 @@ export default function ConversationsPage() {
 
     requestAnimationFrame(() => {
       const el = container.querySelector(`[data-message-id="${firstUnread.id}"]`);
-      if (el) {
-        el.scrollIntoView({ block: "start", behavior: "smooth" });
-      } else {
-        requestAnimationFrame(() => {
-          const el2 = container.querySelector(`[data-message-id="${firstUnread.id}"]`);
-          if (el2) el2.scrollIntoView({ block: "start", behavior: "smooth" });
-        });
-      }
+      if (el) el.scrollIntoView({ block: "start", behavior: "smooth" });
     });
 
     return true;
@@ -256,7 +262,7 @@ export default function ConversationsPage() {
   }, []);
 
   // -------------------------
-  // Load chat when selecting conversation (regra nova)
+  // Load chat when selecting conversation
   // -------------------------
   useEffect(() => {
     let alive = true;
@@ -266,6 +272,9 @@ export default function ConversationsPage() {
         setConv(null);
         setMessages([]);
         setChatError("");
+        setIncomingFiles([]);
+        setIsDraggingFiles(false);
+        dragDepthRef.current = 0;
         return;
       }
 
@@ -283,13 +292,9 @@ export default function ConversationsPage() {
         const items = Array.isArray(m) ? m : m?.items ?? [];
         setMessages(items);
 
-        // badge
         const unreadCount = items.filter(isUnreadFromOthers).length;
         persistUnreadCounts((prev) => ({ ...(prev ?? {}), [selectedId]: unreadCount }));
 
-        // ✅ regra:
-        // - se houver não lidas: rolar até a primeira não lida
-        // - senão: rolar para o fim
         requestAnimationFrame(() => {
           if (!alive) return;
           const hasUnread = items.some(isUnreadFromOthers);
@@ -326,7 +331,7 @@ export default function ConversationsPage() {
   }, [selectedId]);
 
   // -------------------------
-  // SOCKET LISTENERS (regra nova de scroll)
+  // SOCKET LISTENERS
   // -------------------------
   useEffect(() => {
     if (!activeUserId) return;
@@ -334,10 +339,19 @@ export default function ConversationsPage() {
     const onConnect = () => {
       const cid = selectedIdRef.current;
       if (cid) joinConversationRoom(cid);
+      // eslint-disable-next-line no-console
       console.log("[socket] connected", socket.id);
     };
-    const onDisconnect = (r) => console.log("[socket] disconnected", r);
-    const onConnectError = (e) => console.log("[socket] connect_error", e?.message ?? e);
+
+    const onDisconnect = (r) => {
+      // eslint-disable-next-line no-console
+      console.log("[socket] disconnected", r);
+    };
+
+    const onConnectError = (e) => {
+      // eslint-disable-next-line no-console
+      console.log("[socket] connect_error", e?.message ?? e);
+    };
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
@@ -356,7 +370,6 @@ export default function ConversationsPage() {
 
       const currentSelected = selectedIdRef.current;
 
-      // não é a conversa aberta -> só badge
       if (!currentSelected || cid !== currentSelected) {
         persistUnreadCounts((prev) => {
           const next = { ...(prev ?? {}) };
@@ -367,9 +380,6 @@ export default function ConversationsPage() {
       }
 
       try {
-        // ✅ regra:
-        // se usuário está perto do fim -> rolar para o fim depois de atualizar
-        // senão -> não mexe no scroll
         const container = messagesContainerRef.current;
         const shouldAutoScroll = isNearBottom(container, 180);
 
@@ -379,19 +389,14 @@ export default function ConversationsPage() {
 
         persistUnreadCounts((prev) => ({ ...(prev ?? {}), [cid]: 0 }));
 
-        if (shouldAutoScroll) {
-          scrollToBottom();
-        }
+        if (shouldAutoScroll) scrollToBottom();
 
-        // opcional: marcar como lidas ao receber
         const me = myUserIdRef.current;
         const unreadIds = items.filter((x) => !x.is_read && x.sender?.id !== me).map((x) => x.id);
 
         if (unreadIds.length) {
           await markReadApi(currentSelected, unreadIds);
-          setMessages((prev) =>
-            prev.map((x) => (unreadIds.includes(x.id) ? { ...x, is_read: true } : x))
-          );
+          setMessages((prev) => prev.map((x) => (unreadIds.includes(x.id) ? { ...x, is_read: true } : x)));
         }
       } catch {}
     };
@@ -412,51 +417,81 @@ export default function ConversationsPage() {
     navigate(`/conversations/${conversationId}`);
   }
 
-  async function handleSend(text) {
+  // -------------------------
+  // Send message (inclui REQUEST)
+  // -------------------------
+  async function handleSend({ text, files, createRequest, requestItems }) {
     if (!selectedId) return;
 
+    const hasText = Boolean((text ?? "").trim());
+    const hasFiles = Array.isArray(files) && files.length > 0;
+    const hasRequest = Boolean(createRequest);
+
+    if (!hasText && !hasFiles && !hasRequest) return;
+
     const tempId = `tmp-${Date.now()}`;
+
+    const optimisticFiles = (files || []).map((f, idx) => ({
+      id: `tmp-file-${Date.now()}-${idx}`,
+      original_name: f.name,
+      stored_name: null,
+      content_type: f.type || null,
+      size_bytes: Number.isFinite(f.size) ? f.size : null,
+      sha256: null,
+      _local_preview_url: f.type?.startsWith("image/") ? URL.createObjectURL(f) : null,
+      _status: "pending",
+    }));
+
     const optimistic = {
       id: tempId,
       conversation_id: selectedId,
-      body: text,
+      body: hasRequest ? null : (text ?? null),
       created_at: new Date().toISOString(),
       sender: { id: myUserId, full_name: user?.full_name, email: user?.email },
-      files: [],
+      files: optimisticFiles,
       request: null,
       is_read: true,
       _status: "sending",
-      message_type_id: 1,
+      message_type_id: hasRequest ? MESSAGE_TYPE_REQUEST : MESSAGE_TYPE_TEXT,
     };
+
+    const shouldAutoScroll = isNearBottom(messagesContainerRef.current, 180);
 
     setMessages((prev) => [...prev, optimistic]);
 
     try {
       const payload = {
-        message_type_id: 1,
-        body: text,
+        message_type_id: hasRequest ? MESSAGE_TYPE_REQUEST : MESSAGE_TYPE_TEXT,
+        body: hasRequest ? null : (text ?? null),
         files: null,
-        create_request: false,
+        create_request: hasRequest,
+        request_items: hasRequest ? (requestItems ?? []) : null,
       };
 
       const created = await createMessageApi(selectedId, payload);
 
-      setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...created, _status: "sent" } : m))
-      );
+      const merged = {
+        ...created,
+        files: optimisticFiles,
+        _status: "sent",
+      };
 
-      // minha mensagem enviada -> desce (UX melhor)
-      scrollToBottom();
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? merged : m)));
+
+      if (shouldAutoScroll) scrollToBottom();
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       throw err;
     }
   }
 
-  function handleAttach(files) {
-    alert(`Você selecionou ${files.length} arquivo(s). O upload binário ainda precisa de rota no backend.`);
+  function handleAttach(_files) {
+    // opcional
   }
 
+  // -------------------------
+  // mark read ao chegar no fim do scroll
+  // -------------------------
   async function handleScrollMarkRead(e) {
     if (!selectedId) return;
 
@@ -469,11 +504,52 @@ export default function ConversationsPage() {
 
     try {
       await markReadApi(selectedId, unreadIds);
-      setMessages((prev) =>
-        prev.map((x) => (unreadIds.includes(x.id) ? { ...x, is_read: true } : x))
-      );
+      setMessages((prev) => prev.map((x) => (unreadIds.includes(x.id) ? { ...x, is_read: true } : x)));
       persistUnreadCounts((prev) => ({ ...(prev ?? {}), [selectedId]: 0 }));
     } catch {}
+  }
+
+  // -------------------------
+  // Drag & Drop handlers no painel do chat
+  // -------------------------
+  function onDragEnterChat(e) {
+    if (!selectedId) return;
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDraggingFiles(true);
+  }
+
+  function onDragOverChat(e) {
+    if (!selectedId) return;
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  }
+
+  function onDragLeaveChat(e) {
+    if (!selectedId) return;
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepthRef.current -= 1;
+    if (dragDepthRef.current <= 0) {
+      dragDepthRef.current = 0;
+      setIsDraggingFiles(false);
+    }
+  }
+
+  function onDropChat(e) {
+    if (!selectedId) return;
+    if (!hasFiles(e)) return;
+
+    e.preventDefault();
+    dragDepthRef.current = 0;
+    setIsDraggingFiles(false);
+
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (!files.length) return;
+
+    setIncomingFiles(files);
   }
 
   return (
@@ -500,7 +576,6 @@ export default function ConversationsPage() {
           <strong>Conversas</strong>
           <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>Clique para abrir o chat</div>
 
-          {/* ✅ Nova conversa (sem flag) */}
           <form onSubmit={handleCreateConversation} style={{ marginTop: 12, display: "grid", gap: 8 }}>
             <input
               value={newTitle}
@@ -573,6 +648,10 @@ export default function ConversationsPage() {
       </div>
 
       <section
+        onDragEnter={onDragEnterChat}
+        onDragOver={onDragOverChat}
+        onDragLeave={onDragLeaveChat}
+        onDrop={onDropChat}
         style={{
           border: "1px solid #eee",
           borderRadius: 14,
@@ -581,8 +660,30 @@ export default function ConversationsPage() {
           flexDirection: "column",
           minHeight: 0,
           background: "#fff",
+          position: "relative",
         }}
       >
+        {isDraggingFiles ? (
+          <div
+            style={{
+              position: "absolute",
+              inset: 10,
+              borderRadius: 14,
+              border: "2px dashed #bbb",
+              background: "rgba(0,0,0,0.06)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 16,
+              fontWeight: 700,
+              zIndex: 30,
+              pointerEvents: "none",
+            }}
+          >
+            Solte os arquivos para anexar
+          </div>
+        ) : null}
+
         {!selectedId ? (
           <div style={{ padding: 24, opacity: 0.75 }}>Selecione uma conversa à esquerda para abrir o chat.</div>
         ) : (
@@ -616,7 +717,12 @@ export default function ConversationsPage() {
               <div ref={bottomRef} />
             </div>
 
-            <ChatComposer onSend={handleSend} onAttach={handleAttach} />
+            <ChatComposer
+              onSend={handleSend}
+              onAttach={handleAttach}
+              incomingFiles={incomingFiles}
+              onIncomingFilesHandled={() => setIncomingFiles([])}
+            />
           </>
         )}
       </section>
