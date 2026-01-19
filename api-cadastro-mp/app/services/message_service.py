@@ -1,9 +1,12 @@
+# app/services/message_service.py
+
 from enum import IntEnum
+from datetime import timezone
 
 from app.core.exceptions import ForbiddenError, NotFoundError, ConflictError
 from app.infrastructure.database.models.message_model import MessageModel
 from app.infrastructure.database.models.message_file_model import MessageFileModel
-from app.infrastructure.database.models.request_model import RequestModel
+
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.conversation_participant_repository import ConversationParticipantRepository
 from app.repositories.message_repository import MessageRepository
@@ -11,14 +14,10 @@ from app.repositories.message_file_repository import MessageFileRepository
 from app.repositories.request_repository import RequestRepository
 from app.repositories.message_type_repository import MessageTypeRepository
 
-from datetime import timezone
-
 from app.infrastructure.realtime.socketio_server import socketio
+from app.core.interfaces.message_notifier import MessageNotifier, MessageCreatedEvent
 
-from app.core.interfaces.message_notifier import (
-    MessageNotifier,
-    MessageCreatedEvent,
-)
+from app.services.request_service import RequestService
 
 
 class Role(IntEnum):
@@ -37,7 +36,8 @@ class MessageService:
         file_repo: MessageFileRepository,
         req_repo: RequestRepository,
         type_repo: MessageTypeRepository,
-        notifier: MessageNotifier,  
+        notifier: MessageNotifier,
+        req_service: RequestService,
     ) -> None:
         self._conv_repo = conv_repo
         self._part_repo = part_repo
@@ -45,8 +45,8 @@ class MessageService:
         self._file_repo = file_repo
         self._req_repo = req_repo
         self._type_repo = type_repo
-        self._notifier = notifier 
-
+        self._notifier = notifier
+        self._req_service = req_service
 
     def _get_conversation_or_404(self, conversation_id: int):
         row = self._conv_repo.get_row_by_id(conversation_id)
@@ -66,6 +66,102 @@ class MessageService:
         if participant_last_read_message_id is None:
             return False
         return message_id <= participant_last_read_message_id
+
+    def create_message(
+        self,
+        *,
+        conversation_id: int,
+        user_id: int,
+        role_id: int,
+        message_type_id: int,
+        body: str | None,
+        files: list[dict] | None,
+        create_request: bool,
+        request_items: list[dict] | None = None,
+    ) -> MessageModel:
+        self._ensure_access(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+
+        # garante participant (pra leitura funcionar)
+        self._part_repo.ensure(conversation_id=conversation_id, user_id=user_id)
+
+        raw_body = body if body is not None else None
+        body_for_validation = raw_body.strip() if raw_body is not None else None
+
+        has_text = bool(body_for_validation)
+        has_files = bool(files)
+        has_request = bool(create_request)
+
+        if not (has_text or has_files or has_request):
+            raise ConflictError("Mensagem inválida: informe texto, arquivos ou requisição.")
+
+        request_type_id = self._type_repo.get_id_by_code("REQUEST")
+        if request_type_id is None:
+            raise ConflictError('Seed ausente: tbMessageTypes deve conter code="REQUEST".')
+
+        system_type_id = self._type_repo.get_id_by_code("SYSTEM")
+        if system_type_id is None:
+            raise ConflictError('Seed ausente: tbMessageTypes deve conter code="SYSTEM".')
+
+        if message_type_id == system_type_id:
+            raise ConflictError("Não é permitido criar mensagens do tipo SYSTEM via API.")
+
+        # Se vai criar request, o tipo tem que ser REQUEST
+        if create_request and message_type_id != request_type_id:
+            raise ConflictError("Para criar uma requisição, message_type_id deve ser REQUEST.")
+
+        # Se o tipo é REQUEST, garante que haverá request
+        if message_type_id == request_type_id and not create_request:
+            create_request = True
+
+        if create_request:
+            if not request_items or len(request_items) == 0:
+                raise ConflictError("Para criar uma request, informe ao menos 1 item (request_items).")
+
+        msg = MessageModel(
+            conversation_id=conversation_id,
+            sender_id=user_id,
+            message_type_id=message_type_id,
+            body=raw_body if has_text else None,
+        )
+        msg = self._msg_repo.add(msg)
+
+        # arquivos (metadados)
+        if files:
+            file_models: list[MessageFileModel] = []
+            for f in files:
+                file_models.append(
+                    MessageFileModel(
+                        message_id=msg.id,
+                        original_name=f["original_name"],
+                        stored_name=f["stored_name"],
+                        content_type=f.get("content_type"),
+                        size_bytes=f.get("size_bytes"),
+                        sha256=f.get("sha256"),
+                    )
+                )
+            self._file_repo.add_many(file_models)
+
+        # ✅ cria request + itens/fields via RequestService
+        if create_request:
+            self._req_service.create_request(
+                message_id=msg.id,
+                created_by=user_id,
+                role_id=role_id,
+                items=request_items or [],
+            )
+
+        self._conv_repo.touch(conversation_id)
+
+        event = MessageCreatedEvent(
+            conversation_id=conversation_id,
+            message_id=msg.id,
+            sender_id=user_id,
+            body=msg.body,
+            created_at_iso=msg.created_at.astimezone(timezone.utc).isoformat(),
+        )
+        self._notifier.notify_message_created(event)
+
+        return msg
 
     def list_messages(self, *, conversation_id: int, user_id: int, role_id: int, limit: int, offset: int):
         self._ensure_access(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
@@ -118,97 +214,6 @@ class MessageService:
                 message_id=msg.id,
             ),
         }
-
-    def create_message(
-        self,
-        *,
-        conversation_id: int,
-        user_id: int,
-        role_id: int,
-        message_type_id: int,
-        body: str | None,
-        files: list[dict] | None,
-        create_request: bool,
-    ) -> MessageModel:
-        self._ensure_access(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
-
-        # garante participant (pra leitura funcionar)
-        self._part_repo.ensure(conversation_id=conversation_id, user_id=user_id)
-
-        normalized_body = body.strip() if body is not None else None
-        has_text = bool(normalized_body)
-        has_files = bool(files)
-        has_request = bool(create_request)
-
-        if not (has_text or has_files or has_request):
-            raise ConflictError("Mensagem inválida: informe texto, arquivos ou requisição.")
-
-        # ✅ regra de consistência usando tbMessageTypes (por code)
-        request_type_id = self._type_repo.get_id_by_code("REQUEST")
-        if request_type_id is None:
-            raise ConflictError('Seed ausente: tbMessageTypes deve conter code="REQUEST".')
-
-        system_type_id = self._type_repo.get_id_by_code("SYSTEM")
-        if system_type_id is None:
-            raise ConflictError('Seed ausente: tbMessageTypes deve conter code="SYSTEM".')
-
-        # (Opcional) impedir criação de SYSTEM por usuário comum via API
-        # Se você quiser permitir admin/analyst criar SYSTEM, remova este if.
-        if message_type_id == system_type_id:
-            raise ConflictError("Não é permitido criar mensagens do tipo SYSTEM via API.")
-
-        # Se vai criar request, o tipo tem que ser REQUEST
-        if create_request and message_type_id != request_type_id:
-            raise ConflictError("Para criar uma requisição, message_type_id deve ser REQUEST.")
-
-        # Se o tipo é REQUEST, garante que haverá request (cria automaticamente)
-        if message_type_id == request_type_id and not create_request:
-            create_request = True
-
-        msg = MessageModel(
-            conversation_id=conversation_id,
-            sender_id=user_id,
-            message_type_id=message_type_id,
-            body=normalized_body,
-        )
-        msg = self._msg_repo.add(msg)
-
-        # arquivos (metadados)
-        if files:
-            file_models: list[MessageFileModel] = []
-            for f in files:
-                file_models.append(
-                    MessageFileModel(
-                        message_id=msg.id,
-                        original_name=f["original_name"],
-                        stored_name=f["stored_name"],
-                        content_type=f.get("content_type"),
-                        size_bytes=f.get("size_bytes"),
-                        sha256=f.get("sha256"),
-                    )
-                )
-            self._file_repo.add_many(file_models)
-
-        # request 1:1 com message
-        if create_request:
-            req = RequestModel(message_id=msg.id, created_by=user_id)
-            self._req_repo.add(req)
-
-        # marca conversa como “atividade recente”
-        self._conv_repo.touch(conversation_id)
-
-        # WebSocket: nova mensagem criada
-        event = MessageCreatedEvent(
-            conversation_id=conversation_id,
-            message_id=msg.id,
-            sender_id=user_id,
-            body=msg.body,
-            created_at_iso=msg.created_at.astimezone(timezone.utc).isoformat(),
-        )
-        self._notifier.notify_message_created(event)
-
-
-        return msg
 
     def delete_message(self, *, conversation_id: int, message_id: int, user_id: int, role_id: int) -> None:
         self._ensure_access(conversation_id=conversation_id, user_id=user_id, role_id=role_id)

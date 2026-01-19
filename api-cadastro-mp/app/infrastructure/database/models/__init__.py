@@ -1,3 +1,4 @@
+# # app/infrastructure/database/models/__init__.py
 from app.infrastructure.database.models.user_model import UserModel  # noqa: F401
 from app.infrastructure.database.models.role_model import RoleModel  # noqa: F401
 from app.infrastructure.database.models.revoked_token_model import RevokedTokenModel  # noqa: F401
@@ -11,3 +12,6 @@ from app.infrastructure.database.models.conversation_participant_model import Co
 from app.infrastructure.database.models.message_file_model import MessageFileModel  # noqa: F401
 from app.infrastructure.database.models.message_model import MessageModel  # noqa: F401
 from app.infrastructure.database.models.message_type_model import MessageTypeModel  # noqa: F401
+from app.infrastructure.database.models.request_status_model import RequestStatusModel  # noqa: F401
+from app.infrastructure.database.models.request_type_model import RequestTypeModel  # noqa: F401
+from app.infrastructure.database.models.field_type_model import FieldTypeModel  # noqa: F401

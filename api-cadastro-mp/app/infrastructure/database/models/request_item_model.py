@@ -18,7 +18,7 @@ class RequestItemModel(BaseModel):
     )
 
     product_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("tbProduct.id"), nullable=True
+        BigInteger, nullable=True
     )
 
     request_type_id: Mapped[int] = mapped_column(

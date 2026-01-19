@@ -211,8 +211,8 @@ CREATE TABLE IF NOT EXISTS "tbRequestItem"(
         FOREIGN KEY (request_type_id) REFERENCES "tbRequestType"(id),
     CONSTRAINT fk_ritem_rstatus
         FOREIGN KEY (request_status_id) REFERENCES "tbRequestStatus"(id),
-    CONSTRAINT fk_ritem_product
-        FOREIGN KEY (product_id) REFERENCES "tbProduct"(id)
+    -- CONSTRAINT fk_ritem_product
+    --     FOREIGN KEY (product_id) REFERENCES "tbProduct"(id)
 );
 
 -- =========================

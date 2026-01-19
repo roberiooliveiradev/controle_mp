@@ -12,17 +12,21 @@ from app.api.schemas.message_schema import (
     UserMiniResponse,
 )
 from app.infrastructure.database.session import db_session
+
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.conversation_participant_repository import ConversationParticipantRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.message_file_repository import MessageFileRepository
 from app.repositories.request_repository import RequestRepository
-from app.repositories.message_type_repository import MessageTypeRepository  
+from app.repositories.message_type_repository import MessageTypeRepository
+
+from app.repositories.request_item_repository import RequestItemRepository
+from app.repositories.request_item_field_repository import RequestItemFieldRepository
+
+from app.services.request_service import RequestService
 from app.services.message_service import MessageService
 
-from app.infrastructure.realtime.socketio_message_notifier import (
-    SocketIOMessageNotifier,
-)
+from app.infrastructure.realtime.socketio_message_notifier import SocketIOMessageNotifier
 
 
 bp_msg = Blueprint(
@@ -79,15 +83,23 @@ def _pack_response(item: dict) -> dict:
 
 
 def _build_service(session) -> MessageService:
-    """Centraliza a criação do service pra evitar repetição em todas as rotas."""
+    req_service = RequestService(
+        conv_repo=ConversationRepository(session),
+        msg_repo=MessageRepository(session),
+        req_repo=RequestRepository(session),
+        item_repo=RequestItemRepository(session),
+        field_repo=RequestItemFieldRepository(session),
+    )
+
     return MessageService(
         conv_repo=ConversationRepository(session),
         part_repo=ConversationParticipantRepository(session),
         msg_repo=MessageRepository(session),
         file_repo=MessageFileRepository(session),
         req_repo=RequestRepository(session),
-        type_repo=MessageTypeRepository(session),  
+        type_repo=MessageTypeRepository(session),
         notifier=SocketIOMessageNotifier(),
+        req_service=req_service,
     )
 
 
@@ -118,9 +130,11 @@ def create_message(conversation_id: int):
     payload = CreateMessageRequestInput.model_validate(request.get_json(force=True))
 
     files_payload = [f.model_dump() for f in (payload.files or [])] if payload.files else None
+    request_items_payload = [i.model_dump() for i in (payload.request_items or [])] if payload.request_items else None
 
     with db_session() as session:
         svc = _build_service(session)
+
         msg = svc.create_message(
             conversation_id=conversation_id,
             user_id=user_id,
@@ -129,7 +143,9 @@ def create_message(conversation_id: int):
             body=payload.body,
             files=files_payload,
             create_request=payload.create_request,
+            request_items=request_items_payload,
         )
+
         item = svc.get_message(
             conversation_id=conversation_id,
             message_id=msg.id,

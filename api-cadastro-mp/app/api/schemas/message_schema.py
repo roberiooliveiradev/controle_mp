@@ -1,10 +1,13 @@
 # app/api/schemas/message_schema.py
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_serializer
+
 from app.api.schemas._datetime_serializer import serialize_dt
+from app.api.schemas.request_schema import CreateRequestItemInput
+
 
 class UserMiniResponse(BaseModel):
     id: int
@@ -24,6 +27,8 @@ class MessageFileResponse(BaseModel):
     @field_serializer("created_at")
     def serialize_created_at(self, value: datetime):
         return serialize_dt(value)
+
+
 class RequestMiniResponse(BaseModel):
     id: int
     message_id: int
@@ -48,12 +53,12 @@ class MessageResponse(BaseModel):
     files: List[MessageFileResponse] = []
     request: Optional[RequestMiniResponse] = None
 
-    # leitura do usuário autenticado
     is_read: bool
 
     @field_serializer("created_at", "updated_at")
     def serialize_dates(self, value: datetime | None):
         return serialize_dt(value)
+
 
 class CreateMessageFileInput(BaseModel):
     original_name: str = Field(min_length=1, max_length=255)
@@ -64,19 +69,15 @@ class CreateMessageFileInput(BaseModel):
 
 
 class CreateMessageRequestInput(BaseModel):
-    # texto opcional
     body: Optional[str] = None
-
-    # tipo (FK)
     message_type_id: int
-
-    # anexos opcionais
     files: Optional[List[CreateMessageFileInput]] = None
 
-    # cria um Request vinculado à message (opcional)
     create_request: bool = False
+
+    # ✅ carrinho (itens)
+    request_items: Optional[List[CreateRequestItemInput]] = None
 
 
 class MarkReadRequest(BaseModel):
-    # ids de mensagens da conversa marcadas como lidas
     message_ids: List[int] = Field(min_length=1)
