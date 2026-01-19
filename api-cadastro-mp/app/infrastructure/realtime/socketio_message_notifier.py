@@ -6,9 +6,7 @@ from app.infrastructure.realtime.socketio_server import socketio
 
 
 class SocketIOMessageNotifier(MessageNotifier):
-    async def notify_message_created(self, event: MessageCreatedEvent) -> None:
-        # Room por conversa: conversation:<id>
-        room = f"conversation:{event.conversation_id}"
+    def notify_message_created(self, event: MessageCreatedEvent) -> None:
         payload = {
             "conversation_id": event.conversation_id,
             "message_id": event.message_id,
@@ -17,6 +15,9 @@ class SocketIOMessageNotifier(MessageNotifier):
             "created_at": event.created_at_iso,
         }
 
-        # Flask-SocketIO é sync no emit (mesmo em app async),
-        # então chamamos direto.
+        # 1) envia para quem está na conversa (room)
+        room = f"conversation:{event.conversation_id}"
         socketio.emit("message:new", payload, room=room)
+
+        # 2) fallback: envia global (para não depender do join)
+        socketio.emit("message:new", payload)

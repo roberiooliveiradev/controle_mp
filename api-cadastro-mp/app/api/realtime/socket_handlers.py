@@ -31,19 +31,32 @@ def register_socket_handlers() -> None:
         if not token:
             return disconnect()
 
+        decode_options = {"require": ["sub", "exp", "iat"]}
+
+        issuer = getattr(settings, "jwt_issuer", None)
+        audience = getattr(settings, "jwt_audience", None)
+
+        # Se não existir configuração, NÃO valida iss/aud
+        if not issuer:
+            decode_options["verify_iss"] = False
+        if not audience:
+            decode_options["verify_aud"] = False
+
         try:
-            payload = jwt.decode(
-                token,
-                settings.jwt_secret,
+            kwargs = dict(
+                key=settings.jwt_secret,
                 algorithms=["HS256"],
-                audience=getattr(settings, "jwt_audience", None),
-                issuer=getattr(settings, "jwt_issuer", None),
-                options={"require": ["sub", "exp", "iat"]},
+                options=decode_options,
             )
+            if issuer:
+                kwargs["issuer"] = issuer
+            if audience:
+                kwargs["audience"] = audience
+
+            payload = jwt.decode(token, **kwargs)
         except Exception:
             return disconnect()
 
-        # salva user_id no environ da conexão
         request.environ["auth_user_id"] = int(payload["sub"])
 
     @socketio.on("conversation:join")

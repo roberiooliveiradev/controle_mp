@@ -20,6 +20,7 @@ from app.core.interfaces.message_notifier import (
     MessageCreatedEvent,
 )
 
+
 class Role(IntEnum):
     ADMIN = 1
     ANALYST = 2
@@ -243,7 +244,7 @@ class MessageService:
         self._part_repo.set_last_read(conversation_id=conversation_id, user_id=user_id, last_read_message_id=max_id)
 
         socketio.emit(
-            "conversation:read",
+            "message:read",
             {
                 "conversation_id": conversation_id,
                 "user_id": user_id,
@@ -251,5 +252,4 @@ class MessageService:
             },
             room=f"conversation:{conversation_id}",
         )
-
         return 1

@@ -15,5 +15,5 @@ class MessageCreatedEvent:
 
 
 class MessageNotifier(Protocol):
-    async def notify_message_created(self, event: MessageCreatedEvent) -> None:
+    def notify_message_created(self, event: MessageCreatedEvent) -> None:
         ...

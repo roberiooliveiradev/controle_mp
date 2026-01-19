@@ -10,7 +10,6 @@ from app.api.realtime.socket_handlers import register_socket_handlers
 
 import app.infrastructure.database.models  # noqa: F401
 
-
 def create_app() -> Flask:
     app = Flask(__name__)
     configure_app(app)
