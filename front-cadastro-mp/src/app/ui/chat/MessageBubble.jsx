@@ -26,6 +26,10 @@ const FIELD_LABELS = {
   fornecedores: "Fornecedores",
 };
 
+const REQUEST_TYPE_ID_CREATE = 1;
+const REQUEST_TYPE_ID_UPDATE = 2;
+
+
 
 
 function fieldsToMap(fields) {
@@ -67,6 +71,7 @@ function ReadonlyInput({ label, value }) {
 
 function RequestItemReadonlyCard({ item, index }) {
   const map = fieldsToMap(item.fields);
+  const isUpdate = item?.request_type_id === REQUEST_TYPE_ID_UPDATE;
   const suppliers = parseSuppliers(map.fornecedores);
 
   const typeName = item?.request_type?.type_name || `#${item.request_type_id}`;
@@ -115,7 +120,9 @@ function RequestItemReadonlyCard({ item, index }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 10 }}>
-        <ReadonlyInput label={FIELD_LABELS.codigo_atual} value={map.codigo_atual} />
+        {isUpdate ? (
+            <ReadonlyInput label="Código atual" value={map.codigo_atual} />
+          ) : null}
         <ReadonlyInput label={FIELD_LABELS.grupo} value={map.grupo} />
         <ReadonlyInput label={FIELD_LABELS.novo_codigo} value={map.novo_codigo} />
         <div style={{ gridColumn: "1 / -1" }}>
