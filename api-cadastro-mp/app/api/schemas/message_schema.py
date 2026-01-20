@@ -6,7 +6,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, field_serializer
 
 from app.api.schemas._datetime_serializer import serialize_dt
-from app.api.schemas.request_schema import CreateRequestItemInput
+from app.api.schemas.request_schema import CreateRequestItemInput, RequestResponse
 
 
 class UserMiniResponse(BaseModel):
@@ -51,8 +51,14 @@ class MessageResponse(BaseModel):
 
     sender: UserMiniResponse
     files: List[MessageFileResponse] = []
+
+    # mini (como você já tinha)
     request: Optional[RequestMiniResponse] = None
 
+    # ✅ full (para renderizar o form read-only na timeline)
+    request_full: Optional[RequestResponse] = None
+
+    # leitura do usuário autenticado
     is_read: bool
 
     @field_serializer("created_at", "updated_at")
@@ -75,7 +81,7 @@ class CreateMessageRequestInput(BaseModel):
 
     create_request: bool = False
 
-    # ✅ carrinho (itens)
+    # carrinho (itens)
     request_items: Optional[List[CreateRequestItemInput]] = None
 
 

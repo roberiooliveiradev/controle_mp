@@ -13,6 +13,9 @@ from app.repositories.request_repository import RequestRepository
 from app.repositories.request_item_repository import RequestItemRepository
 from app.repositories.request_item_field_repository import RequestItemFieldRepository
 
+from app.repositories.request_status_repository import RequestStatusRepository
+from app.repositories.request_type_repository import RequestTypeRepository
+
 
 class Role(IntEnum):
     ADMIN = 1
@@ -29,12 +32,17 @@ class RequestService:
         req_repo: RequestRepository,
         item_repo: RequestItemRepository,
         field_repo: RequestItemFieldRepository,
+        # ✅ novos
+        status_repo: RequestStatusRepository,
+        type_repo: RequestTypeRepository,
     ) -> None:
         self._conv_repo = conv_repo
         self._msg_repo = msg_repo
         self._req_repo = req_repo
         self._item_repo = item_repo
         self._field_repo = field_repo
+        self._status_repo = status_repo
+        self._type_repo = type_repo
 
     # -------- Access helpers --------
     def _ensure_access_by_conversation(self, *, conversation_id: int, user_id: int, role_id: int) -> None:
@@ -100,7 +108,20 @@ class RequestService:
 
         return req
 
-    def get_request(self, *, request_id: int, user_id: int, role_id: int) -> tuple[RequestModel, list[RequestItemModel], dict[int, list[RequestItemFieldModel]]]:
+
+    def get_request(
+        self,
+        *,
+        request_id: int,
+        user_id: int,
+        role_id: int,
+    ) -> tuple[
+        RequestModel,
+        list[RequestItemModel],
+        dict[int, list[RequestItemFieldModel]],
+        dict[int, "RequestTypeModel"],
+        dict[int, "RequestStatusModel"],
+    ]:
         req = self._req_repo.get_by_id(request_id)
         if req is None:
             raise NotFoundError("Requisição não encontrada.")
@@ -109,9 +130,18 @@ class RequestService:
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         items = self._item_repo.list_by_request_id(req.id)
-        item_ids = [i.id for i in items]
+
+        item_ids = [int(i.id) for i in items]
         fields_map = self._field_repo.list_by_item_ids(item_ids)
-        return req, items, fields_map
+
+        # ✅ maps para devolver nome do type/status
+        type_ids = list({int(i.request_type_id) for i in items if i.request_type_id is not None})
+        status_ids = list({int(i.request_status_id) for i in items if i.request_status_id is not None})
+
+        type_map = self._type_repo.get_map_by_ids(type_ids)
+        status_map = self._status_repo.get_map_by_ids(status_ids)
+
+        return req, items, fields_map, type_map, status_map
 
     def delete_request(self, *, request_id: int, user_id: int, role_id: int) -> None:
         req = self._req_repo.get_by_id(request_id)

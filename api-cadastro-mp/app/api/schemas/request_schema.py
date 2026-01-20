@@ -1,10 +1,22 @@
 # app/api/schemas/request_schema.py
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_serializer
 from app.api.schemas._datetime_serializer import serialize_dt
+
+
+# -------- Types / Status (mini) --------
+class RequestTypeMiniResponse(BaseModel):
+    id: int
+    type_name: str
+
+
+class RequestStatusMiniResponse(BaseModel):
+    id: int
+    status_name: str
+
 
 # -------- Fields --------
 class CreateRequestItemFieldInput(BaseModel):
@@ -35,6 +47,7 @@ class RequestItemFieldResponse(BaseModel):
     def serialize_dates(self, value: datetime | None):
         return serialize_dt(value)
 
+
 # -------- Items --------
 class CreateRequestItemInput(BaseModel):
     request_type_id: int
@@ -52,8 +65,14 @@ class UpdateRequestItemInput(BaseModel):
 class RequestItemResponse(BaseModel):
     id: int
     request_id: int
+
     request_type_id: int
     request_status_id: int
+
+    # ✅ novos campos (nome + id)
+    request_type: Optional[RequestTypeMiniResponse] = None
+    request_status: Optional[RequestStatusMiniResponse] = None
+
     product_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -62,6 +81,7 @@ class RequestItemResponse(BaseModel):
     @field_serializer("created_at", "updated_at")
     def serialize_dates(self, value: datetime | None):
         return serialize_dt(value)
+
 
 # -------- Request --------
 class CreateRequestInput(BaseModel):

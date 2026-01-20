@@ -19,6 +19,14 @@ from app.repositories.request_item_repository import RequestItemRepository
 from app.repositories.request_item_field_repository import RequestItemFieldRepository
 from app.services.request_service import RequestService
 
+from app.repositories.request_status_repository import RequestStatusRepository
+from app.repositories.request_type_repository import RequestTypeRepository
+
+from app.api.schemas.request_schema import (
+    RequestTypeMiniResponse,
+    RequestStatusMiniResponse,
+)
+
 bp_req = Blueprint("requests", __name__, url_prefix="/api/requests")
 
 
@@ -34,10 +42,11 @@ def _build_service(session) -> RequestService:
         req_repo=RequestRepository(session),
         item_repo=RequestItemRepository(session),
         field_repo=RequestItemFieldRepository(session),
+        status_repo=RequestStatusRepository(session),
+        type_repo=RequestTypeRepository(session),
     )
 
-
-def _pack_request(req, items, fields_map) -> dict:
+def _pack_request(req, items, fields_map, type_map, status_map) -> dict:
     return RequestResponse(
         id=req.id,
         message_id=req.message_id,
@@ -48,8 +57,28 @@ def _pack_request(req, items, fields_map) -> dict:
             RequestItemResponse(
                 id=i.id,
                 request_id=i.request_id,
+
                 request_type_id=i.request_type_id,
                 request_status_id=i.request_status_id,
+
+                # ✅ agora devolve objeto
+                request_type=(
+                    RequestTypeMiniResponse(
+                        id=type_map[i.request_type_id].id,
+                        type_name=type_map[i.request_type_id].type_name,
+                    )
+                    if type_map.get(i.request_type_id) is not None
+                    else None
+                ),
+                request_status=(
+                    RequestStatusMiniResponse(
+                        id=status_map[i.request_status_id].id,
+                        status_name=status_map[i.request_status_id].status_name,
+                    )
+                    if status_map.get(i.request_status_id) is not None
+                    else None
+                ),
+
                 product_id=i.product_id,
                 created_at=i.created_at,
                 updated_at=i.updated_at,
@@ -71,7 +100,6 @@ def _pack_request(req, items, fields_map) -> dict:
         ],
     ).model_dump()
 
-
 # -------- Request CRUD --------
 @bp_req.post("")
 @require_auth
@@ -87,10 +115,11 @@ def create_request():
             role_id=role_id,
             items=[i.model_dump() for i in payload.items],
         )
-        req2, items, fields_map = svc.get_request(request_id=req.id, user_id=user_id, role_id=role_id)
+        req2, items, fields_map, type_map, status_map = svc.get_request(
+            request_id=req.id, user_id=user_id, role_id=role_id
+        )
 
-    return jsonify(_pack_request(req2, items, fields_map)), 201
-
+    return jsonify(_pack_request(req2, items, fields_map, type_map, status_map)), 201
 
 @bp_req.get("/<int:request_id>")
 @require_auth
@@ -99,10 +128,11 @@ def get_request(request_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
-        req, items, fields_map = svc.get_request(request_id=request_id, user_id=user_id, role_id=role_id)
+        req, items, fields_map, type_map, status_map = svc.get_request(
+            request_id=request_id, user_id=user_id, role_id=role_id
+        )
 
-    return jsonify(_pack_request(req, items, fields_map)), 200
-
+    return jsonify(_pack_request(req, items, fields_map, type_map, status_map)), 200
 
 @bp_req.delete("/<int:request_id>")
 @require_auth

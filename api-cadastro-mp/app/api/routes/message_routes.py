@@ -28,6 +28,14 @@ from app.services.message_service import MessageService
 
 from app.infrastructure.realtime.socketio_message_notifier import SocketIOMessageNotifier
 
+from app.api.schemas.request_schema import (
+    RequestResponse,
+    RequestItemResponse,
+    RequestItemFieldResponse,
+)
+
+from app.repositories.request_status_repository import RequestStatusRepository
+from app.repositories.request_type_repository import RequestTypeRepository
 
 bp_msg = Blueprint(
     "messages",
@@ -35,11 +43,60 @@ bp_msg = Blueprint(
     url_prefix="/conversations/<int:conversation_id>/messages",
 )
 
-
 def _auth_user():
     auth = getattr(g, "auth", None)
     return int(auth["sub"]), int(auth["role_id"])
 
+def _pack_request_full(req, items, fields_map, type_map, status_map) -> dict:
+
+    return RequestResponse(
+        id=req.id,
+        message_id=req.message_id,
+        created_by=req.created_by,
+        created_at=req.created_at,
+        updated_at=req.updated_at,
+        items=[
+            RequestItemResponse(
+                id=i.id,
+                request_id=i.request_id,
+                request_type_id=i.request_type_id,
+                request_status_id=i.request_status_id,
+                request_type=(
+                    {
+                        "id": type_map[i.request_type_id].id,
+                        "type_name": type_map[i.request_type_id].type_name,
+                    }
+                    if type_map.get(i.request_type_id) is not None
+                    else None
+                ),
+                request_status=(
+                    {
+                        "id": status_map[i.request_status_id].id,
+                        "status_name": status_map[i.request_status_id].status_name,
+                    }
+                    if status_map.get(i.request_status_id) is not None
+                    else None
+                ),
+                product_id=i.product_id,
+                created_at=i.created_at,
+                updated_at=i.updated_at,
+                fields=[
+                    RequestItemFieldResponse(
+                        id=f.id,
+                        request_items_id=f.request_items_id,
+                        field_type_id=f.field_type_id,
+                        field_tag=f.field_tag,
+                        field_value=f.field_value,
+                        field_flag=f.field_flag,
+                        created_at=f.created_at,
+                        updated_at=f.updated_at,
+                    )
+                    for f in fields_map.get(i.id, [])
+                ],
+            )
+            for i in items
+        ],
+    ).model_dump()
 
 def _pack_response(item: dict) -> dict:
     msg = item["msg"]
@@ -47,6 +104,11 @@ def _pack_response(item: dict) -> dict:
     files = item["files"]
     req = item["request"]
     is_read = bool(item["is_read"])
+
+    request_full = None
+    if item.get("request_full") is not None:
+        req2, items2, fields_map, type_map, status_map = item["request_full"]
+        request_full = _pack_request_full(req2, items2, fields_map, type_map, status_map)
 
     return MessageResponse(
         id=msg.id,
@@ -78,9 +140,9 @@ def _pack_response(item: dict) -> dict:
             if req
             else None
         ),
+        request_full=request_full,
         is_read=is_read,
     ).model_dump()
-
 
 def _build_service(session) -> MessageService:
     req_service = RequestService(
@@ -89,6 +151,8 @@ def _build_service(session) -> MessageService:
         req_repo=RequestRepository(session),
         item_repo=RequestItemRepository(session),
         field_repo=RequestItemFieldRepository(session),
+        status_repo=RequestStatusRepository(session),
+        type_repo=RequestTypeRepository(session),
     )
 
     return MessageService(
@@ -101,6 +165,7 @@ def _build_service(session) -> MessageService:
         notifier=SocketIOMessageNotifier(),
         req_service=req_service,
     )
+
 
 
 @bp_msg.get("")

@@ -175,18 +175,31 @@ class MessageService:
 
         out = []
         for msg, sender in rows:
+            req = req_map.get(msg.id)
+
+            request_full = None
+            if req is not None:
+                req2, items2, fields_map, type_map, status_map = self._req_service.get_request(
+                    request_id=req.id,
+                    user_id=user_id,
+                    role_id=role_id,
+                )
+                request_full = (req2, items2, fields_map, type_map, status_map)
+
             out.append(
                 {
                     "msg": msg,
                     "sender": sender,
                     "files": files_map.get(msg.id, []),
-                    "request": req_map.get(msg.id),
+                    "request": req,
+                    "request_full": request_full,
                     "is_read": self._compute_is_read(
                         participant_last_read_message_id=participant.last_read_message_id,
                         message_id=msg.id,
                     ),
                 }
             )
+
         return out
 
     def get_message(self, *, conversation_id: int, message_id: int, user_id: int, role_id: int):
@@ -203,18 +216,30 @@ class MessageService:
 
         files_map = self._file_repo.list_by_message_ids([msg.id])
         req_map = self._req_repo.get_by_message_ids([msg.id])
+        req = req_map.get(msg.id)
+
+        request_full = None
+        if req is not None:
+            req2, items2, fields_map, type_map, status_map = self._req_service.get_request(
+                request_id=req.id,
+                user_id=user_id,
+                role_id=role_id,
+            )
+            request_full = (req2, items2, fields_map, type_map, status_map)
+
 
         return {
             "msg": msg,
             "sender": sender,
             "files": files_map.get(msg.id, []),
-            "request": req_map.get(msg.id),
+            "request": req,
+            "request_full": request_full,
             "is_read": self._compute_is_read(
                 participant_last_read_message_id=participant.last_read_message_id,
                 message_id=msg.id,
             ),
         }
-
+    
     def delete_message(self, *, conversation_id: int, message_id: int, user_id: int, role_id: int) -> None:
         self._ensure_access(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
