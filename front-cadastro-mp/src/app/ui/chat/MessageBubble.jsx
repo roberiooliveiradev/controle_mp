@@ -13,7 +13,7 @@ function fileLabel(originalName) {
 }
 
 const FIELD_LABELS = {
-  codigo_atual: "Código atual",
+  codigo_atual: "Código anterior",
   grupo: "Grupo",
   novo_codigo: "Novo código",
   descricao: "Descrição",
@@ -28,9 +28,6 @@ const FIELD_LABELS = {
 
 const REQUEST_TYPE_ID_CREATE = 1;
 const REQUEST_TYPE_ID_UPDATE = 2;
-
-
-
 
 function fieldsToMap(fields) {
   const map = {};
@@ -121,7 +118,7 @@ function RequestItemReadonlyCard({ item, index }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 10 }}>
         {isUpdate ? (
-            <ReadonlyInput label="Código atual" value={map.codigo_atual} />
+            <ReadonlyInput label={FIELD_LABELS.codigo_atual} value={map.codigo_atual} />
           ) : null}
         <ReadonlyInput label={FIELD_LABELS.grupo} value={map.grupo} />
         <ReadonlyInput label={FIELD_LABELS.novo_codigo} value={map.novo_codigo} />
@@ -208,7 +205,7 @@ export function MessageBubble({ message, isMine }) {
 
         {message.body ? <div style={{ whiteSpace: "pre-wrap" }}>{message.body}</div> : null}
 
-        {/* ✅ stack de forms read-only quando for Request */}
+        {/* stack de forms read-only quando for Request */}
         {message.request_full ? <RequestReadonlyStack requestFull={message.request_full} /> : null}
 
         {files.length > 0 ? (

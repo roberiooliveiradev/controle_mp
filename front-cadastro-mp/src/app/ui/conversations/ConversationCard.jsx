@@ -1,8 +1,9 @@
 // src/app/ui/conversations/ConversationCard.jsx
 
 export function ConversationCard({ conversation, selected, onClick, unreadCount = 0 }) {
-  const createdAt = conversation.created_at ? new Date(conversation.created_at) : null;
-
+  const lastActivity = conversation.updated_at ?? conversation.created_at;
+  const createdAt = lastActivity ? new Date(lastActivity) : null;
+  
   return (
     <button
       onClick={onClick}
@@ -31,18 +32,19 @@ export function ConversationCard({ conversation, selected, onClick, unreadCount 
 
         {unreadCount > 0 && (
           <span
-            title={`${unreadCount} não lida(s)`}
+            title={`${unreadCount} não ${unreadCount>1?'lidas':'lida'}`}
             style={{
-              minWidth: 22,
-              height: 22,
-              padding: "0 8px",
+              minWidth: 20,
+              height: 20,
               borderRadius: 999,
-              border: "1px solid #ddd",
-              display: "inline-flex",
+              background: "#d92d20",
+              color: "#fff",
+              fontSize: 12,
+              fontWeight: 800,
+              display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 12,
-              background: "#fff",
+              padding: "1px 6px",
             }}
           >
             {unreadCount}
@@ -55,10 +57,13 @@ export function ConversationCard({ conversation, selected, onClick, unreadCount 
           <span style={{ fontWeight: 600 }}>De:</span>{" "}
           {conversation.created_by?.full_name ?? conversation.created_by?.email ?? "-"}
         </div>
+        {
+          conversation.assigned_to?
         <div>
           <span style={{ fontWeight: 600 }}>Atribuída:</span>{" "}
           {conversation.assigned_to?.full_name ?? "—"}
-        </div>
+        </div> : null
+        }
         <div>{createdAt ? createdAt.toLocaleString("pt-BR") : ""}</div>
       </div>
     </button>

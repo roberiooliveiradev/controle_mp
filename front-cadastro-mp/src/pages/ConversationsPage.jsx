@@ -35,6 +35,29 @@ function hasFiles(e) {
   return types && Array.from(types).includes("Files");
 }
 
+
+// -------------------------
+// Conversations ordering helpers
+// - Use updated_at when not null; otherwise created_at
+// - Sort by most recent activity first
+// -------------------------
+function convLastActivityIso(conv) {
+  return conv?.updated_at ?? conv?.created_at ?? null;
+}
+
+function convLastActivityTs(conv) {
+  const iso = convLastActivityIso(conv);
+  const ts = iso ? new Date(iso).getTime() : 0;
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function sortConversationsByLastActivity(list) {
+  const arr = Array.isArray(list) ? [...list] : [];
+  arr.sort((a, b) => convLastActivityTs(b) - convLastActivityTs(a));
+  return arr;
+}
+
+
 export default function ConversationsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -61,6 +84,22 @@ export default function ConversationsPage() {
     () => (selectedId ? conversations.find((c) => c.id === selectedId) : null),
     [conversations, selectedId]
   );
+
+  function bumpConversation(conversationId, activityIso) {
+    const cid = Number(conversationId);
+    if (!cid) return;
+    const iso = activityIso || new Date().toISOString();
+
+    setConversations((prev) => {
+      const list = Array.isArray(prev) ? [...prev] : [];
+      const idx = list.findIndex((c) => c.id === cid);
+      if (idx < 0) return list;
+
+      // updated_at só existe quando houve atividade após criação
+      list[idx] = { ...list[idx], updated_at: iso };
+      return sortConversationsByLastActivity(list);
+    });
+  }
 
   // -------------------------
   // Create conversation
@@ -368,6 +407,8 @@ export default function ConversationsPage() {
       const cid = Number(payload?.conversation_id);
       if (!cid) return;
 
+      bumpConversation(cid, payload?.created_at_iso);
+
       const currentSelected = selectedIdRef.current;
 
       if (!currentSelected || cid !== currentSelected) {
@@ -459,6 +500,9 @@ export default function ConversationsPage() {
 
     setMessages((prev) => [...prev, optimistic]);
 
+    // ✅ sobe a conversa na lista e atualiza a data/hora pela última mensagem
+    bumpConversation(selectedId, optimistic.created_at);
+
     try {
       const payload = {
         message_type_id: hasRequest ? MESSAGE_TYPE_REQUEST : MESSAGE_TYPE_TEXT,
@@ -469,6 +513,9 @@ export default function ConversationsPage() {
       };
 
       const created = await createMessageApi(selectedId, payload);
+
+      // ✅ garante timestamp oficial do backend
+      bumpConversation(selectedId, created?.created_at);
 
       const merged = {
         ...created,
