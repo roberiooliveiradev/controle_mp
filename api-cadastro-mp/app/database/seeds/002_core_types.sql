@@ -21,8 +21,11 @@ VALUES
     (1, 'CREATED', FALSE),
     (2, 'IN_PROGRESS', FALSE),
     (3, 'FINALIZED', FALSE),
-    (4, 'FAILED', FALSE)
+    (4, 'FAILED', FALSE),
+    (5, 'RETURNED', FALSE),
+    (6, 'REJECTED', FALSE)
 ON CONFLICT (id) DO NOTHING;
+
 
 -- tbFieldType
 INSERT INTO "tbFieldType" (id, type_name, is_deleted)
