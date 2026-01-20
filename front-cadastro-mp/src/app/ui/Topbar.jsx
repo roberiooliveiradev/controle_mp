@@ -17,7 +17,7 @@ export function Topbar() {
   return (
     <header
       style={{
-        borderBottom: "1px solid #eee",
+        borderBottom: "1px solid var(--border)",
         padding: "12px 16px",
         display: "flex",
         justifyContent: "space-between",

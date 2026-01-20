@@ -59,33 +59,33 @@ const styles = {
     display: "grid",
     gap: 6,
     fontSize: 13,
-    color: "#111",
+    color: "var(--text)",
   },
   input: {
     padding: "8px 8px",
     borderRadius: 6,
-    border: "1px solid #ddd",
+    border: "1px solid var(--border-2)",
     outline: "none",
   },
   select: {
     padding: "8px 8px",
     borderRadius: 6,
-    border: "1px solid #ddd",
+    border: "1px solid var(--border-2)",
     outline: "none",
-    background: "#fff",
+    background: "var(--surface)",
   },
   sectionTitle: { fontWeight: 800, marginBottom: 8 },
-  subtle: { fontSize: 12, opacity: 0.75 },
+  subtle: { fontSize: 12, opacity: "var(--text-muted)" },
   pill: {
     fontSize: 12,
     padding: "4px 8px",
     borderRadius: 999,
-    border: "1px solid #eee",
-    background: "#fafafa",
+    border: "1px solid var(--border)",
+    background: "var(--surface-2)",
   },
   errorText: {
     fontSize: 12,
-    color: "#b42318",
+    color: "var(--danger)",
     marginTop: 4,
     lineHeight: 1.2,
   },
@@ -96,11 +96,11 @@ const styles = {
     width: 18,
     height: 18,
     borderRadius: 999,
-    background: "#fee4e2",
-    color: "#b42318",
+    background: "var(--danger-bg)",
+    color: "var(--danger)",
     fontWeight: 900,
     fontSize: 12,
-    border: "1px solid #fecdca",
+    border: "1px solid var(--danger-border)",
   },
 };
 
@@ -108,8 +108,9 @@ function inputStyle(hasError) {
   if (!hasError) return styles.input;
   return {
     ...styles.input,
-    border: "1px solid #f04438",
-    boxShadow: "0 0 0 3px rgba(240,68,56,0.15)",
+    background: "var(--danger-bg)",
+    border: "1px solid var(--danger-border)",
+    boxShadow: "0 0 0 3px var(--shadow)",
   };
 }
 
@@ -117,8 +118,9 @@ function selectStyle(hasError) {
   if (!hasError) return styles.select;
   return {
     ...styles.select,
-    border: "1px solid #f04438",
-    boxShadow: "0 0 0 3px rgba(240,68,56,0.15)",
+    background: "var(--danger-bg)",
+    border: "1px solid var(--danger-border)",
+    boxShadow: "0 0 0 3px var(--shadow)",
   };
 }
 
@@ -413,7 +415,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
     >
       <div
         style={{
-          background: "#fff",
+          background: "var(--surface)",
           borderRadius: 16,
           overflow: "hidden",
           boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
@@ -423,7 +425,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
         <div
           style={{
             padding: 14,
-            borderBottom: "1px solid #eee",
+            borderBottom: "1px solid var(--border)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -455,9 +457,12 @@ export function RequestComposerModal({ onClose, onSubmit }) {
         </div>
 
         {/* Body */}
-        <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", minHeight: 560, maxHeight: "90dvh" }}>
+        <div style={{display:"flex", maxHeight:"90dvh"}}>
+
+
+        <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", minHeight: "80dvh", overflow:"auto"}}>
           {/* Items list */}
-          <aside style={{ borderRight: "1px solid #eee", padding: 12, background: "#fcfcfc" }}>
+          <aside style={{ borderRight: "1px solid var(--border)", padding: 12, background: "var(--surface-2)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <strong>Itens</strong>
               <button type="button" onClick={addItem} style={{ padding: "8px 10px", borderRadius: 10 }}>
@@ -475,11 +480,11 @@ export function RequestComposerModal({ onClose, onSubmit }) {
                     key={idx}
                     onClick={() => setActiveIndex(idx)}
                     style={{
-                      border: hasErr ? "2px solid #f04438" : isActive ? "2px solid #777" : "1px solid #ddd",
+                      border: hasErr ? "2px solid var(--danger-border)" : isActive ? "2px solid var(--border)" : "1px solid var(--border-2)",
                       borderRadius: 12,
                       padding: 10,
                       cursor: "pointer",
-                      background: "#fff", 
+                      background: "var(--surface)", 
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
@@ -644,7 +649,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
             </div>
 
             {/* Suppliers */}
-            <div style={{ marginTop: 18, borderTop: "1px solid #eee", paddingTop: 14 }}>
+            <div style={{ marginTop: 18, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                 <div>
                   <div style={styles.sectionTitle}>Fornecedores</div>
@@ -659,16 +664,16 @@ export function RequestComposerModal({ onClose, onSubmit }) {
               <div
                 style={{
                   marginTop: 10,
-                  border: "1px solid #eee",
+                  border: "1px solid var(--border)",
                   borderRadius: 12,
                   overflow: "hidden",
-                  background: "#fff",
+                  background: "var(--surface)",
                 }}
               >
                 <div style={{ maxHeight: 260, overflow: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
-                      <tr style={{ background: "#fafafa" }}>
+                      <tr style={{ background: "var(--surface-2)" }}>
                         {[
                           ["Código", 150],
                           ["Loja", 130],
@@ -679,12 +684,12 @@ export function RequestComposerModal({ onClose, onSubmit }) {
                             key={t}
                             style={{
                               textAlign: "left",
-                              borderBottom: "1px solid #eee",
+                              borderBottom: "1px solid var(--border)",
                               padding: 10,
                               minWidth: w,
                               position: "sticky",
                               top: 0,
-                              background: "#fafafa",
+                              background: "var(--surface-2)",
                               zIndex: 1,
                             }}
                           >
@@ -693,12 +698,12 @@ export function RequestComposerModal({ onClose, onSubmit }) {
                         ))}
                         <th
                           style={{
-                            borderBottom: "1px solid #eee",
+                            borderBottom: "1px solid var(--border)",
                             padding: 10,
                             width: 110,
                             position: "sticky",
                             top: 0,
-                            background: "#fafafa",
+                            background: "var(--surface-2)",
                             zIndex: 1,
                           }}
                         />
@@ -763,11 +768,12 @@ export function RequestComposerModal({ onClose, onSubmit }) {
                 </div>
               </div>
 
-              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
+              <div style={{ fontSize: 12, opacity: "var(--text-muted)", marginTop: 8 }}>
                 Fornecedores são armazenados como snapshot JSON no field_tag="fornecedores".
               </div>
             </div>
           </main>
+        </div>
         </div>
       </div>
     </div>

@@ -611,7 +611,7 @@ export default function ConversationsPage() {
     >
       <aside
         style={{
-          border: "1px solid #eee",
+          border: "1px solid var(--border)",
           borderRadius: 14,
           overflow: "hidden",
           display: "flex",
@@ -619,9 +619,9 @@ export default function ConversationsPage() {
           minHeight: 0,
         }}
       >
-        <div style={{ padding: 12, borderBottom: "1px solid #eee" }}>
+        <div style={{ padding: 12, borderBottom: "1px solid var(--border)" }}>
           <strong>Conversas</strong>
-          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>Clique para abrir o chat</div>
+          <div style={{ fontSize: 12, opacity:"var(--text-muted)", marginTop: 4 }}>Clique para abrir o chat</div>
 
           <form onSubmit={handleCreateConversation} style={{ marginTop: 12, display: "grid", gap: 8 }}>
             <input
@@ -640,8 +640,6 @@ export default function ConversationsPage() {
               style={{
                 padding: "10px 12px",
                 borderRadius: 12,
-                border: "1px solid #ddd",
-                background: "#fff",
                 cursor: createBusy ? "not-allowed" : "pointer",
               }}
             >
@@ -655,7 +653,7 @@ export default function ConversationsPage() {
           {listError && <div style={{ color: "crimson" }}>{listError}</div>}
 
           {!listBusy && !listError && conversations.length === 0 && (
-            <div style={{ opacity: 0.7 }}>Nenhuma conversa encontrada.</div>
+            <div style={{ opacity:"var(--text-muted)"}}>Nenhuma conversa encontrada.</div>
           )}
 
           {conversations.map((c) => (
@@ -688,7 +686,7 @@ export default function ConversationsPage() {
             bottom: 10,
             width: 2,
             transform: "translateX(-50%)",
-            background: isDividerHover ? "#cfcfcf" : "#eee",
+            background: isDividerHover ? "var(--border-2)" : "var(--border)",
             borderRadius: 2,
           }}
         />
@@ -700,13 +698,13 @@ export default function ConversationsPage() {
         onDragLeave={onDragLeaveChat}
         onDrop={onDropChat}
         style={{
-          border: "1px solid #eee",
+          border: "1px solid var(--border)",
           borderRadius: 14,
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
           minHeight: 0,
-          background: "#fff",
+          background: "var(--surface)",
           position: "relative",
         }}
       >
@@ -732,12 +730,12 @@ export default function ConversationsPage() {
         ) : null}
 
         {!selectedId ? (
-          <div style={{ padding: 24, opacity: 0.75 }}>Selecione uma conversa à esquerda para abrir o chat.</div>
+          <div style={{ padding: 24, opacity:"var(--text-muted)" }}>Selecione uma conversa à esquerda para abrir o chat.</div>
         ) : (
           <>
-            <div style={{ padding: 12, borderBottom: "1px solid #eee" }}>
+            <div style={{ padding: 12, borderBottom: "1px solid var(--border)" }}>
               <strong>{conv?.title ?? selectedConversation?.title ?? `Conversa #${selectedId}`}</strong>
-              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+              <div style={{ fontSize: 12, opacity:"var(--text-muted)", marginTop: 4 }}>
                 {conv?.created_by?.full_name ?? conv?.created_by?.email ?? ""}
               </div>
             </div>
@@ -750,7 +748,7 @@ export default function ConversationsPage() {
               {chatBusy && <div>Carregando chat...</div>}
               {chatError && <div style={{ color: "crimson" }}>{chatError}</div>}
 
-              {!chatBusy && !chatError && messages.length === 0 && <div style={{ opacity: 0.7 }}>Sem mensagens.</div>}
+              {!chatBusy && !chatError && messages.length === 0 && <div style={{ opacity:"var(--text-muted)"}}>Sem mensagens.</div>}
 
               {messages.map((m) => {
                 const isMine = m.sender?.id === myUserId;

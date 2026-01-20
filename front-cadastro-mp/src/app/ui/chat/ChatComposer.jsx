@@ -113,7 +113,7 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
   }
 
   return (
-    <div style={{ borderTop: "1px solid #eee" }}>
+    <div style={{ borderTop: "1px solid var(--border-2)" }}>
       <AttachmentTray files={pendingFiles} previews={previews} onRemove={removeFileAt} onClear={clearFiles} />
 
       <form
@@ -126,7 +126,7 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
           onKeyDown={onKeyDown}
           placeholder="Digite sua mensagem... (Shift+Enter para quebrar linha)"
           rows={5}
-          style={{ flex: 1, padding: 12, resize: "none", borderRadius: 10, border: "1px solid #ddd", lineHeight: 1.4 }}
+          style={{ flex: 1, padding: 12, resize: "none", borderRadius: 10, border: "1px solid var(--border-2)", lineHeight: 1.4 }}
         />
 
         <input
@@ -162,10 +162,10 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
                 right: 0,
                 bottom: "calc(100% + 8px)",
                 width: 240,
-                background: "#fff",
-                border: "1px solid #ddd",
+                background: "var(--suface)",
+                border: "1px solid var(--border-2)",
                 borderRadius: 12,
-                boxShadow: "0 12px 30px rgba(0,0,0,0.12)",
+                boxShadow: "0 12px 30px var(--shadow)",
                 padding: 6,
                 zIndex: 50,
               }}
@@ -178,9 +178,7 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
                   width: "100%",
                   textAlign: "left",
                   padding: "10px 10px",
-                  borderRadius: 10,
-                  border: "none",
-                  background: "transparent",
+                  textAlignLast:"center",
                   cursor: "pointer",
                 }}
               >

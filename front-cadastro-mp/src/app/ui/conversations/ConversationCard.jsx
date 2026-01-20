@@ -12,8 +12,8 @@ export function ConversationCard({ conversation, selected, onClick, unreadCount 
         textAlign: "left",
         padding: 12,
         borderRadius: 12,
-        border: selected ? "1px solid #cfcfcf" : "1px solid #eee",
-        background: selected ? "#f6f6f6" : "#fff",
+        border: selected ? "1px solid var(--border-2)" : "1px solid var(--border)",
+        background: selected ? "var(--surface-2)" : "var(--surface)",
         cursor: "pointer",
         position: "relative",
       }}
@@ -38,7 +38,7 @@ export function ConversationCard({ conversation, selected, onClick, unreadCount 
               height: 20,
               borderRadius: 999,
               background: "#d92d20",
-              color: "#fff",
+              color: "var(--text)", // VERIFICAR COR
               fontSize: 12,
               fontWeight: 800,
               display: "flex",

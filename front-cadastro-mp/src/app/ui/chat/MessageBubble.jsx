@@ -50,13 +50,13 @@ function parseSuppliers(jsonStr) {
 function ReadonlyInput({ label, value }) {
   return (
     <div style={{ display: "grid", gap: 4 }}>
-      <div style={{ fontSize: 12, opacity: 0.7 }}>{label}</div>
+      <div style={{ fontSize: 12, opacity: "var(--text-muted)" }}>{label}</div>
       <div
         style={{
           padding: "10px 10px",
           borderRadius: 10,
-          border: "1px solid #eee",
-          background: "#fafafa",
+          border: "1px solid var(--border)",
+          background: "var(--surface-2)",
           whiteSpace: "pre-wrap",
         }}
       >
@@ -76,10 +76,10 @@ function RequestItemReadonlyCard({ item, index }) {
   return (
     <div
       style={{
-        border: "1px solid #eee",
+        border: "1px solid var(--border)",
         borderRadius: 14,
         padding: 12,
-        background: "#fff",
+        background: "var(--surface)",
         display: "grid",
         gap: 12,
       }}
@@ -92,8 +92,8 @@ function RequestItemReadonlyCard({ item, index }) {
               fontSize: 12,
               padding: "4px 8px",
               borderRadius: 999,
-              border: "1px solid #eee",
-              background: "#fafafa",
+              border: "1px solid var(--border)",
+              background: "var(--surface-2)",
               opacity: 0.9,
               fontWeight: 700,
             }}
@@ -106,8 +106,8 @@ function RequestItemReadonlyCard({ item, index }) {
               fontSize: 12,
               padding: "4px 8px",
               borderRadius: 999,
-              border: "1px solid #eee",
-              background: "#fafafa",
+              border: "1px solid var(--border)",
+              background: "var(--surface-2)",
               opacity: 0.9,
             }}
           >
@@ -133,7 +133,7 @@ function RequestItemReadonlyCard({ item, index }) {
         <ReadonlyInput label={FIELD_LABELS.ref_cliente} value={map.ref_cliente} />
       </div>
 
-      <div style={{ borderTop: "1px solid #eee", paddingTop: 10 }}>
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
         <div style={{ fontWeight: 700, marginBottom: 8 }}>Fornecedores</div>
 
         {suppliers.length === 0 ? (
@@ -143,10 +143,10 @@ function RequestItemReadonlyCard({ item, index }) {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 8 }}>Código</th>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 8 }}>Loja</th>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 8 }}>Nome</th>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid #eee", padding: 8 }}>Part. Number</th>
+                  <th style={{ textAlign: "left", borderBottom: "1px solid var(--border)", padding: 8 }}>Código</th>
+                  <th style={{ textAlign: "left", borderBottom: "1px solid var(--border)", padding: 8 }}>Loja</th>
+                  <th style={{ textAlign: "left", borderBottom: "1px solid var(--border)", padding: 8 }}>Nome</th>
+                  <th style={{ textAlign: "left", borderBottom: "1px solid var(--border)", padding: 8 }}>Part. Number</th>
                 </tr>
               </thead>
               <tbody>
@@ -192,13 +192,13 @@ export function MessageBubble({ message, isMine }) {
           maxWidth: 780,
           padding: "10px 12px",
           borderRadius: 14,
-          border: "1px solid #eee",
-          background: isMine ? "#f6f6f6" : "#fff",
+          border: "1px solid var(--border)",
+          background: isMine ? "var(--surface-2)" : "var(--surface)",
           opacity: status === "sending" ? 0.75 : 1,
         }}
       >
         {!isMine && (
-          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
+          <div style={{ fontSize: 12, opacity: "var(--text-muted)", marginBottom: 6 }}>
             {message.sender?.full_name ?? message.sender?.email}
           </div>
         )}
@@ -220,16 +220,16 @@ export function MessageBubble({ message, isMine }) {
                   title={f.original_name}
                   style={{
                     width: 160,
-                    border: "1px solid #eee",
+                    border: "1px solid var(--border)",
                     borderRadius: 12,
                     overflow: "hidden",
-                    background: "#fff",
+                    background: "var(--surface)",
                   }}
                 >
                   <div
                     style={{
                       height: 96,
-                      background: "#f7f7f7",
+                      background: "var(--surface-2)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -242,7 +242,7 @@ export function MessageBubble({ message, isMine }) {
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                       />
                     ) : (
-                      <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.7 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, opacity: "var(--text-muted)" }}>
                         {fileLabel(f.original_name)}
                       </div>
                     )}

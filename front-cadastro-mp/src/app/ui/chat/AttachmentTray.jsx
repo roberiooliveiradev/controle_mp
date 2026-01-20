@@ -15,9 +15,9 @@ export function AttachmentTray({ files = [], previews = {}, onRemove, onClear })
   if (!files.length) return null;
 
   return (
-    <div style={{ borderTop: "1px solid #eee", padding: 10 }}>
+    <div style={{ borderTop: "1px solid var(--border)", padding: 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <strong style={{ fontSize: 12, opacity: 0.8 }}>Anexos ({files.length})</strong>
+        <strong style={{ fontSize: 12, opacity: "var(--text-muted)" }}>Anexos ({files.length})</strong>
 
         <button
           type="button"
@@ -26,8 +26,8 @@ export function AttachmentTray({ files = [], previews = {}, onRemove, onClear })
             marginLeft: "auto",
             padding: "6px 10px",
             borderRadius: 10,
-            border: "1px solid #ddd",
-            background: "#fff",
+            border: "1px solid var(--boder-2)",
+            background: "var(--surface)",
           }}
         >
           Limpar
@@ -46,10 +46,10 @@ export function AttachmentTray({ files = [], previews = {}, onRemove, onClear })
               key={`${f.name}-${f.size}-${idx}`}
               style={{
                 width: 160,
-                border: "1px solid #eee",
+                border: "1px solid var(--border)",
                 borderRadius: 12,
                 overflow: "hidden",
-                background: "#fff",
+                background: "var(--surface)",
               }}
               title={f.name}
             >
@@ -59,13 +59,13 @@ export function AttachmentTray({ files = [], previews = {}, onRemove, onClear })
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: "#f7f7f7",
+                  background: "var(--surface-2)",
                 }}
               >
                 {url && isImage ? (
                   <img src={url} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
-                  <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.7 }}>{label}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, opacity: "var(--text-muted)" }}>{label}</div>
                 )}
               </div>
 
@@ -74,7 +74,7 @@ export function AttachmentTray({ files = [], previews = {}, onRemove, onClear })
                   {f.name}
                 </div>
 
-                <div style={{ fontSize: 11, opacity: 0.65 }}>
+                <div style={{ fontSize: 11, opacity: "var(--text-muted)" }}>
                   {formatBytes(f.size)} {f.type ? `• ${f.type}` : ""}
                 </div>
 
@@ -84,8 +84,8 @@ export function AttachmentTray({ files = [], previews = {}, onRemove, onClear })
                   style={{
                     padding: "6px 10px",
                     borderRadius: 10,
-                    border: "1px solid #ddd",
-                    background: "#fff",
+                    border: "1px solid var(--boder-2)",
+                    background: "var(--surface)",
                     fontSize: 12,
                   }}
                 >
