@@ -156,7 +156,7 @@ class MessageService:
             conversation_id=conversation_id,
             message_id=msg.id,
             sender_id=user_id,
-            body=msg.body,
+            body=msg.body or "",
             created_at_iso=msg.created_at.astimezone(timezone.utc).isoformat(),
         )
         self._notifier.notify_message_created(event)
