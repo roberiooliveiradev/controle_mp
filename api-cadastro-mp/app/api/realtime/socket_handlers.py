@@ -29,7 +29,8 @@ def register_socket_handlers() -> None:
     def on_connect():
         token = _get_bearer_token()
         if not token:
-            return disconnect()
+            disconnect()
+            return False
 
         decode_options = {"require": ["sub", "exp", "iat"]}
 
@@ -55,7 +56,8 @@ def register_socket_handlers() -> None:
 
             payload = jwt.decode(token, **kwargs)
         except Exception:
-            return disconnect()
+            disconnect()
+            return False
 
         request.environ["auth_user_id"] = int(payload["sub"])
 

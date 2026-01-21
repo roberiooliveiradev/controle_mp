@@ -7,6 +7,7 @@ import { Layout } from "../ui/Layout";
 import LoginPage from "../../pages/LoginPage";
 import ConversationsPage from "../../pages/ConversationsPage";
 import RequestsPage from "../../pages/RequestsPage";
+import { RealtimeProvider } from "../realtime/RealtimeContext"
 
 export function AppRouter() {
   return (
@@ -18,7 +19,9 @@ export function AppRouter() {
           path="/"
           element={
             <ProtectedRoute>
-              <Layout />
+              <RealtimeProvider>
+                <Layout />
+              </RealtimeProvider>
             </ProtectedRoute>
           }
         >

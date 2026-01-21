@@ -37,7 +37,7 @@ export function ConversationCard({ conversation, selected, onClick, unreadCount 
               minWidth: 20,
               height: 20,
               borderRadius: 999,
-              background: "#d92d20",
+              background: "var(--danger-bg)",
               color: "var(--text)", // VERIFICAR COR
               fontSize: 12,
               fontWeight: 800,
