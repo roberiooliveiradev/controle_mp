@@ -1,3 +1,6 @@
+# app/api/routes/request_routes.py
+
+from datetime import date
 from flask import Blueprint, jsonify, g, request
 
 from app.api.middlewares.auth_middleware import require_auth
@@ -236,6 +239,17 @@ def delete_field(field_id: int):
     return ("", 204)
 
 
+def _parse_date_yyyy_mm_dd(s: str | None) -> date | None:
+    if not s:
+        return None
+    try:
+        # input type="date" -> "YYYY-MM-DD"
+        y, m, d = s.split("-")
+        return date(int(y), int(m), int(d))
+    except Exception:
+        return None
+
+
 # -------- Listagem (tela) --------
 @bp_req.get("/items")
 @require_auth
@@ -248,11 +262,28 @@ def list_request_items():
     except ValueError:
         return jsonify({"error": "Parâmetros limit/offset inválidos."}), 400
 
+    # mantém
     status_id = request.args.get("status_id")
-    created_by = request.args.get("created_by")
-
     status_id = int(status_id) if status_id is not None and status_id != "" else None
-    created_by = int(created_by) if created_by is not None and created_by != "" else None
+
+    # novos filtros
+    created_by_name = (request.args.get("created_by_name") or "").strip() or None
+
+    type_id = request.args.get("type_id")
+    type_id = int(type_id) if type_id is not None and type_id != "" else None
+    type_q = (request.args.get("type_q") or "").strip() or None
+
+    item_id = request.args.get("item_id")
+    item_id = int(item_id) if item_id is not None and item_id != "" else None
+
+    date_mode = (request.args.get("date_mode") or "AUTO").strip().upper()
+    if date_mode not in ("AUTO", "CREATED", "UPDATED"):
+        return jsonify({"error": "date_mode inválido. Use: AUTO | CREATED | UPDATED"}), 400
+
+    date_from = _parse_date_yyyy_mm_dd(request.args.get("date_from"))
+    date_to = _parse_date_yyyy_mm_dd(request.args.get("date_to"))
+    if (request.args.get("date_from") and date_from is None) or (request.args.get("date_to") and date_to is None):
+        return jsonify({"error": "date_from/date_to inválidos. Use YYYY-MM-DD."}), 400
 
     with db_session() as session:
         svc = _build_service(session)
@@ -262,7 +293,14 @@ def list_request_items():
             limit=limit,
             offset=offset,
             status_id=status_id,
-            created_by=created_by,
+            # novos
+            created_by_name=created_by_name,
+            type_id=type_id,
+            type_q=type_q,
+            item_id=item_id,
+            date_from=date_from,
+            date_to=date_to,
+            date_mode=date_mode,
         )
 
     payload = RequestItemListResponse(

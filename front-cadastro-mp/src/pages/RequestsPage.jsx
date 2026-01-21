@@ -17,7 +17,7 @@ import {
 	fornecedoresToJson,
 	validateStructuredItemFromTags,
 	TAGS,
-    REQUEST_TYPE_ID_UPDATE 
+	REQUEST_TYPE_ID_UPDATE,
 } from "../app/ui/requests/requestItemFields.logic";
 
 import { socket } from "../app/realtime/socket";
@@ -39,6 +39,37 @@ function fmt(iso) {
 	const d = new Date(iso);
 	if (Number.isNaN(d.getTime())) return String(iso);
 	return d.toLocaleString();
+}
+
+function norm(s) {
+	return String(s ?? "")
+		.trim()
+		.toLowerCase()
+		.normalize("NFD")
+		.replace(/\p{Diacritic}/gu, "");
+}
+
+function isValidDate(d) {
+	return d instanceof Date && !Number.isNaN(d.getTime());
+}
+
+function parseDateRange(dateFrom, dateTo) {
+	// dateFrom/dateTo no formato YYYY-MM-DD (input type="date")
+	// retorna { fromMs, toMs } (toMs inclusivo até 23:59:59.999)
+	let fromMs = null;
+	let toMs = null;
+
+	if (dateFrom) {
+		const d = new Date(`${dateFrom}T00:00:00`);
+		if (isValidDate(d)) fromMs = d.getTime();
+	}
+
+	if (dateTo) {
+		const d = new Date(`${dateTo}T23:59:59.999`);
+		if (isValidDate(d)) toMs = d.getTime();
+	}
+
+	return { fromMs, toMs };
 }
 
 function ModalShell({ title, onClose, children, footer }) {
@@ -251,15 +282,15 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
 	const typeName = row?.request_type?.type_name ?? `#${row?.request_type_id}`;
 	const statusName = row?.request_status?.status_name ?? `#${row?.request_status_id}`;
 
-    async function handleSave() {
-        if (!canEditFields || !item) return;
+	async function handleSave() {
+		if (!canEditFields || !item) return;
 
-        // ✅ FIX: UPDATE depende do tipo do item/request, não do valor digitado
-        const isUpdate = Number(row?.request_type_id) === REQUEST_TYPE_ID_UPDATE;
+		// ✅ FIX: UPDATE depende do tipo do item/request, não do valor digitado
+		const isUpdate = Number(row?.request_type_id) === REQUEST_TYPE_ID_UPDATE;
 
-        const v = validateStructuredItemFromTags(valuesByTag, fornecedoresRows, isUpdate);
-        setEditErrors(v);
-        if (hasAnyError(v)) return;
+		const v = validateStructuredItemFromTags(valuesByTag, fornecedoresRows, isUpdate);
+		setEditErrors(v);
+		if (hasAnyError(v)) return;
 
 		try {
 			setSaving(true);
@@ -398,7 +429,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
 					<RequestItemFields
 						variant="fields"
 						readOnly={!canEditFields}
-                        requestTypeId={row?.request_type_id}  
+						requestTypeId={row?.request_type_id}
 						valuesByTag={valuesByTag}
 						onChangeTagValue={(tag, v) => {
 							setValuesByTag((prev) => ({ ...(prev || {}), [tag]: v }));
@@ -413,9 +444,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
 
 					{canEditFields ? (
 						hasAnyError(editErrors) ? (
-							<div style={{ fontSize: 12, color: "var(--danger)" }}>
-								Existem campos obrigatórios pendentes. Corrija antes de salvar.
-							</div>
+							<div style={{ fontSize: 12, color: "var(--danger)" }}>Existem campos obrigatórios pendentes. Corrija antes de salvar.</div>
 						) : (
 							<div style={{ fontSize: 12, opacity: 0.7 }}>Preencha os obrigatórios e salve.</div>
 						)
@@ -447,8 +476,16 @@ export default function RequestsPage() {
 	const [limit] = useState(15);
 	const [offset, setOffset] = useState(0);
 
+	// ✅ mantém status como filtro server-side (já existente)
 	const [statusId, setStatusId] = useState("");
-	const [createdBy, setCreatedBy] = useState("");
+
+	// ✅ novos filtros (client-side)
+	const [createdByName, setCreatedByName] = useState("");
+	const [typeFilter, setTypeFilter] = useState(""); // id ou nome
+	const [itemFilter, setItemFilter] = useState(""); // item_id
+	const [dateFrom, setDateFrom] = useState(""); // YYYY-MM-DD
+	const [dateTo, setDateTo] = useState(""); // YYYY-MM-DD
+	const [dateMode, setDateMode] = useState("AUTO"); // "AUTO" | "CREATED" | "UPDATED"
 
 	const [detailsOpen, setDetailsOpen] = useState(false);
 	const [detailsMode, setDetailsMode] = useState("view"); // "view" | "edit"
@@ -458,6 +495,13 @@ export default function RequestsPage() {
 		const iso = row?.item_updated_at || row?.item_created_at;
 		const t = iso ? new Date(iso).getTime() : 0;
 		return Number.isFinite(t) ? t : 0;
+	}
+
+	function getRowTimeForFilter(row) {
+		// AUTO: updated_at se existir, senão created_at
+		if (dateMode === "UPDATED") return row?.item_updated_at || null;
+		if (dateMode === "CREATED") return row?.item_created_at || null;
+		return row?.item_updated_at || row?.item_created_at || null;
 	}
 
 	async function load({ resetOffset = false } = {}) {
@@ -471,8 +515,20 @@ export default function RequestsPage() {
 			limit,
 			offset: nextOffset,
 			status_id: statusId ? Number(statusId) : null,
-			created_by: createdBy ? Number(createdBy) : null,
+
+			created_by_name: createdByName?.trim() || null,
+
+			// se for número, manda type_id; senão manda type_q
+			type_id: /^\d+$/.test(typeFilter?.trim() || "") ? Number(typeFilter.trim()) : null,
+			type_q: !/^\d+$/.test(typeFilter?.trim() || "") ? (typeFilter?.trim() || null) : null,
+
+			item_id: itemFilter?.trim() ? Number(itemFilter.trim()) : null,
+
+			date_mode: dateMode,
+			date_from: dateFrom || null,
+			date_to: dateTo || null,
 			});
+
 
 			const items = Array.isArray(data?.items) ? data.items : [];
 
@@ -495,26 +551,64 @@ export default function RequestsPage() {
 	}, [limit, offset]);
 
 	useEffect(() => {
-    const onCreated = (payload) => {
-      // opcional: respeitar filtros/paginação e só recarregar
-      load({ resetOffset: false });
-    };
+		const onCreated = () => load({ resetOffset: false });
+		const onItemChanged = () => load({ resetOffset: false });
 
-    const onItemChanged = (payload) => {
-      // opcional: você pode otimizar e só atualizar uma linha,
-      // mas o mais seguro inicialmente é recarregar.
-      load({ resetOffset: false });
-    };
+		socket.on("request:created", onCreated);
+		socket.on("request:item_changed", onItemChanged);
 
-    socket.on("request:created", onCreated);
-    socket.on("request:item_changed", onItemChanged);
+		return () => {
+			socket.off("request:created", onCreated);
+			socket.off("request:item_changed", onItemChanged);
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [limit, offset, statusId]);
 
-    return () => {
-      socket.off("request:created", onCreated);
-      socket.off("request:item_changed", onItemChanged);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [limit, offset, statusId, createdBy]);
+	const filteredRows = useMemo(() => {
+		const nameQ = norm(createdByName);
+		const typeQ = norm(typeFilter);
+		const itemQ = norm(itemFilter);
+
+		const { fromMs, toMs } = parseDateRange(dateFrom, dateTo);
+
+		return (rows || []).filter((r) => {
+			// 1) filtro por item
+			if (itemQ) {
+				const itemId = String(r?.item_id ?? "");
+				if (!norm(itemId).includes(itemQ)) return false;
+			}
+
+			// 2) filtro por tipo (id ou nome)
+			if (typeQ) {
+				const typeId = String(r?.request_type_id ?? "");
+				const typeName = String(r?.request_type?.type_name ?? "");
+				const hay = norm(`${typeId} ${typeName}`);
+				if (!hay.includes(typeQ)) return false;
+			}
+
+			// 3) filtro por criado por (nome)
+			if (nameQ) {
+				const fullName = String(r?.request_created_by_user?.full_name ?? "");
+				const email = String(r?.request_created_by_user?.email ?? "");
+				const hay = norm(`${fullName} ${email}`);
+				if (!hay.includes(nameQ)) return false;
+			}
+
+			// 4) range de data (criação/alteração)
+			if (fromMs != null || toMs != null) {
+				const iso = getRowTimeForFilter(r);
+				if (!iso) return false;
+
+				const t = new Date(iso).getTime();
+				if (!Number.isFinite(t)) return false;
+
+				if (fromMs != null && t < fromMs) return false;
+				if (toMs != null && t > toMs) return false;
+			}
+
+			return true;
+		});
+	}, [rows, createdByName, typeFilter, itemFilter, dateFrom, dateTo, dateMode]);
 
 	const pageInfo = useMemo(() => {
 		const start = total === 0 ? 0 : offset + 1;
@@ -538,13 +632,26 @@ export default function RequestsPage() {
 		navigate(`/conversations/${row.conversation_id}?messageId=${row.message_id}`);
 	}
 
+	function clearFilters() {
+		setStatusId("");
+		setCreatedByName("");
+		setTypeFilter("");
+		setItemFilter("");
+		setDateFrom("");
+		setDateTo("");
+		setDateMode("AUTO");
+		setOffset(0);
+		load({ resetOffset: true });
+	}
+
 	return (
 		<div style={{ display: "grid", gap: 12 }}>
 			<div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
 				<h2 style={{ margin: 0 }}>Solicitações</h2>
 
 				<div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-					<select value={statusId} onChange={(e) => setStatusId(e.target.value)} >
+					{/* STATUS (mantém) */}
+					<select value={statusId} onChange={(e) => setStatusId(e.target.value)}>
 						<option value="">Status (todos)</option>
 						<option value={STATUS.CREATED}>CREATED</option>
 						<option value={STATUS.IN_PROGRESS}>IN_PROGRESS</option>
@@ -554,17 +661,58 @@ export default function RequestsPage() {
 						<option value={STATUS.FAILED}>FAILED</option>
 					</select>
 
+					{/* Nome do usuário (em vez de id) */}
 					{canModerate ? (
 						<input
-							placeholder="created_by (id)"
-							value={createdBy}
-							onChange={(e) => setCreatedBy(e.target.value)}
-							style={{ padding: 6, width: 160 }}
+							placeholder="Criado por (nome ou e-mail)"
+							value={createdByName}
+							onChange={(e) => setCreatedByName(e.target.value)}
+							style={{ width: 220 }}
 						/>
 					) : null}
 
+					{/* Tipo */}
+					<input
+						placeholder="Tipo (id ou nome)"
+						value={typeFilter}
+						onChange={(e) => setTypeFilter(e.target.value)}
+						style={{ width: 180 }}
+					/>
+
+					{/* Item */}
+					<input
+						placeholder="Item (id)"
+						value={itemFilter}
+						onChange={(e) => setItemFilter(e.target.value)}
+						style={{ width: 120 }}
+					/>
+
+					{/* Datas */}
+					<select value={dateMode} onChange={(e) => setDateMode(e.target.value)} title="Qual data filtrar?">
+						<option value="AUTO">Data: Atualizado (ou Criado)</option>
+						<option value="CREATED">Data: Criado</option>
+						<option value="UPDATED">Data: Atualizado</option>
+					</select>
+
+					<input
+						type="date"
+						value={dateFrom}
+						onChange={(e) => setDateFrom(e.target.value)}
+						title="De (data)"
+					/>
+					<input
+						type="date"
+						value={dateTo}
+						onChange={(e) => setDateTo(e.target.value)}
+						title="Até (data)"
+					/>
+
 					<button onClick={() => load({ resetOffset: true })} disabled={busy}>
-						Filtrar
+						Aplicar (status)
+					</button>
+
+					<button onClick={clearFilters} disabled={busy}>
+						Limpar
 					</button>
 				</div>
 			</div>
@@ -582,6 +730,11 @@ export default function RequestsPage() {
 				</div>
 			) : null}
 
+			{/* Aviso pequeno sobre filtros client-side (para não confundir total/paginação) */}
+			<div style={{ fontSize: 12, opacity: 0.75 }}>
+				Filtrando na tela: <b>{filteredRows.length}</b> itens desta página (status é filtrado na API).
+			</div>
+
 			<div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "auto" }}>
 				<table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1200 }}>
 					<thead>
@@ -590,7 +743,8 @@ export default function RequestsPage() {
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Tipo</th>
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Status</th>
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado por</th>
-							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado / Atualizado em</th>
+							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado em</th>
+							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Atualizado em</th>
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Abrir</th>
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Editar</th>
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Conversa</th>
@@ -604,14 +758,14 @@ export default function RequestsPage() {
 									Carregando...
 								</td>
 							</tr>
-						) : rows.length === 0 ? (
+						) : filteredRows.length === 0 ? (
 							<tr>
 								<td colSpan={8} style={{ padding: 12 }}>
 									Nenhuma solicitação encontrada.
 								</td>
 							</tr>
 						) : (
-							rows.map((r) => {
+							filteredRows.map((r) => {
 								const isReturned = Number(r.request_status_id) === STATUS.RETURNED;
 								const isOwner = Number(r.request_created_by) === Number(user?.id);
 								const canEdit = isReturned && isOwner; // ✅ regra do pedido
@@ -621,9 +775,6 @@ export default function RequestsPage() {
 										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
 											<div style={{ display: "grid" }}>
 												<span style={{ fontWeight: 700 }}>#{r.item_id}</span>
-												{/* <span style={{ opacity: 0.75, fontSize: 12 }}>
-													req #{r.request_id} • msg #{r.message_id}
-												</span> */}
 											</div>
 										</td>
 
@@ -635,9 +786,17 @@ export default function RequestsPage() {
 											{r.request_status?.status_name ?? r.request_status_id}
 										</td>
 
-										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.request_created_by_user?.full_name ?? "—"}</td>
+										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+											{r.request_created_by_user?.full_name ?? "—"}
+										</td>
 
-										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{fmt(r.item_updated_at?r.item_updated_at:r.item_created_at)}</td>
+										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+											{fmt(r.item_created_at)}
+										</td>
+
+										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+											{fmt(r.item_updated_at ? r.item_updated_at : "")}
+										</td>
 
 										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
 											<button onClick={() => openDetails(r, "view")}>Abrir</button>

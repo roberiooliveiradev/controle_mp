@@ -2,7 +2,7 @@
 
 from enum import IntEnum
 from typing import Optional
-from datetime import timezone 
+from datetime import timezone, date
 
 from app.core.exceptions import ForbiddenError, NotFoundError, ConflictError
 from app.infrastructure.database.models.request_model import RequestModel
@@ -17,7 +17,7 @@ from app.repositories.request_item_field_repository import RequestItemFieldRepos
 from app.repositories.request_status_repository import RequestStatusRepository
 from app.repositories.request_type_repository import RequestTypeRepository
 
-from app.core.interfaces.request_notifier import ( 
+from app.core.interfaces.request_notifier import (
     RequestNotifier,
     RequestCreatedEvent,
     RequestItemChangedEvent,
@@ -175,17 +175,35 @@ class RequestService:
         limit: int,
         offset: int,
         status_id: Optional[int] = None,
-        created_by: Optional[int] = None,
+        # novos
+        created_by_name: Optional[str] = None,
+        type_id: Optional[int] = None,
+        type_q: Optional[str] = None,
+        item_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        date_mode: str = "AUTO",  # "AUTO" | "CREATED" | "UPDATED"
     ) -> tuple[list[dict], int]:
         """Lista RequestItems (flattened) para tela de listagem."""
+
+        # regra de visibilidade
+        created_by_user_id: int | None = None
         if role_id == Role.USER:
-            created_by = user_id
+            created_by_user_id = user_id
+            created_by_name = None  # ignora filtro por nome para USER
 
         rows, total = self._item_repo.list_items_for_page(
             limit=limit,
             offset=offset,
             status_id=status_id,
-            created_by=created_by,
+            created_by_user_id=created_by_user_id,
+            created_by_name=created_by_name,
+            type_id=type_id,
+            type_q=type_q,
+            item_id=item_id,
+            date_from=date_from,
+            date_to=date_to,
+            date_mode=date_mode,
         )
 
         type_ids = list({int(r["request_type_id"]) for r in rows if r.get("request_type_id") is not None})
