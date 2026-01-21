@@ -1,5 +1,5 @@
 // src/app/realtime/RealtimeContext.js
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "./socket";
 import { listConversationsApi } from "../api/conversationsApi";
 import { useAuth } from "../auth/AuthContext";
@@ -11,8 +11,11 @@ export function RealtimeProvider({ children }) {
 
   const [conversations, setConversations] = useState([]);
 
-  // ✅ Unread por perfil (mesma ideia do ConversationsPage antigo)
-  const unreadKey = `cadmp_unread_counts:${activeUserId ?? "na"}`;
+  // ✅ Unread por perfil
+  const unreadKey = useMemo(
+    () => `cadmp_unread_counts:${activeUserId ?? "na"}`,
+    [activeUserId]
+  );
 
   const [unreadCounts, setUnreadCounts] = useState(() => {
     try {
@@ -64,6 +67,52 @@ export function RealtimeProvider({ children }) {
     });
   }
 
+  // -----------------------------
+  // ✅ DEDUPE de eventos message:new
+  // -----------------------------
+  const seenRef = useRef({
+    order: [], // fila (LRU)
+    set: new Set(), // membership
+    max: 500, // limite
+  });
+
+  function getEventKey(payload) {
+    // prioriza IDs reais (o ideal)
+    const mid =
+      payload?.message_id ??
+      payload?.messageId ??
+      payload?.id ??
+      payload?.message?.id;
+
+    if (mid != null) return `mid:${mid}`;
+
+    // fallback (caso backend não envie message_id)
+    const cid = payload?.conversation_id ?? payload?.conversationId ?? "na";
+    const ts = payload?.created_at_iso ?? payload?.created_at ?? "na";
+    const sid = payload?.sender_id ?? payload?.sender?.id ?? "na";
+    const body = payload?.body ?? payload?.text ?? "";
+    // evita chave gigante
+    const bodyCut = String(body).slice(0, 80);
+
+    return `fp:${cid}|${ts}|${sid}|${bodyCut}`;
+  }
+
+  function wasSeenAndMark(key) {
+    const box = seenRef.current;
+    if (box.set.has(key)) return true;
+
+    box.set.add(key);
+    box.order.push(key);
+
+    // trim
+    while (box.order.length > box.max) {
+      const old = box.order.shift();
+      if (old != null) box.set.delete(old);
+    }
+
+    return false;
+  }
+
   useEffect(() => {
     if (!activeUserId) return;
 
@@ -77,6 +126,10 @@ export function RealtimeProvider({ children }) {
     const onMessageNew = (payload) => {
       const cid = Number(payload?.conversation_id);
       if (!cid) return;
+
+      // ✅ ignora duplicados (room + global, etc.)
+      const key = getEventKey(payload);
+      if (wasSeenAndMark(key)) return;
 
       bumpConversation(cid, payload?.created_at_iso ?? new Date().toISOString());
 
