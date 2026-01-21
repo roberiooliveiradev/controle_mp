@@ -35,6 +35,9 @@ from app.api.schemas.request_schema import (
     RequestItemFieldResponse,
 )
 
+from app.repositories.product_repository import ProductRepository
+from app.repositories.product_field_repository import ProductFieldRepository
+
 from app.repositories.request_status_repository import RequestStatusRepository
 from app.repositories.request_type_repository import RequestTypeRepository
 
@@ -154,6 +157,8 @@ def _build_service(session) -> MessageService:
         field_repo=RequestItemFieldRepository(session),
         status_repo=RequestStatusRepository(session),
         type_repo=RequestTypeRepository(session),
+        product_repo=ProductRepository(session),
+        pfield_repo=ProductFieldRepository(session),
         notifier=SocketIORequestNotifier(),
     )
 

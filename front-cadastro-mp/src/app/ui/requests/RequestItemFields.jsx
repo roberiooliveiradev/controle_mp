@@ -2,11 +2,11 @@
 
 import { useMemo } from "react";
 import {
-  TAGS,
+  TAGS, // ✅ estava faltando em alguns projetos quando copiaram
   newSupplierRow,
   REQUEST_TYPE_ID_UPDATE,
+  REQUEST_TYPE_ID_CREATE,
 } from "./requestItemFields.logic";
-
 
 const styles = {
   label: { display: "grid", gap: 6, fontSize: 13, color: "var(--text)" },
@@ -43,19 +43,12 @@ function selectStyle(hasError) {
   };
 }
 
-/**
- * Componente “unificado” dos campos do RequestItem.
- *
- * Suporta 2 variantes:
- * - variant="structured": usado no RequestComposerModal (state estruturado)
- * - variant="fields": usado no DetailsModal (state por tags + fornecedores)
- *
- * Props comuns:
- * - readOnly: boolean (força somente leitura)
- */
 export function RequestItemFields({
   variant,
   readOnly = false,
+
+  // ✅ libera SOMENTE o campo executor_codigo_novo mesmo em modo readOnly
+  canEditExecutorCode = false,
 
   // ---------- structured ----------
   item,
@@ -70,22 +63,37 @@ export function RequestItemFields({
   fornecedoresRows,
   onChangeFornecedores,
 
-  // ✅ NOVO: usado no modal de detalhes (variant="fields")
+  // usado no details (variant="fields")
   requestTypeId,
 }) {
   const isStructured = variant === "structured";
 
-  // ✅ FIX: isUpdate não pode depender do valor do campo
   const isUpdate = isStructured
     ? item?.request_type_code === "UPDATE"
     : Number(requestTypeId) === REQUEST_TYPE_ID_UPDATE;
 
+  const isCreate = isStructured
+    ? item?.request_type_code === "CREATE"
+    : Number(requestTypeId) === REQUEST_TYPE_ID_CREATE;
+
   const fieldErr = errors?.fields || {};
   const suppliersErr = errors?.suppliers || {};
 
+  // ✅ gating: "edit normal" = readOnly false
+  const canEditNormal = !readOnly;
+
+  // ✅ gating: só o campo do executor pode furar o readOnly
+  const canEditExecutorField = !!canEditExecutorCode;
+
   const fornecedores = useMemo(() => {
-    if (isStructured) return Array.isArray(item?.fornecedores) && item.fornecedores.length ? item.fornecedores : [newSupplierRow()];
-    return Array.isArray(fornecedoresRows) && fornecedoresRows.length ? fornecedoresRows : [newSupplierRow()];
+    if (isStructured) {
+      return Array.isArray(item?.fornecedores) && item.fornecedores.length
+        ? item.fornecedores
+        : [newSupplierRow()];
+    }
+    return Array.isArray(fornecedoresRows) && fornecedoresRows.length
+      ? fornecedoresRows
+      : [newSupplierRow()];
   }, [isStructured, item?.fornecedores, fornecedoresRows]);
 
   function getVal(tag, fallback = "") {
@@ -94,20 +102,28 @@ export function RequestItemFields({
   }
 
   function setVal(tag, v) {
-    if (readOnly) return;
+    const isExecutorField = tag === TAGS.executor_codigo_novo;
+
+    // ✅ regra:
+    // - se readOnly: só permite alterar executor_codigo_novo e somente quando canEditExecutorCode=true
+    // - se não readOnly: permite tudo (edit normal)
+    if (!canEditNormal && !(isExecutorField && canEditExecutorField)) return;
+
     if (isStructured) {
       onItemChange?.(tag, v);
       onClearFieldError?.(tag);
       return;
     }
+
     onChangeTagValue?.(tag, v);
+    onClearFieldError?.(tag); // ✅ estava faltando: limpa erro também no modo fields
   }
 
   function setRequestType(code) {
-    if (readOnly) return;
+    // somente no structured + edit normal
+    if (!canEditNormal) return;
     if (!isStructured) return;
 
-    // se CREATE: limpar campos que ficam ocultos
     if (code === "CREATE") {
       onItemChange?.("request_type_code", "CREATE");
       onItemChange?.(TAGS.codigo_atual, "");
@@ -121,29 +137,29 @@ export function RequestItemFields({
   }
 
   function addSupplierRow() {
-    if (readOnly) return;
+    // ✅ fornecedores seguem sempre o readOnly (executor NÃO pode mexer)
+    if (!canEditNormal) return;
+
     const next = [...fornecedores, newSupplierRow()];
     if (isStructured) {
-      onItemChange?.(TAGS.fornecedores, next); // no structured usamos chave "fornecedores"
+      onItemChange?.(TAGS.fornecedores, next);
       return;
     }
     onChangeFornecedores?.(next);
   }
 
   function removeSupplierRow(idx) {
-    if (readOnly) return;
+    if (!canEditNormal) return;
+
     const next = fornecedores.filter((_, i) => i !== idx);
     const safe = next.length ? next : [newSupplierRow()];
 
-    if (isStructured) {
-      onItemChange?.(TAGS.fornecedores, safe);
-    } else {
-      onChangeFornecedores?.(safe);
-    }
+    if (isStructured) onItemChange?.(TAGS.fornecedores, safe);
+    else onChangeFornecedores?.(safe);
   }
 
   function setSupplierCell(rowIndex, key, value) {
-    if (readOnly) return;
+    if (!canEditNormal) return;
 
     const next = fornecedores.map((r, i) => (i === rowIndex ? { ...r, [key]: value } : r));
 
@@ -153,11 +169,12 @@ export function RequestItemFields({
       return;
     }
     onChangeFornecedores?.(next);
+    onClearSupplierError?.(rowIndex, key); // ✅ também limpa no modo fields
   }
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
-      {/* Tipo (só no structured, porque no details já vem do backend) */}
+      {/* Tipo (só no structured) */}
       {isStructured ? (
         <div style={{ display: "grid", gap: 8 }}>
           <div style={styles.sectionTitle}>Tipo da solicitação</div>
@@ -166,7 +183,7 @@ export function RequestItemFields({
             <select
               value={item?.request_type_code ?? "CREATE"}
               onChange={(e) => setRequestType(e.target.value)}
-              disabled={readOnly}
+              disabled={!canEditNormal}
               style={selectStyle(false)}
             >
               <option value="CREATE">CRIAR</option>
@@ -179,6 +196,25 @@ export function RequestItemFields({
 
       {/* Campos principais */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        {/* ✅ CAMPO SEPARADO DO EXECUTOR (somente CREATE no details) */}
+        {!isStructured && isCreate ? (
+          <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+            <span>Código novo (executor — obrigatório para finalizar)</span>
+            <input
+              value={getVal(TAGS.executor_codigo_novo)}
+              onChange={(e) => setVal(TAGS.executor_codigo_novo, e.target.value)}
+              disabled={!canEditExecutorField}
+              style={inputStyle(!!fieldErr[TAGS.executor_codigo_novo])}
+            />
+            {fieldErr[TAGS.executor_codigo_novo] ? (
+              <span style={styles.errorText}>{fieldErr[TAGS.executor_codigo_novo]}</span>
+            ) : null}
+            <div style={styles.subtle}>
+              Este campo é preenchido pelo executor (ADMIN/ANALYST) antes de rejeitar/finalizar.
+            </div>
+          </label>
+        ) : null}
+
         {/* UPDATE: codigo_atual/novo_codigo */}
         {isUpdate ? (
           <>
@@ -187,10 +223,12 @@ export function RequestItemFields({
               <input
                 value={getVal(TAGS.codigo_atual)}
                 onChange={(e) => setVal(TAGS.codigo_atual, e.target.value)}
-                disabled={readOnly}
+                disabled={!canEditNormal}
                 style={inputStyle(!!fieldErr[TAGS.codigo_atual])}
               />
-              {fieldErr[TAGS.codigo_atual] ? <span style={styles.errorText}>{fieldErr[TAGS.codigo_atual]}</span> : null}
+              {fieldErr[TAGS.codigo_atual] ? (
+                <span style={styles.errorText}>{fieldErr[TAGS.codigo_atual]}</span>
+              ) : null}
             </label>
 
             <label style={styles.label}>
@@ -198,10 +236,12 @@ export function RequestItemFields({
               <input
                 value={getVal(TAGS.novo_codigo)}
                 onChange={(e) => setVal(TAGS.novo_codigo, e.target.value)}
-                disabled={readOnly}
+                disabled={!canEditNormal}
                 style={inputStyle(!!fieldErr[TAGS.novo_codigo])}
               />
-              {fieldErr[TAGS.novo_codigo] ? <span style={styles.errorText}>{fieldErr[TAGS.novo_codigo]}</span> : null}
+              {fieldErr[TAGS.novo_codigo] ? (
+                <span style={styles.errorText}>{fieldErr[TAGS.novo_codigo]}</span>
+              ) : null}
             </label>
           </>
         ) : null}
@@ -211,7 +251,7 @@ export function RequestItemFields({
           <input
             value={getVal(TAGS.grupo)}
             onChange={(e) => setVal(TAGS.grupo, e.target.value)}
-            disabled={readOnly}
+            disabled={!canEditNormal}
             style={inputStyle(!!fieldErr[TAGS.grupo])}
           />
           {fieldErr[TAGS.grupo] ? <span style={styles.errorText}>{fieldErr[TAGS.grupo]}</span> : null}
@@ -222,7 +262,7 @@ export function RequestItemFields({
           <input
             value={getVal(TAGS.tipo)}
             onChange={(e) => setVal(TAGS.tipo, e.target.value)}
-            disabled={readOnly}
+            disabled={!canEditNormal}
             style={inputStyle(!!fieldErr[TAGS.tipo])}
           />
           {fieldErr[TAGS.tipo] ? <span style={styles.errorText}>{fieldErr[TAGS.tipo]}</span> : null}
@@ -233,7 +273,7 @@ export function RequestItemFields({
           <input
             value={getVal(TAGS.descricao)}
             onChange={(e) => setVal(TAGS.descricao, e.target.value)}
-            disabled={readOnly}
+            disabled={!canEditNormal}
             style={inputStyle(!!fieldErr[TAGS.descricao])}
           />
           {fieldErr[TAGS.descricao] ? <span style={styles.errorText}>{fieldErr[TAGS.descricao]}</span> : null}
@@ -244,7 +284,7 @@ export function RequestItemFields({
           <input
             value={getVal(TAGS.armazem_padrao)}
             onChange={(e) => setVal(TAGS.armazem_padrao, e.target.value)}
-            disabled={readOnly}
+            disabled={!canEditNormal}
             style={inputStyle(!!fieldErr[TAGS.armazem_padrao])}
           />
           {fieldErr[TAGS.armazem_padrao] ? <span style={styles.errorText}>{fieldErr[TAGS.armazem_padrao]}</span> : null}
@@ -255,7 +295,7 @@ export function RequestItemFields({
           <input
             value={getVal(TAGS.unidade)}
             onChange={(e) => setVal(TAGS.unidade, e.target.value)}
-            disabled={readOnly}
+            disabled={!canEditNormal}
             style={inputStyle(!!fieldErr[TAGS.unidade])}
           />
           {fieldErr[TAGS.unidade] ? <span style={styles.errorText}>{fieldErr[TAGS.unidade]}</span> : null}
@@ -266,7 +306,7 @@ export function RequestItemFields({
           <input
             value={getVal(TAGS.produto_terceiro)}
             onChange={(e) => setVal(TAGS.produto_terceiro, e.target.value)}
-            disabled={readOnly}
+            disabled={!canEditNormal}
             style={inputStyle(!!fieldErr[TAGS.produto_terceiro])}
           />
           {fieldErr[TAGS.produto_terceiro] ? <span style={styles.errorText}>{fieldErr[TAGS.produto_terceiro]}</span> : null}
@@ -277,7 +317,7 @@ export function RequestItemFields({
           <input
             value={getVal(TAGS.cta_contabil)}
             onChange={(e) => setVal(TAGS.cta_contabil, e.target.value)}
-            disabled={readOnly}
+            disabled={!canEditNormal}
             style={inputStyle(!!fieldErr[TAGS.cta_contabil])}
           />
           {fieldErr[TAGS.cta_contabil] ? <span style={styles.errorText}>{fieldErr[TAGS.cta_contabil]}</span> : null}
@@ -288,7 +328,7 @@ export function RequestItemFields({
           <input
             value={getVal(TAGS.ref_cliente)}
             onChange={(e) => setVal(TAGS.ref_cliente, e.target.value)}
-            disabled={readOnly}
+            disabled={!canEditNormal}
             style={inputStyle(!!fieldErr[TAGS.ref_cliente])}
           />
           {fieldErr[TAGS.ref_cliente] ? <span style={styles.errorText}>{fieldErr[TAGS.ref_cliente]}</span> : null}
@@ -299,7 +339,7 @@ export function RequestItemFields({
       <div style={{ display: "grid", gap: 10 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <div style={styles.sectionTitle}>Fornecedores</div>
-          {!readOnly ? (
+          {canEditNormal ? (
             <button type="button" onClick={addSupplierRow} style={{ padding: "8px 10px", borderRadius: 10 }}>
               + Linha
             </button>
@@ -325,7 +365,7 @@ export function RequestItemFields({
                   <tr key={idx}>
                     {["supplier_code", "store", "supplier_name", "part_number"].map((k) => (
                       <td key={k} style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                        {readOnly ? (
+                        {!canEditNormal ? (
                           <div style={{ padding: "8px 8px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface)" }}>
                             {String(r?.[k] ?? "").trim() ? r[k] : <span style={{ opacity: 0.6 }}>—</span>}
                           </div>
@@ -343,7 +383,7 @@ export function RequestItemFields({
                     ))}
 
                     <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                      {!readOnly ? (
+                      {canEditNormal ? (
                         <button type="button" onClick={() => removeSupplierRow(idx)} style={{ padding: "8px 10px", borderRadius: 10 }}>
                           Remover
                         </button>

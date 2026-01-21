@@ -17,6 +17,10 @@ from app.repositories.request_item_field_repository import RequestItemFieldRepos
 from app.repositories.request_status_repository import RequestStatusRepository
 from app.repositories.request_type_repository import RequestTypeRepository
 
+from app.repositories.product_repository import ProductRepository
+from app.repositories.product_field_repository import ProductFieldRepository
+from app.services.product_service import ProductService
+
 from app.core.interfaces.request_notifier import (
     RequestNotifier,
     RequestCreatedEvent,
@@ -39,6 +43,10 @@ class RequestStatus(IntEnum):
     REJECTED = 6
 
 
+class RequestType(IntEnum):
+    CREATE = 1
+    UPDATE = 2
+
 class RequestService:
     def __init__(
         self,
@@ -50,6 +58,8 @@ class RequestService:
         field_repo: RequestItemFieldRepository,
         status_repo: RequestStatusRepository,
         type_repo: RequestTypeRepository,
+        product_repo: ProductRepository,
+        pfield_repo: ProductFieldRepository,
         notifier: RequestNotifier | None = None,
     ) -> None:
         self._conv_repo = conv_repo
@@ -60,14 +70,10 @@ class RequestService:
         self._status_repo = status_repo
         self._type_repo = type_repo
         self._notifier = notifier
+        self._product_repo = product_repo
+        self._pfield_repo = pfield_repo
 
-    def _emit_request_created(
-        self,
-        *,
-        req: RequestModel,
-        conversation_id: int,
-        created_by: int,
-    ) -> None:
+    def _emit_request_created(self, *, req: RequestModel, conversation_id: int, created_by: int) -> None:
         if not self._notifier:
             return
         evt = RequestCreatedEvent(
@@ -79,21 +85,13 @@ class RequestService:
         )
         self._notifier.notify_request_created(evt)
 
-    def _emit_item_changed(
-        self,
-        *,
-        req: RequestModel,
-        conversation_id: int,
-        item: RequestItemModel,
-        changed_by: int,
-        change_kind: str,
-    ) -> None:
+    
+    def _emit_item_changed(self, *, req: RequestModel, conversation_id: int, item: RequestItemModel, changed_by: int, change_kind: str) -> None:
         if not self._notifier:
             return
 
-        # 🔎 tenta usar updated_at do item (se houver), senão created_at
         dt = item.updated_at or item.created_at
-        iso = dt.astimezone(timezone.utc).isoformat() if dt else None
+        iso = dt.astimezone(timezone.utc).isoformat() if dt else ""
 
         evt = RequestItemChangedEvent(
             request_id=int(req.id),
@@ -103,7 +101,7 @@ class RequestService:
             changed_by=int(changed_by),
             change_kind=change_kind,
             request_status_id=int(item.request_status_id) if item.request_status_id is not None else None,
-            updated_at_iso=iso or "",
+            updated_at_iso=iso,
         )
         self._notifier.notify_request_item_changed(evt)
 
@@ -112,12 +110,12 @@ class RequestService:
         row = self._conv_repo.get_row_by_id(conversation_id)
         if row is None:
             raise NotFoundError("Conversa não encontrada.")
-
         conv, _, _ = row
         if role_id in (Role.ADMIN, Role.ANALYST):
             return
         if conv.created_by != user_id:
             raise ForbiddenError("Acesso negado.")
+
 
     def _conversation_id_from_message(self, message_id: int) -> int:
         row = self._msg_repo.get_row(message_id=message_id)
@@ -126,47 +124,175 @@ class RequestService:
         msg, _sender = row
         return int(msg.conversation_id)
 
-    def _ensure_user_can_edit_item(
+    def _ensure_user_can_edit_item(self, *, req: RequestModel, item: RequestItemModel, user_id: int, role_id: int) -> None:
+        # regra global (vale para todos)
+        self._ensure_not_locked(item=item)
+
+        # ✅ qualquer edição "normal" (item/fields normais) só quando:
+        # - for o criador
+        # - e status RETURNED
+        if req.created_by != user_id:
+            raise ForbiddenError("Acesso negado.")
+
+        if int(item.request_status_id) != int(RequestStatus.RETURNED):
+            raise ForbiddenError("Você só pode alterar quando a solicitação foi devolvida (RETURNED).")
+
+    def _ensure_user_can_edit_field(
         self,
         *,
         req: RequestModel,
         item: RequestItemModel,
         user_id: int,
         role_id: int,
+        field_tag: str,
     ) -> None:
-        """USER só edita quando for dono e o status do item for RETURNED."""
-        if role_id in (Role.ADMIN, Role.ANALYST):
+        # regra global
+        self._ensure_not_locked(item=item)
+
+        executor_tag = "executor_codigo_novo"
+
+        # ✅ Caso 1: criador + RETURNED -> pode editar qualquer campo
+        if req.created_by == user_id and int(item.request_status_id) == int(RequestStatus.RETURNED):
             return
 
-        if req.created_by != user_id:
-            raise ForbiddenError("Acesso negado.")
+        # ✅ Caso 2: ADMIN/ANALYST -> só pode editar o campo executor_codigo_novo em CREATE
+        if role_id in (Role.ADMIN, Role.ANALYST):
+            if str(field_tag) != executor_tag:
+                raise ForbiddenError("ADMIN/ANALYST só podem alterar o campo 'executor_codigo_novo'.")
+            if not self._is_create_item(item):
+                raise ForbiddenError("O campo 'executor_codigo_novo' só pode ser alterado em solicitações do tipo CREATE.")
+            return
 
-        if int(item.request_status_id) != int(RequestStatus.RETURNED):
-            raise ForbiddenError(
-                "Você só pode alterar quando a solicitação foi devolvida para correção (RETURNED)."
-            )
+        # ✅ Caso 3: USER (ou outro) fora do RETURNED/criador -> bloqueia
+        raise ForbiddenError("Você não tem permissão para editar este campo.")
 
     def _ensure_can_change_status(self, *, role_id: int) -> None:
         if role_id not in (Role.ADMIN, Role.ANALYST):
             raise ForbiddenError("Apenas ANALYST/ADMIN podem alterar o status.")
+        
+    # regra global: FINALIZED/REJECTED não permite alteração de nada
+    def _ensure_not_locked(self, *, item: RequestItemModel) -> None:
+        if int(item.request_status_id) in (int(RequestStatus.FINALIZED), int(RequestStatus.REJECTED)):
+            raise ConflictError("Item FINALIZED/REJECTED não pode ser alterado.")
 
     def _resubmit_if_returned(self, *, item: RequestItemModel, role_id: int) -> None:
-        """
-     Regra de negócio:
-        Quando USER corrigir um item RETURNED, ele volta para CREATED automaticamente.
-        Admin/Analyst não sofrem essa regra.
-        """
         if role_id != Role.USER:
             self._item_repo.touch_updated_at(int(item.id))
             return
         if int(item.request_status_id) != int(RequestStatus.RETURNED):
             self._item_repo.touch_updated_at(int(item.id))
             return
-
-        # seta para CREATED (reenviado)
         self._item_repo.update_fields(int(item.id), {"request_status_id": int(RequestStatus.CREATED)})
 
-    # -------- Listagem para tela --------
+    def _get_field_value(self, item_fields: list[RequestItemFieldModel], tag: str) -> str | None:
+        for f in item_fields:
+            if str(f.field_tag) == str(tag) and not (f.is_deleted or False):
+                v = (f.field_value or "").strip()
+                return v or None
+        return None
+
+    # valida regras de finalização
+    def _validate_finalize_rules(self, *, item: RequestItemModel, item_fields: list[RequestItemFieldModel]) -> None:
+        executor_tag = "executor_codigo_novo"
+        codigo_atual_tag = "codigo_atual"
+        novo_codigo_tag = "novo_codigo"
+
+        if self._is_create_item(item):
+            executor_code = self._get_field_value(item_fields, executor_tag)
+            if not executor_code:
+                raise ConflictError("Para finalizar CREATE, o campo 'código novo (executor)' é obrigatório.")
+            return
+
+        if self._is_update_item(item):
+            novo_codigo = self._get_field_value(item_fields, novo_codigo_tag)
+            if novo_codigo:
+                return
+            codigo_atual = self._get_field_value(item_fields, codigo_atual_tag)
+            if not codigo_atual:
+                raise ConflictError("Para finalizar UPDATE, informe 'codigo_atual' ou preencha 'novo_codigo'.")
+            return
+
+    def _get_request_type_name(self, request_type_id: int | None) -> str | None:
+        if request_type_id is None:
+            return None
+        mp = self._type_repo.get_map_by_ids([int(request_type_id)])
+        t = mp.get(int(request_type_id))
+        if t is None:
+            return None
+        # normaliza: CREATE / UPDATE
+        return str(getattr(t, "type_name", "") or "").strip().upper() or None
+
+    def _is_create_item(self, item: RequestItemModel) -> bool:
+        # Preferir o nome do tipo vindo do banco (evita mismatch de seeds)
+        name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
+        if name:
+            return name == "CREATE"
+        # fallback por id (caso o repo não retorne)
+        return int(item.request_type_id or 0) == int(RequestType.CREATE)
+
+    def _is_update_item(self, item: RequestItemModel) -> bool:
+        name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
+        if name:
+            return name == "UPDATE"
+        return int(item.request_type_id or 0) == int(RequestType.UPDATE)
+
+    def _sync_create_executor_to_novo_codigo(
+        self,
+        *,
+        item: RequestItemModel,
+        item_fields: list[RequestItemFieldModel],
+    ) -> None:
+        """
+        Compatibilidade:
+        - Para CREATE, alguns pontos do fluxo (ex: ProductService / validações antigas)
+          podem ainda ler o tag 'novo_codigo'.
+        - Se o executor preencheu 'executor_codigo_novo', espelha em 'novo_codigo'.
+        """
+        if not self._is_create_item(item):
+            return
+
+        executor_tag = "executor_codigo_novo"
+        novo_codigo_tag = "novo_codigo"
+
+        # valor do executor
+        executor_val = self._get_field_value(item_fields, executor_tag)
+        if not executor_val:
+            return
+
+        # procura field novo_codigo (ativo)
+        novo_field: RequestItemFieldModel | None = None
+        for f in item_fields:
+            if str(f.field_tag) == novo_codigo_tag and not (f.is_deleted or False):
+                novo_field = f
+                break
+
+        if novo_field is not None:
+            prev = (novo_field.field_value or "").strip()
+            if prev != executor_val:
+                self._field_repo.update_fields(int(novo_field.id), {"field_value": executor_val})
+            return
+
+        # se não existe, cria
+        # tenta herdar field_type_id do executor (se existir no payload), senão usa 1
+        executor_field = None
+        for f in item_fields:
+            if str(f.field_tag) == executor_tag and not (f.is_deleted or False):
+                executor_field = f
+                break
+
+        field_type_id = int(getattr(executor_field, "field_type_id", None) or 1)
+
+        self._field_repo.add(
+            RequestItemFieldModel(
+                request_items_id=int(item.id),
+                field_type_id=field_type_id,
+                field_tag=novo_codigo_tag,
+                field_value=executor_val,
+                field_flag=None,
+            )
+        )
+
+    # ---------------- listagem ----------------
     def list_request_items(
         self,
         *,
@@ -175,22 +301,18 @@ class RequestService:
         limit: int,
         offset: int,
         status_id: Optional[int] = None,
-        # novos
         created_by_name: Optional[str] = None,
         type_id: Optional[int] = None,
         type_q: Optional[str] = None,
         item_id: Optional[int] = None,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
-        date_mode: str = "AUTO",  # "AUTO" | "CREATED" | "UPDATED"
+        date_mode: str = "AUTO",
     ) -> tuple[list[dict], int]:
-        """Lista RequestItems (flattened) para tela de listagem."""
-
-        # regra de visibilidade
         created_by_user_id: int | None = None
         if role_id == Role.USER:
             created_by_user_id = user_id
-            created_by_name = None  # ignora filtro por nome para USER
+            created_by_name = None
 
         rows, total = self._item_repo.list_items_for_page(
             limit=limit,
@@ -221,21 +343,17 @@ class RequestService:
             r["request_status"] = {"id": s.id, "status_name": s.status_name} if s is not None else None
 
         return rows, int(total)
-
-    # -------- Alterar status (analyst/admin) --------
-    def change_item_status(
-        self,
-        *,
-        item_id: int,
-        new_status_id: int,
-        user_id: int,
-        role_id: int,
-    ) -> None:
+    
+    # ---------------- status ----------------
+    def change_item_status(self, *, item_id: int, new_status_id: int, user_id: int, role_id: int) -> None:
         self._ensure_can_change_status(role_id=role_id)
 
         item = self._item_repo.get_by_id(item_id)
         if item is None:
             raise NotFoundError("Item não encontrado.")
+
+        # regra global: não muda status se já FINALIZED/REJECTED
+        self._ensure_not_locked(item=item)
 
         req = self._req_repo.get_by_id(item.request_id)
         if req is None:
@@ -253,11 +371,29 @@ class RequestService:
         if int(new_status_id) not in allowed:
             raise ConflictError("Status inválido para esta operação.")
 
+        # FINALIZE: valida regras + sync compat + aplica produto
+        if int(new_status_id) == int(RequestStatus.FINALIZED):
+            fields_map = self._field_repo.list_by_item_ids([int(item.id)])
+            item_fields = fields_map.get(int(item.id), [])
+
+            # ✅ compat: espelha executor_codigo_novo -> novo_codigo (CREATE)
+            self._sync_create_executor_to_novo_codigo(item=item, item_fields=item_fields)
+
+            # ✅ valida com regra correta
+            self._validate_finalize_rules(item=item, item_fields=item_fields)
+
+            prod_svc = ProductService(
+                product_repo=self._product_repo,
+                pfield_repo=self._pfield_repo,
+                item_repo=self._item_repo,
+            )
+            prod_svc.apply_request_item_finalized(item=item, item_fields=item_fields)
+
+
         ok = self._item_repo.update_fields(item_id, {"request_status_id": int(new_status_id)})
         if not ok:
             raise NotFoundError("Item não encontrado.")
 
-        # recarrega item para pegar status/updated_at atual
         item2 = self._item_repo.get_by_id(item_id) or item
         self._emit_item_changed(
             req=req,
@@ -428,15 +564,12 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        # regra: USER só pode editar quando devolvido
         self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
 
         ok = self._item_repo.update_fields(item_id, values)
-
         if not ok:
             raise NotFoundError("Item não encontrado.")
 
-        # após corrigir (USER), volta para CREATED
         self._resubmit_if_returned(item=item, role_id=role_id)
 
     def delete_item(self, *, item_id: int, user_id: int, role_id: int) -> None:
@@ -468,8 +601,13 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        # se USER estiver corrigindo, precisa estar RETURNED
-        self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
+        self._ensure_user_can_edit_field(
+            req=req,
+            item=item,
+            user_id=user_id,
+            role_id=role_id,
+            field_tag=str(payload.get("field_tag") or ""),
+        )
 
         field = RequestItemFieldModel(
             request_items_id=item.id,
@@ -480,7 +618,6 @@ class RequestService:
         )
         created = self._field_repo.add(field)
 
-        # após corrigir (USER), volta para CREATED
         self._resubmit_if_returned(item=item, role_id=role_id)
         return created
 
@@ -500,17 +637,24 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        # regra: USER só pode editar quando devolvido
-        self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
+        self._ensure_user_can_edit_field(
+            req=req,
+            item=item,
+            user_id=user_id,
+            role_id=role_id,
+            field_tag=str(field.field_tag),
+        )
+
+        # ✅ admin/analyst: só altera field_value
+        if role_id in (Role.ADMIN, Role.ANALYST):
+            values = {"field_value": values.get("field_value")}
 
         ok = self._field_repo.update_fields(field_id, values)
         if not ok:
             raise NotFoundError("Campo não encontrado.")
 
-        # após corrigir (USER), volta para CREATED
         self._resubmit_if_returned(item=item, role_id=role_id)
-        
-        # emite realtime (FIELDS)
+
         item2 = self._item_repo.get_by_id(int(item.id)) or item
         self._emit_item_changed(
             req=req,
@@ -536,12 +680,16 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        # se USER estiver corrigindo, precisa estar RETURNED
-        self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
+        self._ensure_user_can_edit_field(
+            req=req,
+            item=item,
+            user_id=user_id,
+            role_id=role_id,
+            field_tag=str(field.field_tag),
+        )
 
         ok = self._field_repo.soft_delete(field_id)
         if not ok:
             raise NotFoundError("Campo não encontrado.")
 
-        # após corrigir (USER), volta para CREATED
         self._resubmit_if_returned(item=item, role_id=role_id)

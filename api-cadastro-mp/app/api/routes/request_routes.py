@@ -27,6 +27,9 @@ from app.services.request_service import RequestService
 from app.repositories.request_status_repository import RequestStatusRepository
 from app.repositories.request_type_repository import RequestTypeRepository
 
+from app.repositories.product_repository import ProductRepository
+from app.repositories.product_field_repository import ProductFieldRepository
+
 from app.api.schemas.request_schema import (
     RequestTypeMiniResponse,
     RequestStatusMiniResponse,
@@ -50,6 +53,8 @@ def _build_service(session) -> RequestService:
         field_repo=RequestItemFieldRepository(session),
         status_repo=RequestStatusRepository(session),
         type_repo=RequestTypeRepository(session),
+        product_repo=ProductRepository(session),
+        pfield_repo=ProductFieldRepository(session),
         notifier=SocketIORequestNotifier(),
     )
 

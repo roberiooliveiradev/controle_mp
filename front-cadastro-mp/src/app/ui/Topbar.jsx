@@ -27,10 +27,8 @@ export function Topbar() {
         gap: 12,
       }}
     >
-      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
         <strong>Controle MP</strong>
-
-        <nav style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <nav style={{ display: "flex", gap: 20, alignItems: "center", justifyContent: "end", width: "75dvw"}}>
           <Link
             to="/conversations"
             style={{
@@ -49,8 +47,16 @@ export function Topbar() {
           >
             Solicitações
           </Link>
+          <Link
+            to="/products"
+            style={{
+              textDecoration: "none",
+              fontWeight: location.pathname.startsWith("/products") ? 700 : 500,
+            }}
+          >
+            Produtos
+          </Link>
         </nav>
-      </div>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         {profiles.length > 1 && (

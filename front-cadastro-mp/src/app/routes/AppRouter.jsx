@@ -9,6 +9,7 @@ import ConversationsPage from "../../pages/ConversationsPage";
 import RequestsPage from "../../pages/RequestsPage";
 import { RealtimeProvider } from "../realtime/RealtimeContext"
 import RegisterPage from "../../pages/RegisterPage";
+import ProductsPage from "../../pages/ProductsPage";
 
 export function AppRouter() {
   return (
@@ -32,6 +33,7 @@ export function AppRouter() {
           <Route path="conversations/:id" element={<ConversationsPage />} />
 
           <Route path="requests" element={<RequestsPage />} />
+          <Route path="products" element={<ProductsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

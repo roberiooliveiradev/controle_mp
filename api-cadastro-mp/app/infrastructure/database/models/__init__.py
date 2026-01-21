@@ -15,3 +15,5 @@ from app.infrastructure.database.models.message_type_model import MessageTypeMod
 from app.infrastructure.database.models.request_status_model import RequestStatusModel  # noqa: F401
 from app.infrastructure.database.models.request_type_model import RequestTypeModel  # noqa: F401
 from app.infrastructure.database.models.field_type_model import FieldTypeModel  # noqa: F401
+from app.infrastructure.database.models.product_model import ProductModel  # noqa: F401
+from app.infrastructure.database.models.product_field_model import ProductFieldModel  # noqa: F401
