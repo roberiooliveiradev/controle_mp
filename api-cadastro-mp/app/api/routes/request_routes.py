@@ -10,6 +10,8 @@ from app.api.schemas.request_schema import (
     RequestResponse,
     RequestItemResponse,
     RequestItemFieldResponse,
+    RequestItemListResponse,
+    RequestItemListRowResponse,
 )
 from app.infrastructure.database.session import db_session
 from app.repositories.conversation_repository import ConversationRepository
@@ -46,6 +48,7 @@ def _build_service(session) -> RequestService:
         type_repo=RequestTypeRepository(session),
     )
 
+
 def _pack_request(req, items, fields_map, type_map, status_map) -> dict:
     return RequestResponse(
         id=req.id,
@@ -57,11 +60,8 @@ def _pack_request(req, items, fields_map, type_map, status_map) -> dict:
             RequestItemResponse(
                 id=i.id,
                 request_id=i.request_id,
-
                 request_type_id=i.request_type_id,
                 request_status_id=i.request_status_id,
-
-                # ✅ agora devolve objeto
                 request_type=(
                     RequestTypeMiniResponse(
                         id=type_map[i.request_type_id].id,
@@ -78,7 +78,6 @@ def _pack_request(req, items, fields_map, type_map, status_map) -> dict:
                     if status_map.get(i.request_status_id) is not None
                     else None
                 ),
-
                 product_id=i.product_id,
                 created_at=i.created_at,
                 updated_at=i.updated_at,
@@ -99,6 +98,7 @@ def _pack_request(req, items, fields_map, type_map, status_map) -> dict:
             for i in items
         ],
     ).model_dump()
+
 
 # -------- Request CRUD --------
 @bp_req.post("")
@@ -121,6 +121,7 @@ def create_request():
 
     return jsonify(_pack_request(req2, items, fields_map, type_map, status_map)), 201
 
+
 @bp_req.get("/<int:request_id>")
 @require_auth
 def get_request(request_id: int):
@@ -133,6 +134,7 @@ def get_request(request_id: int):
         )
 
     return jsonify(_pack_request(req, items, fields_map, type_map, status_map)), 200
+
 
 @bp_req.delete("/<int:request_id>")
 @require_auth
@@ -228,5 +230,65 @@ def delete_field(field_id: int):
     with db_session() as session:
         svc = _build_service(session)
         svc.delete_field(field_id=field_id, user_id=user_id, role_id=role_id)
+
+    return ("", 204)
+
+
+# -------- Listagem (tela) --------
+@bp_req.get("/items")
+@require_auth
+def list_request_items():
+    user_id, role_id = _auth_user()
+
+    try:
+        limit = int(request.args.get("limit", 30))
+        offset = int(request.args.get("offset", 0))
+    except ValueError:
+        return jsonify({"error": "Parâmetros limit/offset inválidos."}), 400
+
+    status_id = request.args.get("status_id")
+    created_by = request.args.get("created_by")
+
+    status_id = int(status_id) if status_id is not None and status_id != "" else None
+    created_by = int(created_by) if created_by is not None and created_by != "" else None
+
+    with db_session() as session:
+        svc = _build_service(session)
+        rows, total = svc.list_request_items(
+            user_id=user_id,
+            role_id=role_id,
+            limit=limit,
+            offset=offset,
+            status_id=status_id,
+            created_by=created_by,
+        )
+
+    payload = RequestItemListResponse(
+        items=[RequestItemListRowResponse(**r) for r in rows],
+        total=int(total),
+        limit=limit,
+        offset=offset,
+    ).model_dump()
+
+    return jsonify(payload), 200
+
+
+@bp_req.patch("/items/<int:item_id>/status")
+@require_auth
+def change_item_status(item_id: int):
+    user_id, role_id = _auth_user()
+    body = request.get_json(force=True) or {}
+    new_status_id = body.get("request_status_id")
+    if new_status_id is None:
+        return jsonify({"error": "Campo obrigatório: request_status_id"}), 400
+
+    with db_session() as session:
+        svc = _build_service(session)
+        svc.change_item_status(
+            item_id=item_id,
+            new_status_id=int(new_status_id),
+            user_id=user_id,
+            role_id=role_id,
+        )
 
     return ("", 204)

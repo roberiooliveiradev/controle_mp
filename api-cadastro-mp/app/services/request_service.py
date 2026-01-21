@@ -23,6 +23,15 @@ class Role(IntEnum):
     USER = 3
 
 
+class RequestStatus(IntEnum):
+    CREATED = 1
+    IN_PROGRESS = 2
+    FINALIZED = 3
+    FAILED = 4
+    RETURNED = 5
+    REJECTED = 6
+
+
 class RequestService:
     def __init__(
         self,
@@ -32,7 +41,6 @@ class RequestService:
         req_repo: RequestRepository,
         item_repo: RequestItemRepository,
         field_repo: RequestItemFieldRepository,
-        # ✅ novos
         status_repo: RequestStatusRepository,
         type_repo: RequestTypeRepository,
     ) -> None:
@@ -63,6 +71,119 @@ class RequestService:
         msg, _sender = row
         return int(msg.conversation_id)
 
+    def _ensure_user_can_edit_item(
+        self,
+        *,
+        req: RequestModel,
+        item: RequestItemModel,
+        user_id: int,
+        role_id: int,
+    ) -> None:
+        """USER só edita quando for dono e o status do item for RETURNED."""
+        if role_id in (Role.ADMIN, Role.ANALYST):
+            return
+
+        if req.created_by != user_id:
+            raise ForbiddenError("Acesso negado.")
+
+        if int(item.request_status_id) != int(RequestStatus.RETURNED):
+            raise ForbiddenError(
+                "Você só pode alterar quando a solicitação foi devolvida para correção (RETURNED)."
+            )
+
+    def _ensure_can_change_status(self, *, role_id: int) -> None:
+        if role_id not in (Role.ADMIN, Role.ANALYST):
+            raise ForbiddenError("Apenas ANALYST/ADMIN podem alterar o status.")
+
+    def _resubmit_if_returned(self, *, item: RequestItemModel, role_id: int) -> None:
+        """
+        ✅ Regra de negócio:
+        Quando USER corrigir um item RETURNED, ele volta para CREATED automaticamente.
+        Admin/Analyst não sofrem essa regra.
+        """
+        if role_id != Role.USER:
+            self._item_repo.touch_updated_at(int(item.id))
+            return
+        if int(item.request_status_id) != int(RequestStatus.RETURNED):
+            self._item_repo.touch_updated_at(int(item.id))
+            return
+
+        # seta para CREATED (reenviado)
+        self._item_repo.update_fields(int(item.id), {"request_status_id": int(RequestStatus.CREATED)})
+
+    # -------- Listagem para tela --------
+    def list_request_items(
+        self,
+        *,
+        user_id: int,
+        role_id: int,
+        limit: int,
+        offset: int,
+        status_id: Optional[int] = None,
+        created_by: Optional[int] = None,
+    ) -> tuple[list[dict], int]:
+        """Lista RequestItems (flattened) para tela de listagem."""
+        if role_id == Role.USER:
+            created_by = user_id
+
+        rows, total = self._item_repo.list_items_for_page(
+            limit=limit,
+            offset=offset,
+            status_id=status_id,
+            created_by=created_by,
+        )
+
+        type_ids = list({int(r["request_type_id"]) for r in rows if r.get("request_type_id") is not None})
+        status_ids = list({int(r["request_status_id"]) for r in rows if r.get("request_status_id") is not None})
+
+        type_map = self._type_repo.get_map_by_ids(type_ids)
+        status_map = self._status_repo.get_map_by_ids(status_ids)
+
+        for r in rows:
+            tid = int(r["request_type_id"])
+            sid = int(r["request_status_id"])
+            t = type_map.get(tid)
+            s = status_map.get(sid)
+            r["request_type"] = {"id": t.id, "type_name": t.type_name} if t is not None else None
+            r["request_status"] = {"id": s.id, "status_name": s.status_name} if s is not None else None
+
+        return rows, int(total)
+
+    # -------- Alterar status (analyst/admin) --------
+    def change_item_status(
+        self,
+        *,
+        item_id: int,
+        new_status_id: int,
+        user_id: int,
+        role_id: int,
+    ) -> None:
+        self._ensure_can_change_status(role_id=role_id)
+
+        item = self._item_repo.get_by_id(item_id)
+        if item is None:
+            raise NotFoundError("Item não encontrado.")
+
+        req = self._req_repo.get_by_id(item.request_id)
+        if req is None:
+            raise NotFoundError("Requisição não encontrada.")
+
+        conversation_id = self._conversation_id_from_message(req.message_id)
+        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+
+        allowed = {
+            int(RequestStatus.IN_PROGRESS),
+            int(RequestStatus.FINALIZED),
+            int(RequestStatus.RETURNED),
+            int(RequestStatus.REJECTED),
+        }
+        if int(new_status_id) not in allowed:
+            raise ConflictError("Status inválido para esta operação.")
+
+        ok = self._item_repo.update_fields(item_id, {"request_status_id": int(new_status_id)})
+        if not ok:
+            raise NotFoundError("Item não encontrado.")
+
     # -------- CRUD: Request --------
     def create_request(
         self,
@@ -82,7 +203,6 @@ class RequestService:
         req = RequestModel(message_id=message_id, created_by=created_by)
         req = self._req_repo.add(req)
 
-        # cria itens + fields
         for item in items:
             it = RequestItemModel(
                 request_id=req.id,
@@ -107,7 +227,6 @@ class RequestService:
                 self._field_repo.add_many(field_models)
 
         return req
-
 
     def get_request(
         self,
@@ -134,7 +253,6 @@ class RequestService:
         item_ids = [int(i.id) for i in items]
         fields_map = self._field_repo.list_by_item_ids(item_ids)
 
-        # ✅ maps para devolver nome do type/status
         type_ids = list({int(i.request_type_id) for i in items if i.request_type_id is not None})
         status_ids = list({int(i.request_status_id) for i in items if i.request_status_id is not None})
 
@@ -210,9 +328,16 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
+        # ✅ regra: USER só pode editar quando devolvido
+        self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
+
         ok = self._item_repo.update_fields(item_id, values)
+
         if not ok:
             raise NotFoundError("Item não encontrado.")
+
+        # ✅ após corrigir (USER), volta para CREATED
+        self._resubmit_if_returned(item=item, role_id=role_id)
 
     def delete_item(self, *, item_id: int, user_id: int, role_id: int) -> None:
         item = self._item_repo.get_by_id(item_id)
@@ -243,6 +368,9 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
+        # ✅ se USER estiver corrigindo, precisa estar RETURNED
+        self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
+
         field = RequestItemFieldModel(
             request_items_id=item.id,
             field_type_id=payload["field_type_id"],
@@ -250,7 +378,11 @@ class RequestService:
             field_value=payload.get("field_value"),
             field_flag=payload.get("field_flag"),
         )
-        return self._field_repo.add(field)
+        created = self._field_repo.add(field)
+
+        # ✅ após corrigir (USER), volta para CREATED
+        self._resubmit_if_returned(item=item, role_id=role_id)
+        return created
 
     def update_field(self, *, field_id: int, user_id: int, role_id: int, values: dict) -> None:
         field = self._field_repo.get_by_id(field_id)
@@ -268,9 +400,15 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
+        # ✅ regra: USER só pode editar quando devolvido
+        self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
+
         ok = self._field_repo.update_fields(field_id, values)
         if not ok:
             raise NotFoundError("Campo não encontrado.")
+
+        # ✅ após corrigir (USER), volta para CREATED
+        self._resubmit_if_returned(item=item, role_id=role_id)
 
     def delete_field(self, *, field_id: int, user_id: int, role_id: int) -> None:
         field = self._field_repo.get_by_id(field_id)
@@ -288,6 +426,12 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
+        # ✅ se USER estiver corrigindo, precisa estar RETURNED
+        self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
+
         ok = self._field_repo.soft_delete(field_id)
         if not ok:
             raise NotFoundError("Campo não encontrado.")
+
+        # ✅ após corrigir (USER), volta para CREATED
+        self._resubmit_if_returned(item=item, role_id=role_id)

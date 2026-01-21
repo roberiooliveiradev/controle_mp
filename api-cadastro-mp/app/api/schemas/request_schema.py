@@ -6,7 +6,9 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, field_serializer
 from app.api.schemas._datetime_serializer import serialize_dt
 
-
+class UserMiniResponse(BaseModel):
+    id: int
+    full_name: str
 # -------- Types / Status (mini) --------
 class RequestTypeMiniResponse(BaseModel):
     id: int
@@ -100,3 +102,47 @@ class RequestResponse(BaseModel):
     @field_serializer("created_at", "updated_at")
     def serialize_dates(self, value: datetime | None):
         return serialize_dt(value)
+
+# -------- Listagem (tela) --------
+class RequestItemListRowResponse(BaseModel):
+    """Linha 'flattened' para a tela de listagem de solicitações (RequestItems)."""
+
+    request_id: int
+
+    request_created_by: int
+    request_created_by_user: UserMiniResponse
+
+    request_created_at: datetime
+    request_updated_at: Optional[datetime] = None
+
+    message_id: int
+    conversation_id: int
+
+    item_id: int
+    request_type_id: int
+    request_status_id: int
+    request_type: Optional[RequestTypeMiniResponse] = None
+    request_status: Optional[RequestStatusMiniResponse] = None
+
+    product_id: Optional[int] = None
+    item_created_at: datetime
+    item_updated_at: Optional[datetime] = None
+    fields_count: int = 0
+
+    @field_serializer(
+        "request_created_at",
+        "request_updated_at",
+        "item_created_at",
+        "item_updated_at",
+    )
+    def serialize_dates(self, value: datetime | None):
+        return serialize_dt(value)
+
+
+class RequestItemListResponse(BaseModel):
+    items: List[RequestItemListRowResponse]
+    total: int
+    limit: int
+    offset: int
+
+
