@@ -452,6 +452,12 @@ export default function RequestsPage() {
 	const [detailsMode, setDetailsMode] = useState("view"); // "view" | "edit"
 	const [selectedRow, setSelectedRow] = useState(null);
 
+	function getRowSortTime(row) {
+		const iso = row?.item_updated_at || row?.item_created_at;
+		const t = iso ? new Date(iso).getTime() : 0;
+		return Number.isFinite(t) ? t : 0;
+	}
+
 	async function load({ resetOffset = false } = {}) {
 		try {
 			setBusy(true);
@@ -460,13 +466,18 @@ export default function RequestsPage() {
 			const nextOffset = resetOffset ? 0 : offset;
 
 			const data = await listRequestItemsApi({
-				limit,
-				offset: nextOffset,
-				status_id: statusId ? Number(statusId) : null,
-				created_by: createdBy ? Number(createdBy) : null,
+			limit,
+			offset: nextOffset,
+			status_id: statusId ? Number(statusId) : null,
+			created_by: createdBy ? Number(createdBy) : null,
 			});
 
-			setRows(Array.isArray(data?.items) ? data.items : []);
+			const items = Array.isArray(data?.items) ? data.items : [];
+
+			// Ordena pela mais recente: updated_at se existir, senão created_at
+			items.sort((a, b) => getRowSortTime(b) - getRowSortTime(a));
+
+			setRows(items);
 			setTotal(Number(data?.total ?? 0));
 			if (resetOffset) setOffset(0);
 		} catch (err) {
@@ -586,9 +597,9 @@ export default function RequestsPage() {
 										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
 											<div style={{ display: "grid" }}>
 												<span style={{ fontWeight: 700 }}>#{r.item_id}</span>
-												<span style={{ opacity: 0.75, fontSize: 12 }}>
+												{/* <span style={{ opacity: 0.75, fontSize: 12 }}>
 													req #{r.request_id} • msg #{r.message_id}
-												</span>
+												</span> */}
 											</div>
 										</td>
 
@@ -602,7 +613,7 @@ export default function RequestsPage() {
 
 										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.request_created_by_user?.full_name ?? "—"}</td>
 
-										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{fmt(r.item_created_at)}</td>
+										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{fmt(r.item_updated_at?r.item_updated_at:r.item_created_at)}</td>
 
 										<td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
 											<button onClick={() => openDetails(r, "view")}>Abrir</button>
