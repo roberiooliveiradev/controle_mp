@@ -442,7 +442,7 @@ export default function RequestsPage() {
 	const [rows, setRows] = useState([]);
 	const [total, setTotal] = useState(0);
 
-	const [limit] = useState(30);
+	const [limit] = useState(15);
 	const [offset, setOffset] = useState(0);
 
 	const [statusId, setStatusId] = useState("");
@@ -566,7 +566,7 @@ export default function RequestsPage() {
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Tipo</th>
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Status</th>
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado por</th>
-							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado em</th>
+							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado / Atualizado em</th>
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Abrir</th>
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Editar</th>
 							<th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Conversa</th>

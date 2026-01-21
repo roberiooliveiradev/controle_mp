@@ -7,11 +7,13 @@ from app.infrastructure.security.password_hasher import PasswordHasher
 from app.infrastructure.database.models.user_model import UserModel
 from app.repositories.user_repository import UserRepository
 
+ROLE_USER_ID = 3
+
 class UserService:
     def __init__(self, user_repository: UserRepository) -> None:
         self._user_repository = user_repository
 
-    def create_user(self, *, full_name: str, email: str, role_id: int, password: str) -> UserModel:
+    def create_user(self, *, full_name: str, email: str, password: str) -> UserModel:
         existing = self._user_repository.get_by_email(email.strip().lower())
         if existing is not None:
             raise ConflictError("Email já cadastrado.")
@@ -22,7 +24,7 @@ class UserService:
         model = UserModel(
             full_name=full_name.strip(),
             email=email.strip(),
-            role_id=role_id,
+            role_id=ROLE_USER_ID,
             password_algo=algo,
             password_iterations=iterations,
             password_hash=password_hash,

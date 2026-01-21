@@ -8,13 +8,14 @@ import LoginPage from "../../pages/LoginPage";
 import ConversationsPage from "../../pages/ConversationsPage";
 import RequestsPage from "../../pages/RequestsPage";
 import { RealtimeProvider } from "../realtime/RealtimeContext"
+import RegisterPage from "../../pages/RegisterPage";
 
 export function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-
+        <Route path="/register" element={<RegisterPage />} />
         <Route
           path="/"
           element={

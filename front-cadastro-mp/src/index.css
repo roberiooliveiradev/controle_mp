@@ -60,7 +60,7 @@
 		--primary: #8b93ff;
 
 		--danger: #ff6b6b;
-		--danger-bg: rgba(255, 107, 107, 0.12);
+		--danger-bg: rgba(255, 107, 107, 0.5);
 		--danger-border: rgba(255, 107, 107, 0.28);
 
 		--control-placeholder: rgba(255, 255, 255, 0.55);
@@ -99,6 +99,7 @@ textarea {
 	background: var(--control-bg);
 	border: 1px solid var(--control-border);
 	border-radius: 10px;
+	padding: 12px;
 }
 
 input::placeholder,

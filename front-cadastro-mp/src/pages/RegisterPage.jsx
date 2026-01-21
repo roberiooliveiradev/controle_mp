@@ -1,42 +1,58 @@
-// src/pages/LoginPage.jsx
+// src/pages/RegisterPage.jsx
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
+import { createUserApi } from "../app/api/usersApi";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const { login } = useAuth();
   const nav = useNavigate();
 
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [password2, setPassword2] = useState("");
 
-  const [busyLogin, setBusyLogin] = useState(false);
+  const [busyCreate, setBusyCreate] = useState(false);
   const [error, setError] = useState("");
 
-  async function onLogin(e) {
+  async function onCreate(e) {
     e.preventDefault();
     setError("");
-    setBusyLogin(true);
 
+    if (password !== password2) {
+      setError("As senhas não conferem.");
+      return;
+    }
+
+    setBusyCreate(true);
     try {
+      // ✅ cria usuário na API correta (/api/users via httpClient)
+      await createUserApi({
+        full_name: fullName,
+        email,
+        password,
+      });
+
+      // ✅ login automático (já usa axios/httpClient por dentro)
       await login({ email, password });
       nav("/conversations");
     } catch (err) {
       const msg =
         err?.response?.data?.error ??
         err?.message ??
-        "Falha no login. Verifique suas credenciais.";
+        "Falha ao criar usuário.";
       setError(msg);
     } finally {
-      setBusyLogin(false);
+      setBusyCreate(false);
     }
   }
 
   return (
     <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center" }}>
       <form
-        onSubmit={onLogin}
+        onSubmit={onCreate}
         style={{
           width: 360,
           padding: 20,
@@ -46,13 +62,20 @@ export default function LoginPage() {
           gap: "12px",
         }}
       >
-        <h2 style={{ marginTop: 0 }}>Entrar</h2>
+        <h2 style={{ marginTop: 0 }}>Criar conta</h2>
+
+        <label>Nome</label>
+        <input
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          autoComplete="name"
+        />
 
         <label>Email</label>
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          autoComplete="username"
+          autoComplete="email"
         />
 
         <label>Senha</label>
@@ -60,7 +83,15 @@ export default function LoginPage() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
+          autoComplete="new-password"
+        />
+
+        <label>Repetir Senha</label>
+        <input
+          type="password"
+          value={password2}
+          onChange={(e) => setPassword2(e.target.value)}
+          autoComplete="new-password"
         />
 
         {error && (
@@ -69,18 +100,19 @@ export default function LoginPage() {
           </div>
         )}
 
-        <button disabled={busyLogin}>
-          {busyLogin ? "Entrando..." : "Entrar"}
+        <button disabled={busyCreate}>
+          {busyCreate ? "Criando..." : "Criar"}
         </button>
+
         <button
           type="button"
-          onClick={() => nav("/register")}
+          onClick={() => nav("/login")}
           style={{
             background: "transparent",
             border: "1px solid var(--border)",
           }}
         >
-          Criar conta
+          Voltar para login
         </button>
       </form>
     </div>
