@@ -28,6 +28,7 @@ from app.api.schemas.request_schema import (
     RequestTypeMiniResponse,
     RequestStatusMiniResponse,
 )
+from app.infrastructure.realtime.socketio_request_notifier import SocketIORequestNotifier
 
 bp_req = Blueprint("requests", __name__, url_prefix="/api/requests")
 
@@ -46,6 +47,7 @@ def _build_service(session) -> RequestService:
         field_repo=RequestItemFieldRepository(session),
         status_repo=RequestStatusRepository(session),
         type_repo=RequestTypeRepository(session),
+        notifier=SocketIORequestNotifier(),
     )
 
 

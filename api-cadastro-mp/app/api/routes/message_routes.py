@@ -27,6 +27,7 @@ from app.services.request_service import RequestService
 from app.services.message_service import MessageService
 
 from app.infrastructure.realtime.socketio_message_notifier import SocketIOMessageNotifier
+from app.infrastructure.realtime.socketio_request_notifier import SocketIORequestNotifier
 
 from app.api.schemas.request_schema import (
     RequestResponse,
@@ -153,6 +154,7 @@ def _build_service(session) -> MessageService:
         field_repo=RequestItemFieldRepository(session),
         status_repo=RequestStatusRepository(session),
         type_repo=RequestTypeRepository(session),
+        notifier=SocketIORequestNotifier(),
     )
 
     return MessageService(

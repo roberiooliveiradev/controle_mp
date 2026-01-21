@@ -20,6 +20,8 @@ import {
     REQUEST_TYPE_ID_UPDATE 
 } from "../app/ui/requests/requestItemFields.logic";
 
+import { socket } from "../app/realtime/socket";
+
 const ROLE_ADMIN = 1;
 const ROLE_ANALYST = 2;
 
@@ -492,6 +494,28 @@ export default function RequestsPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [limit, offset]);
 
+	useEffect(() => {
+    const onCreated = (payload) => {
+      // opcional: respeitar filtros/paginação e só recarregar
+      load({ resetOffset: false });
+    };
+
+    const onItemChanged = (payload) => {
+      // opcional: você pode otimizar e só atualizar uma linha,
+      // mas o mais seguro inicialmente é recarregar.
+      load({ resetOffset: false });
+    };
+
+    socket.on("request:created", onCreated);
+    socket.on("request:item_changed", onItemChanged);
+
+    return () => {
+      socket.off("request:created", onCreated);
+      socket.off("request:item_changed", onItemChanged);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [limit, offset, statusId, createdBy]);
+
 	const pageInfo = useMemo(() => {
 		const start = total === 0 ? 0 : offset + 1;
 		const end = Math.min(offset + limit, total);
@@ -520,7 +544,7 @@ export default function RequestsPage() {
 				<h2 style={{ margin: 0 }}>Solicitações</h2>
 
 				<div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-					<select value={statusId} onChange={(e) => setStatusId(e.target.value)} style={{ padding: 6 }}>
+					<select value={statusId} onChange={(e) => setStatusId(e.target.value)} >
 						<option value="">Status (todos)</option>
 						<option value={STATUS.CREATED}>CREATED</option>
 						<option value={STATUS.IN_PROGRESS}>IN_PROGRESS</option>

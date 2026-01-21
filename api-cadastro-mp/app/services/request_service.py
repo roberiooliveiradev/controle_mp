@@ -2,6 +2,7 @@
 
 from enum import IntEnum
 from typing import Optional
+from datetime import timezone 
 
 from app.core.exceptions import ForbiddenError, NotFoundError, ConflictError
 from app.infrastructure.database.models.request_model import RequestModel
@@ -15,6 +16,12 @@ from app.repositories.request_item_field_repository import RequestItemFieldRepos
 
 from app.repositories.request_status_repository import RequestStatusRepository
 from app.repositories.request_type_repository import RequestTypeRepository
+
+from app.core.interfaces.request_notifier import ( 
+    RequestNotifier,
+    RequestCreatedEvent,
+    RequestItemChangedEvent,
+)
 
 
 class Role(IntEnum):
@@ -43,6 +50,7 @@ class RequestService:
         field_repo: RequestItemFieldRepository,
         status_repo: RequestStatusRepository,
         type_repo: RequestTypeRepository,
+        notifier: RequestNotifier | None = None,
     ) -> None:
         self._conv_repo = conv_repo
         self._msg_repo = msg_repo
@@ -51,6 +59,53 @@ class RequestService:
         self._field_repo = field_repo
         self._status_repo = status_repo
         self._type_repo = type_repo
+        self._notifier = notifier
+
+    def _emit_request_created(
+        self,
+        *,
+        req: RequestModel,
+        conversation_id: int,
+        created_by: int,
+    ) -> None:
+        if not self._notifier:
+            return
+        evt = RequestCreatedEvent(
+            request_id=int(req.id),
+            message_id=int(req.message_id),
+            conversation_id=int(conversation_id),
+            created_by=int(created_by),
+            created_at_iso=req.created_at.astimezone(timezone.utc).isoformat(),
+        )
+        self._notifier.notify_request_created(evt)
+
+    def _emit_item_changed(
+        self,
+        *,
+        req: RequestModel,
+        conversation_id: int,
+        item: RequestItemModel,
+        changed_by: int,
+        change_kind: str,
+    ) -> None:
+        if not self._notifier:
+            return
+
+        # 🔎 tenta usar updated_at do item (se houver), senão created_at
+        dt = item.updated_at or item.created_at
+        iso = dt.astimezone(timezone.utc).isoformat() if dt else None
+
+        evt = RequestItemChangedEvent(
+            request_id=int(req.id),
+            item_id=int(item.id),
+            message_id=int(req.message_id),
+            conversation_id=int(conversation_id),
+            changed_by=int(changed_by),
+            change_kind=change_kind,
+            request_status_id=int(item.request_status_id) if item.request_status_id is not None else None,
+            updated_at_iso=iso or "",
+        )
+        self._notifier.notify_request_item_changed(evt)
 
     # -------- Access helpers --------
     def _ensure_access_by_conversation(self, *, conversation_id: int, user_id: int, role_id: int) -> None:
@@ -97,7 +152,7 @@ class RequestService:
 
     def _resubmit_if_returned(self, *, item: RequestItemModel, role_id: int) -> None:
         """
-        ✅ Regra de negócio:
+     Regra de negócio:
         Quando USER corrigir um item RETURNED, ele volta para CREATED automaticamente.
         Admin/Analyst não sofrem essa regra.
         """
@@ -184,6 +239,17 @@ class RequestService:
         if not ok:
             raise NotFoundError("Item não encontrado.")
 
+        # recarrega item para pegar status/updated_at atual
+        item2 = self._item_repo.get_by_id(item_id) or item
+        self._emit_item_changed(
+            req=req,
+            conversation_id=conversation_id,
+            item=item2,
+            changed_by=user_id,
+            change_kind="STATUS",
+        )
+
+
     # -------- CRUD: Request --------
     def create_request(
         self,
@@ -203,6 +269,8 @@ class RequestService:
         req = RequestModel(message_id=message_id, created_by=created_by)
         req = self._req_repo.add(req)
 
+        created_first_item: RequestItemModel | None = None
+
         for item in items:
             it = RequestItemModel(
                 request_id=req.id,
@@ -211,6 +279,9 @@ class RequestService:
                 product_id=item.get("product_id"),
             )
             it = self._item_repo.add(it)
+
+            if created_first_item is None:
+                created_first_item = it
 
             fields_payload = item.get("fields") or []
             if fields_payload:
@@ -225,6 +296,17 @@ class RequestService:
                     for f in fields_payload
                 ]
                 self._field_repo.add_many(field_models)
+
+        # eventos realtime
+        self._emit_request_created(req=req, conversation_id=conversation_id, created_by=created_by)
+        if created_first_item is not None:
+            self._emit_item_changed(
+                req=req,
+                conversation_id=conversation_id,
+                item=created_first_item,
+                changed_by=created_by,
+                change_kind="ITEM",
+            )
 
         return req
 
@@ -328,7 +410,7 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        # ✅ regra: USER só pode editar quando devolvido
+        # regra: USER só pode editar quando devolvido
         self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
 
         ok = self._item_repo.update_fields(item_id, values)
@@ -336,7 +418,7 @@ class RequestService:
         if not ok:
             raise NotFoundError("Item não encontrado.")
 
-        # ✅ após corrigir (USER), volta para CREATED
+        # após corrigir (USER), volta para CREATED
         self._resubmit_if_returned(item=item, role_id=role_id)
 
     def delete_item(self, *, item_id: int, user_id: int, role_id: int) -> None:
@@ -368,7 +450,7 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        # ✅ se USER estiver corrigindo, precisa estar RETURNED
+        # se USER estiver corrigindo, precisa estar RETURNED
         self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
 
         field = RequestItemFieldModel(
@@ -380,7 +462,7 @@ class RequestService:
         )
         created = self._field_repo.add(field)
 
-        # ✅ após corrigir (USER), volta para CREATED
+        # após corrigir (USER), volta para CREATED
         self._resubmit_if_returned(item=item, role_id=role_id)
         return created
 
@@ -400,15 +482,25 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        # ✅ regra: USER só pode editar quando devolvido
+        # regra: USER só pode editar quando devolvido
         self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
 
         ok = self._field_repo.update_fields(field_id, values)
         if not ok:
             raise NotFoundError("Campo não encontrado.")
 
-        # ✅ após corrigir (USER), volta para CREATED
+        # após corrigir (USER), volta para CREATED
         self._resubmit_if_returned(item=item, role_id=role_id)
+        
+        # emite realtime (FIELDS)
+        item2 = self._item_repo.get_by_id(int(item.id)) or item
+        self._emit_item_changed(
+            req=req,
+            conversation_id=conversation_id,
+            item=item2,
+            changed_by=user_id,
+            change_kind="FIELDS",
+        )
 
     def delete_field(self, *, field_id: int, user_id: int, role_id: int) -> None:
         field = self._field_repo.get_by_id(field_id)
@@ -426,12 +518,12 @@ class RequestService:
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        # ✅ se USER estiver corrigindo, precisa estar RETURNED
+        # se USER estiver corrigindo, precisa estar RETURNED
         self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
 
         ok = self._field_repo.soft_delete(field_id)
         if not ok:
             raise NotFoundError("Campo não encontrado.")
 
-        # ✅ após corrigir (USER), volta para CREATED
+        # após corrigir (USER), volta para CREATED
         self._resubmit_if_returned(item=item, role_id=role_id)
