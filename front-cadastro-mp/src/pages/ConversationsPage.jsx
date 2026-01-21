@@ -1,7 +1,7 @@
 // src/pages/ConversationsPage.jsx
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 
 import { useAuth } from "../app/auth/AuthContext";
 import {
@@ -35,33 +35,36 @@ function hasFiles(e) {
   return types && Array.from(types).includes("Files");
 }
 
-
 // -------------------------
 // Conversations ordering helpers
-// - Use updated_at when not null; otherwise created_at
-// - Sort by most recent activity first
 // -------------------------
 function convLastActivityIso(conv) {
   return conv?.updated_at ?? conv?.created_at ?? null;
 }
-
 function convLastActivityTs(conv) {
   const iso = convLastActivityIso(conv);
   const ts = iso ? new Date(iso).getTime() : 0;
   return Number.isFinite(ts) ? ts : 0;
 }
-
 function sortConversationsByLastActivity(list) {
   const arr = Array.isArray(list) ? [...list] : [];
   arr.sort((a, b) => convLastActivityTs(b) - convLastActivityTs(a));
   return arr;
 }
 
-
 export default function ConversationsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, activeUserId } = useAuth();
+
+  // ✅ lê messageId para rolar
+  const targetMessageId = useMemo(() => {
+    const sp = new URLSearchParams(location.search || "");
+    const v = sp.get("messageId");
+    const n = v ? Number(v) : null;
+    return Number.isFinite(n) ? n : null;
+  }, [location.search]);
 
   const [conversations, setConversations] = useState([]);
   const [listBusy, setListBusy] = useState(true);
@@ -72,7 +75,6 @@ export default function ConversationsPage() {
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState("");
 
-  // drag & drop anexos
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const dragDepthRef = useRef(0);
   const [incomingFiles, setIncomingFiles] = useState([]);
@@ -94,8 +96,6 @@ export default function ConversationsPage() {
       const list = Array.isArray(prev) ? [...prev] : [];
       const idx = list.findIndex((c) => c.id === cid);
       if (idx < 0) return list;
-
-      // updated_at só existe quando houve atividade após criação
       list[idx] = { ...list[idx], updated_at: iso };
       return sortConversationsByLastActivity(list);
     });
@@ -125,7 +125,6 @@ export default function ConversationsPage() {
 
       setNewTitle("");
 
-      // atualiza lista (tenta refetch; fallback local)
       try {
         const data = await listConversationsApi({ limit: 50, offset: 0 });
         setConversations(Array.isArray(data) ? data : data?.items ?? []);
@@ -259,23 +258,31 @@ export default function ConversationsPage() {
     });
   }
 
-  function scrollToFirstUnread(items) {
-    const container = messagesContainerRef.current;
-    if (!container) return false;
+  function scrollToMessage(messageId) {
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`msg-${messageId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      else scrollToBottom();
+    });
+  }
 
-    const firstUnread = items.find((m) => isUnreadFromOthers(m));
+  function scrollToFirstUnread(items) {
+    const el = messagesContainerRef.current;
+    if (!el) return false;
+
+    const me = myUserIdRef.current;
+    const firstUnread = (items || []).find((m) => !m.is_read && m.sender?.id !== me);
     if (!firstUnread) return false;
 
-    requestAnimationFrame(() => {
-      const el = container.querySelector(`[data-message-id="${firstUnread.id}"]`);
-      if (el) el.scrollIntoView({ block: "start", behavior: "smooth" });
-    });
+    const target = document.getElementById(`msg-${firstUnread.id}`);
+    if (!target) return false;
 
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
     return true;
   }
 
   // -------------------------
-  // Load conversations list
+  // Load list
   // -------------------------
   useEffect(() => {
     let alive = true;
@@ -286,7 +293,8 @@ export default function ConversationsPage() {
         setListError("");
         const data = await listConversationsApi({ limit: 50, offset: 0 });
         if (!alive) return;
-        setConversations(Array.isArray(data) ? data : data?.items ?? []);
+        const arr = Array.isArray(data) ? data : data?.items ?? [];
+        setConversations(sortConversationsByLastActivity(arr));
       } catch (err) {
         if (!alive) return;
         setListError(err?.response?.data?.error ?? "Erro ao carregar conversas.");
@@ -298,7 +306,7 @@ export default function ConversationsPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [activeUserId]);
 
   // -------------------------
   // Load chat when selecting conversation
@@ -336,6 +344,13 @@ export default function ConversationsPage() {
 
         requestAnimationFrame(() => {
           if (!alive) return;
+
+          // ✅ prioridade: scroll para messageId quando vier pela rota
+          if (targetMessageId) {
+            scrollToMessage(targetMessageId);
+            return;
+          }
+
           const hasUnread = items.some(isUnreadFromOthers);
           if (hasUnread) {
             const did = scrollToFirstUnread(items);
@@ -356,7 +371,7 @@ export default function ConversationsPage() {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, activeUserId]);
+  }, [selectedId, activeUserId, targetMessageId]);
 
   // -------------------------
   // Join/leave room on conversation select
@@ -370,7 +385,7 @@ export default function ConversationsPage() {
   }, [selectedId]);
 
   // -------------------------
-  // SOCKET LISTENERS
+  // SOCKET LISTENERS (mantido)
   // -------------------------
   useEffect(() => {
     if (!activeUserId) return;

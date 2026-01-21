@@ -1,6 +1,7 @@
 // src/app/ui/Topbar.jsx
 
 import { useMemo } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
 function roleLabel(roleId) {
@@ -11,13 +12,14 @@ function roleLabel(roleId) {
 
 export function Topbar() {
   const { user, logout, activeUserId, setActiveUserId, listProfiles } = useAuth();
+  const location = useLocation();
 
   const profiles = useMemo(() => listProfiles(), [listProfiles]);
 
   return (
     <header
       style={{
-        borderBottom: "1px solid var(--border)",
+        borderBottom: "1px solid #eee",
         padding: "12px 16px",
         display: "flex",
         justifyContent: "space-between",
@@ -25,7 +27,30 @@ export function Topbar() {
         gap: 12,
       }}
     >
-      <strong>Controle MP</strong>
+      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+        <strong>Controle MP</strong>
+
+        <nav style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <Link
+            to="/conversations"
+            style={{
+              textDecoration: "none",
+              fontWeight: location.pathname.startsWith("/conversations") ? 700 : 500,
+            }}
+          >
+            Conversas
+          </Link>
+          <Link
+            to="/requests"
+            style={{
+              textDecoration: "none",
+              fontWeight: location.pathname.startsWith("/requests") ? 700 : 500,
+            }}
+          >
+            Solicitações
+          </Link>
+        </nav>
+      </div>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         {profiles.length > 1 && (
@@ -43,8 +68,7 @@ export function Topbar() {
         )}
 
         <span style={{ opacity: 0.8 }}>
-          {user?.full_name ?? user?.email}{" "}
-          {user?.role_id ? `(${roleLabel(user.role_id)})` : ""}
+          {user?.full_name ?? user?.email} {user?.role_id ? `(${roleLabel(user.role_id)})` : ""}
         </span>
 
         <button onClick={logout}>Sair</button>
