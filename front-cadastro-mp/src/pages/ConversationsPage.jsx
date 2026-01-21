@@ -608,7 +608,7 @@ export default function ConversationsPage() {
           </form>
         </div>
 
-        <div style={{ padding: 12, overflow: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ padding: 12, overflow: "auto", display: "flex", flexDirection: "column", gap: 10, }}>
           {conversations.length === 0 ? (
             <div style={{ opacity: "var(--text-muted)" }}>Nenhuma conversa encontrada.</div>
           ) : null}
@@ -672,7 +672,7 @@ export default function ConversationsPage() {
               inset: 10,
               borderRadius: 14,
               border: "2px dashed #bbb",
-              background: "rgba(0,0,0,0.06)",
+              background: "rgba(0, 0, 0, 0.1)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
