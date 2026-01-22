@@ -13,9 +13,9 @@ from app.api.schemas.product_schema import (
 
 from app.services.product_query_service import ProductQueryService
 
-bp_products = Blueprint("products", __name__, url_prefix="/api/products")
+bp_prod = Blueprint("products", __name__, url_prefix="/api/products")
 
-@bp_products.get("")
+@bp_prod.get("")
 @require_auth
 def list_products():
     try:
@@ -40,7 +40,7 @@ def list_products():
     return jsonify(payload), 200
 
 
-@bp_products.get("/<int:product_id>")
+@bp_prod.get("/<int:product_id>")
 @require_auth
 def get_product(product_id: int):
     with db_session() as session:

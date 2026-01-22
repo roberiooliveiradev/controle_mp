@@ -44,20 +44,43 @@ class ProductFieldRepository(BaseRepository[ProductFieldModel]):
         res = self._session.execute(stmt)
         return (res.rowcount or 0) > 0
 
-    def find_product_id_by_any_code(self, *, codigo_atual: str | None, novo_codigo: str | None) -> int | None:
-        codes = [c.strip() for c in [codigo_atual, novo_codigo] if c and c.strip()]
+    def find_product_id_by_any_code(
+        self,
+        *,
+        codigo_atual: str | None,
+        novo_codigo: str | None,
+    ) -> int | None:
+        codes = [c.strip() for c in (codigo_atual, novo_codigo) if c and c.strip()]
         if not codes:
             return None
 
-        # procura por (tag='codigo_atual' OR tag='novo_codigo') AND value in codes
         stmt = (
             select(ProductFieldModel.product_id)
             .where(
                 ProductFieldModel.is_deleted.is_(False),
-                ProductFieldModel.field_tag.in_(["codigo_atual", "novo_codigo"]),
+                ProductFieldModel.field_tag == "codigo_atual",
                 ProductFieldModel.field_value.in_(codes),
             )
             .order_by(ProductFieldModel.product_id.asc())
             .limit(1)
         )
+
         return self._session.execute(stmt).scalar()
+    
+    
+    def find_product_id_by_codigo_atual(self, *, codigo_atual: str | None) -> int | None:
+        code = (codigo_atual or "").strip()
+        if not code:
+            return None
+
+        stmt = (
+            select(ProductFieldModel.product_id)
+            .where(
+                ProductFieldModel.is_deleted.is_(False),
+                ProductFieldModel.field_tag == "codigo_atual",
+                ProductFieldModel.field_value == code,
+            )
+            .limit(1)
+        )
+        return self._session.execute(stmt).scalar()
+

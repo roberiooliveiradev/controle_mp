@@ -26,7 +26,7 @@ class ProductService:
 
     def _get_field_value(self, fields: list[RequestItemFieldModel], tag: str) -> str:
         for f in fields:
-            if f.field_tag == tag and (f.field_value or "").strip():
+            if str(f.field_tag) == str(tag) and (f.field_value or "").strip():
                 return str(f.field_value).strip()
         return ""
 
@@ -54,7 +54,6 @@ class ProductService:
             )
             return
 
-        # se já existe, atualiza
         self._pfield_repo.update_field(
             int(existing.id),
             {"field_type_id": int(field_type_id), "field_value": value, "field_flag": flag},
@@ -76,26 +75,30 @@ class ProductService:
         codigo_atual = self._get_field_value(item_fields, "codigo_atual")
         novo_codigo = self._get_field_value(item_fields, "novo_codigo")
 
-        # --- validação de finalização (regras do enunciado) ---
+        # --- validação de finalização (mantém suas regras atuais) ---
         if request_type_id == 1:  # CREATE
             if not novo_codigo:
                 raise ConflictError("Para finalizar CREATE, o campo 'novo_codigo' é obrigatório.")
             effective_code = novo_codigo
 
+            # ✅ CREATE: procurar existente por codigo_atual == novo_codigo (porque produto só tem codigo_atual)
+            lookup_code = novo_codigo
+
         elif request_type_id == 2:  # UPDATE
-            if novo_codigo:
-                effective_code = novo_codigo
-            else:
-                if not codigo_atual:
-                    raise ConflictError("Para finalizar UPDATE, informe 'codigo_atual' (ou preencha 'novo_codigo').")
-                effective_code = codigo_atual
+            # ✅ UPDATE: usa codigo_atual como chave do produto (é o código atual do produto)
+            if not codigo_atual:
+                raise ConflictError("Para finalizar UPDATE, informe 'codigo_atual'.")
+            lookup_code = codigo_atual
+
+            # ✅ se veio novo_codigo, ele sobrescreve o codigo_atual do produto
+            effective_code = novo_codigo if novo_codigo else codigo_atual
+
         else:
             raise ConflictError("Tipo de solicitação inválido.")
 
-        # --- encontra produto existente por codigo_atual/novo_codigo ---
-        existing_product_id = self._pfield_repo.find_product_id_by_any_code(
-            codigo_atual=codigo_atual or None,
-            novo_codigo=novo_codigo or None,
+        # --- encontra produto existente SOMENTE por codigo_atual ---
+        existing_product_id = self._pfield_repo.find_product_id_by_codigo_atual(
+            codigo_atual=lookup_code
         )
 
         # --- cria produto se não existe ---
@@ -104,45 +107,55 @@ class ProductService:
             product_id = int(p.id)
         else:
             product_id = int(existing_product_id)
-
+        
         # --- aplica campos do item no produto (upsert por tag) ---
+        codigo_field_type_id: int | None = None
+        codigo_field_flag: str | None = None
+
         for f in item_fields:
-            if f.field_tag == "codigo_atual":
-                # mantém codigo_atual como o "código efetivo" após aplicar
-                self._upsert_product_field(
-                    product_id=product_id,
-                    field_type_id=int(f.field_type_id),
-                    tag="codigo_atual",
-                    value=effective_code,
-                    flag=f.field_flag,
-                )
+            tag = str(f.field_tag)
+
+            # capturar metadados do campo de código (pra usar no upsert garantido)
+            if tag == "codigo_atual":
+                codigo_field_type_id = int(f.field_type_id)
+                codigo_field_flag = f.field_flag
+                # não faz upsert aqui — vamos garantir no final
                 continue
 
-            if f.field_tag == "novo_codigo":
-                # se tem novo_codigo, grava. senão mantém como null (não inventa)
-                val = (novo_codigo or "").strip() or None
-                self._upsert_product_field(
-                    product_id=product_id,
-                    field_type_id=int(f.field_type_id),
-                    tag="novo_codigo",
-                    value=val,
-                    flag=f.field_flag,
-                )
+            if tag == "novo_codigo":
+                # no CREATE geralmente só existe este; vamos usar seus metadados
+                if codigo_field_type_id is None:
+                    codigo_field_type_id = int(f.field_type_id)
+                    codigo_field_flag = f.field_flag
+                # ✅ NÃO grava novo_codigo no produto
                 continue
 
             # demais campos: upsert 1:1
             self._upsert_product_field(
                 product_id=product_id,
                 field_type_id=int(f.field_type_id),
-                tag=str(f.field_tag),
+                tag=tag,
                 value=f.field_value,
                 flag=f.field_flag,
             )
 
-        # atualiza product.updated_at
+        # ✅ GARANTIA: produto sempre recebe codigo_atual (mesmo quando só veio novo_codigo no CREATE)
+        if codigo_field_type_id is None:
+            # fallback defensivo (caso item_fields venha sem os campos)
+            raise ConflictError("Não foi possível determinar o tipo do campo para 'codigo_atual'.")
+
+        self._upsert_product_field(
+            product_id=product_id,
+            field_type_id=int(codigo_field_type_id),
+            tag="codigo_atual",
+            value=effective_code,
+            flag=codigo_field_flag,
+        )
+
+
         self._product_repo.touch_updated_at(product_id)
 
-        # seta item.product_id
+        # seta item.product_id (amarração da request finalizada ao produto)
         self._item_repo.update_fields(int(item.id), {"product_id": product_id})
 
         return product_id

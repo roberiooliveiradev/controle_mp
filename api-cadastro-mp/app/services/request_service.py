@@ -146,24 +146,31 @@ class RequestService:
         role_id: int,
         field_tag: str,
     ) -> None:
-        # regra global
         self._ensure_not_locked(item=item)
 
-        executor_tag = "executor_codigo_novo"
+        # FINALIZED / REJECTED → ninguém
+        if int(item.request_status_id) in (
+            int(RequestStatus.FINALIZED),
+            int(RequestStatus.REJECTED),
+        ):
+            raise ConflictError("Item FINALIZED/REJECTED não pode ser alterado.")
 
-        # ✅ Caso 1: criador + RETURNED -> pode editar qualquer campo
-        if req.created_by == user_id and int(item.request_status_id) == int(RequestStatus.RETURNED):
-            return
+        # CREATE → ADMIN / ANALYST podem editar novo_codigo
+        if self._is_create_item(item):
+            if role_id in (Role.ADMIN, Role.ANALYST) and field_tag == "novo_codigo":
+                return
+            raise ForbiddenError("Apenas ADMIN/ANALYST podem editar 'novo_codigo' em CREATE.")
 
-        # ✅ Caso 2: ADMIN/ANALYST -> só pode editar o campo executor_codigo_novo em CREATE
-        if role_id in (Role.ADMIN, Role.ANALYST):
-            if str(field_tag) != executor_tag:
-                raise ForbiddenError("ADMIN/ANALYST só podem alterar o campo 'executor_codigo_novo'.")
-            if not self._is_create_item(item):
-                raise ForbiddenError("O campo 'executor_codigo_novo' só pode ser alterado em solicitações do tipo CREATE.")
-            return
+        # UPDATE → criador somente se RETURNED
+        if self._is_update_item(item):
+            if (
+                req.created_by == user_id
+                and int(item.request_status_id) == int(RequestStatus.RETURNED)
+                and field_tag in ("novo_codigo", "codigo_atual")
+            ):
+                return
+            raise ForbiddenError("Você só pode editar quando o status for RETURNED.")
 
-        # ✅ Caso 3: USER (ou outro) fora do RETURNED/criador -> bloqueia
         raise ForbiddenError("Você não tem permissão para editar este campo.")
 
     def _ensure_can_change_status(self, *, role_id: int) -> None:
@@ -192,25 +199,27 @@ class RequestService:
         return None
 
     # valida regras de finalização
-    def _validate_finalize_rules(self, *, item: RequestItemModel, item_fields: list[RequestItemFieldModel]) -> None:
-        executor_tag = "executor_codigo_novo"
-        codigo_atual_tag = "codigo_atual"
-        novo_codigo_tag = "novo_codigo"
+    def _validate_finalize_rules(
+        self,
+        *,
+        item: RequestItemModel,
+        item_fields: list[RequestItemFieldModel],
+    ) -> None:
+        codigo_atual = self._get_field_value(item_fields, "codigo_atual")
+        novo_codigo = self._get_field_value(item_fields, "novo_codigo")
 
         if self._is_create_item(item):
-            executor_code = self._get_field_value(item_fields, executor_tag)
-            if not executor_code:
-                raise ConflictError("Para finalizar CREATE, o campo 'código novo (executor)' é obrigatório.")
+            if not novo_codigo:
+                raise ConflictError("Para finalizar CREATE, 'novo_codigo' é obrigatório.")
             return
 
         if self._is_update_item(item):
-            novo_codigo = self._get_field_value(item_fields, novo_codigo_tag)
             if novo_codigo:
                 return
-            codigo_atual = self._get_field_value(item_fields, codigo_atual_tag)
             if not codigo_atual:
-                raise ConflictError("Para finalizar UPDATE, informe 'codigo_atual' ou preencha 'novo_codigo'.")
-            return
+                raise ConflictError(
+                    "Para finalizar UPDATE, informe 'codigo_atual' ou preencha 'novo_codigo'."
+                )
 
     def _get_request_type_name(self, request_type_id: int | None) -> str | None:
         if request_type_id is None:
@@ -235,62 +244,6 @@ class RequestService:
         if name:
             return name == "UPDATE"
         return int(item.request_type_id or 0) == int(RequestType.UPDATE)
-
-    def _sync_create_executor_to_novo_codigo(
-        self,
-        *,
-        item: RequestItemModel,
-        item_fields: list[RequestItemFieldModel],
-    ) -> None:
-        """
-        Compatibilidade:
-        - Para CREATE, alguns pontos do fluxo (ex: ProductService / validações antigas)
-          podem ainda ler o tag 'novo_codigo'.
-        - Se o executor preencheu 'executor_codigo_novo', espelha em 'novo_codigo'.
-        """
-        if not self._is_create_item(item):
-            return
-
-        executor_tag = "executor_codigo_novo"
-        novo_codigo_tag = "novo_codigo"
-
-        # valor do executor
-        executor_val = self._get_field_value(item_fields, executor_tag)
-        if not executor_val:
-            return
-
-        # procura field novo_codigo (ativo)
-        novo_field: RequestItemFieldModel | None = None
-        for f in item_fields:
-            if str(f.field_tag) == novo_codigo_tag and not (f.is_deleted or False):
-                novo_field = f
-                break
-
-        if novo_field is not None:
-            prev = (novo_field.field_value or "").strip()
-            if prev != executor_val:
-                self._field_repo.update_fields(int(novo_field.id), {"field_value": executor_val})
-            return
-
-        # se não existe, cria
-        # tenta herdar field_type_id do executor (se existir no payload), senão usa 1
-        executor_field = None
-        for f in item_fields:
-            if str(f.field_tag) == executor_tag and not (f.is_deleted or False):
-                executor_field = f
-                break
-
-        field_type_id = int(getattr(executor_field, "field_type_id", None) or 1)
-
-        self._field_repo.add(
-            RequestItemFieldModel(
-                request_items_id=int(item.id),
-                field_type_id=field_type_id,
-                field_tag=novo_codigo_tag,
-                field_value=executor_val,
-                field_flag=None,
-            )
-        )
 
     # ---------------- listagem ----------------
     def list_request_items(
@@ -376,10 +329,6 @@ class RequestService:
             fields_map = self._field_repo.list_by_item_ids([int(item.id)])
             item_fields = fields_map.get(int(item.id), [])
 
-            # ✅ compat: espelha executor_codigo_novo -> novo_codigo (CREATE)
-            self._sync_create_executor_to_novo_codigo(item=item, item_fields=item_fields)
-
-            # ✅ valida com regra correta
             self._validate_finalize_rules(item=item, item_fields=item_fields)
 
             prod_svc = ProductService(
