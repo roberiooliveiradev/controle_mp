@@ -161,12 +161,15 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [editErrors, setEditErrors] = useState({ fields: {}, suppliers: {} });
 
-  const isReturned = Number(row?.request_status_id) === STATUS.RETURNED;
-  const isOwner = Number(row?.request_created_by) === Number(user?.id);
+  const [statusIdNow, setStatusIdNow] = useState(null);
+  const [statusNameNow, setStatusNameNow] = useState("");
+
+  const statusIdEffective = statusIdNow != null ? Number(statusIdNow) : Number(row?.request_status_id);
+  const isReturned = statusIdEffective === STATUS.RETURNED;
 
   const lockAfterDone =
-    Number(row?.request_status_id) === STATUS.FINALIZED ||
-    Number(row?.request_status_id) === STATUS.REJECTED;
+  statusIdEffective === STATUS.FINALIZED || statusIdEffective === STATUS.REJECTED;
+  const isOwner = Number(row?.request_created_by) === Number(user?.id);
 
   const isCreate = Number(row?.request_type_id) === REQUEST_TYPE_ID_CREATE;
   const isUpdate = Number(row?.request_type_id) === REQUEST_TYPE_ID_UPDATE;
@@ -214,45 +217,52 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     });
   }
 
-  useEffect(() => {
-    let alive = true;
+  async function reloadDetails() {
+    if (!open || !row?.request_id) return;
 
-    async function load() {
-      if (!open || !row?.request_id) return;
-      try {
-        setBusy(true);
-        setError("");
+    try {
+      setBusy(true);
+      setError("");
 
-        const full = await getRequestApi(row.request_id);
-        if (!alive) return;
+      const full = await getRequestApi(row.request_id);
+      if (!full) return;
 
-        const it = (full?.items || []).find((x) => Number(x.id) === Number(row.item_id));
-        setItem(it || null);
+      const it = (full?.items || []).find((x) => Number(x.id) === Number(row.item_id));
+      setItem(it || null);
 
-        const st = fieldsToFormState(it?.fields || []);
-        setByTag(st.byTag);
-        setValuesByTag(st.values);
-        setFornecedoresRows(st.fornecedoresRows);
+      const st = fieldsToFormState(it?.fields || []);
+      setByTag(st.byTag);
+      setValuesByTag(st.values);
+      setFornecedoresRows(st.fornecedoresRows);
 
-        setEditErrors({ fields: {}, suppliers: {} });
-      } catch (err) {
-        if (!alive) return;
-        setError(err?.response?.data?.error ?? "Erro ao carregar detalhes da solicitação.");
-      } finally {
-        if (alive) setBusy(false);
-      }
+      // ✅ status "ao vivo"
+      setStatusIdNow(it?.request_status_id ?? row?.request_status_id);
+      setStatusNameNow(it?.request_status?.status_name ?? row?.request_status?.status_name ?? "");
+
+      setEditErrors({ fields: {}, suppliers: {} });
+    } catch (err) {
+      setError(err?.response?.data?.error ?? "Erro ao carregar detalhes da solicitação.");
+    } finally {
+      setBusy(false);
     }
+  }
 
-    load();
-    return () => {
-      alive = false;
-    };
+  useEffect(() => {
+    if (!open) return;
+    reloadDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, row?.request_id, row?.item_id]);
+
 
   if (!open) return null;
 
   const typeName = row?.request_type?.type_name ?? `#${row?.request_type_id}`;
-  const statusName = row?.request_status?.status_name ?? `#${row?.request_status_id}`;
+
+  const statusName =
+    statusNameNow ||
+    row?.request_status?.status_name ||
+    `#${row?.request_status_id}`;
+
 
   async function ensureTextFieldExists(tag, fieldValue) {
     const existing = byTag?.[tag];
@@ -421,7 +431,14 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     try {
       await changeRequestItemStatusApi(row.item_id, newStatusId);
       onSaved?.();
-      onClose?.();
+
+      // ✅ puxa dados atualizados do banco (status + fields + updated_at etc.)
+      await reloadDetails();
+
+      // ✅ NÃO fechar ao marcar "Em andamento"
+      if (Number(newStatusId) !== Number(STATUS.IN_PROGRESS)) {
+        onClose?.();
+      }
     } catch (err) {
       alert(err?.response?.data?.error ?? "Falha ao alterar status.");
     }
