@@ -1,3 +1,5 @@
+// src/app/ui/Topbar.jsx
+
 import { useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -13,8 +15,9 @@ export function Topbar() {
   const location = useLocation();
 
   const profiles = useMemo(() => listProfiles(), [listProfiles]);
-
   const isActive = (path) => location.pathname.startsWith(path);
+
+  const isAdmin = user?.role_id === 1;
 
   return (
     <header
@@ -29,7 +32,6 @@ export function Topbar() {
     >
       <strong>Controle MP</strong>
 
-      {/* Navegação principal */}
       <nav
         style={{
           display: "flex",
@@ -41,39 +43,35 @@ export function Topbar() {
       >
         <Link
           to="/conversations"
-          style={{
-            textDecoration: "none",
-            fontWeight: isActive("/conversations") ? 700 : 500,
-          }}
+          style={{ textDecoration: "none", fontWeight: isActive("/conversations") ? 700 : 500 }}
         >
           Conversas
         </Link>
 
         <Link
           to="/requests"
-          style={{
-            textDecoration: "none",
-            fontWeight: isActive("/requests") ? 700 : 500,
-          }}
+          style={{ textDecoration: "none", fontWeight: isActive("/requests") ? 700 : 500 }}
         >
           Solicitações
         </Link>
 
         <Link
           to="/products"
-          style={{
-            textDecoration: "none",
-            fontWeight: isActive("/products") ? 700 : 500,
-          }}
+          style={{ textDecoration: "none", fontWeight: isActive("/products") ? 700 : 500 }}
         >
           Produtos
         </Link>
 
-        {/* ✅ novo link */}
-
+        {isAdmin && (
+          <Link
+            to="/admin/users"
+            style={{ textDecoration: "none", fontWeight: isActive("/admin/users") ? 700 : 500 }}
+          >
+            Admin · Usuários
+          </Link>
+        )}
       </nav>
 
-      {/* Área do usuário */}
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         {profiles.length > 1 && (
           <select
@@ -89,7 +87,6 @@ export function Topbar() {
           </select>
         )}
 
-        {/* ✅ nome do usuário como link para Minha Conta */}
         <Link
           to="/account"
           style={{

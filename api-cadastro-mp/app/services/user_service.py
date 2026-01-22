@@ -48,13 +48,12 @@ class UserService:
         password: str | None = None,
     ) -> UserModel:
         """
-        Regra: qualquer alteração (nome/email/senha/role) exige validação da senha atual.
+        Regra: qualquer alteração do próprio usuário exige validação da senha atual.
         """
         user = self._user_repository.get_by_id(user_id)
         if user is None:
             raise NotFoundError("Usuário não encontrado.")
 
-        # ✅ valida senha atual
         ok = PasswordHasher.verify_password(
             current_password,
             password_hash=user.password_hash,
@@ -65,22 +64,17 @@ class UserService:
         if not ok:
             raise UnauthorizedError("Senha atual inválida.")
 
-        # valida email único (se mudou)
         if email and email.strip().lower() != user.email:
             existing = self._user_repository.get_by_email(email.strip().lower())
             if existing is not None:
                 raise ConflictError("Email já cadastrado.")
 
-        # atualiza campos
         if full_name is not None:
             user.full_name = full_name.strip()
-
         if email is not None:
             user.email = email.strip().lower()
-
         if role_id is not None:
             user.role_id = role_id
-
         if password is not None:
             password_hash, password_salt, algo, iterations = PasswordHasher.hash_password(password)
             user.password_hash = password_hash
@@ -115,4 +109,39 @@ class UserService:
             raise UnauthorizedError("Credenciais inválidas.")
 
         user.last_login = datetime.utcnow()
+        return user
+
+    # -------------------------
+    # ADMIN
+    # -------------------------
+
+    def admin_list_users(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        include_deleted: bool = True,
+    ) -> tuple[list[UserModel], int]:
+        total = self._user_repository.count_all(include_deleted=include_deleted)
+        items = self._user_repository.list_all(limit=limit, offset=offset, include_deleted=include_deleted)
+        return items, total
+
+    def admin_update_user(
+        self,
+        *,
+        user_id: int,
+        role_id: int | None = None,
+        is_deleted: bool | None = None,
+    ) -> UserModel:
+        user = self._user_repository.get_by_id_any(user_id)
+        if user is None:
+            raise NotFoundError("Usuário não encontrado.")
+
+        if role_id is not None:
+            user.role_id = role_id
+
+        if is_deleted is not None:
+            user.is_deleted = is_deleted
+
+        user.updated_at = datetime.utcnow()
         return user

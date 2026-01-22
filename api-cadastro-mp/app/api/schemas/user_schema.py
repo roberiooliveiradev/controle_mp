@@ -1,5 +1,5 @@
 # app/api/schemas/user_schema.py
-
+from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -44,3 +44,30 @@ class RefreshRequest(BaseModel):
 
 class LogoutRequest(BaseModel):
     refresh_token: str | None = None  # opcional: logout total da sessão se enviar refresh
+
+
+    # -------------------------
+# ADMIN
+# -------------------------
+
+class AdminUpdateUserRequest(BaseModel):
+    role_id: int | None = None
+    is_deleted: bool | None = None
+
+
+class AdminUserResponse(BaseModel):
+    id: int
+    full_name: str
+    email: EmailStr
+    role_id: int
+    is_deleted: bool
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    last_login: datetime | None = None
+
+
+class AdminUsersListResponse(BaseModel):
+    items: list[AdminUserResponse]
+    total: int
+    limit: int
+    offset: int

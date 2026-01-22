@@ -11,6 +11,7 @@ import { RealtimeProvider } from "../realtime/RealtimeContext";
 import RegisterPage from "../../pages/RegisterPage";
 import ProductsPage from "../../pages/ProductsPage";
 import AccountPage from "../../pages/AccountPage";
+import AdminUsersPage from "../../pages/AdminUsersPage";
 
 export function AppRouter() {
   return (
@@ -38,6 +39,9 @@ export function AppRouter() {
           <Route path="products" element={<ProductsPage />} />
 
           <Route path="account" element={<AccountPage />} />
+
+          {/* ✅ admin */}
+          <Route path="admin/users" element={<AdminUsersPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
