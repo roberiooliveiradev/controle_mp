@@ -23,13 +23,10 @@ from app.repositories.request_repository import RequestRepository
 from app.repositories.request_item_repository import RequestItemRepository
 from app.repositories.request_item_field_repository import RequestItemFieldRepository
 from app.services.request_service import RequestService
-
 from app.repositories.request_status_repository import RequestStatusRepository
 from app.repositories.request_type_repository import RequestTypeRepository
-
 from app.repositories.product_repository import ProductRepository
 from app.repositories.product_field_repository import ProductFieldRepository
-
 from app.api.schemas.request_schema import (
     RequestTypeMiniResponse,
     RequestStatusMiniResponse,
@@ -203,6 +200,23 @@ def delete_item(item_id: int):
     return ("", 204)
 
 
+# -------- NEW: Resubmit (explicit) --------
+@bp_req.patch("/items/<int:item_id>/resubmit")
+@require_auth
+def resubmit_item(item_id: int):
+    """
+    O USER usa esta rota ao terminar de editar um item RETURNED,
+    para reenviar (RETURNED -> CREATED).
+    """
+    user_id, role_id = _auth_user()
+
+    with db_session() as session:
+        svc = _build_service(session)
+        svc.resubmit_returned_item(item_id=item_id, user_id=user_id, role_id=role_id)
+
+    return ("", 204)
+
+
 # -------- Fields CRUD --------
 @bp_req.post("/items/<int:item_id>/fields")
 @require_auth
@@ -248,7 +262,6 @@ def _parse_date_yyyy_mm_dd(s: str | None) -> date | None:
     if not s:
         return None
     try:
-        # input type="date" -> "YYYY-MM-DD"
         y, m, d = s.split("-")
         return date(int(y), int(m), int(d))
     except Exception:
@@ -267,11 +280,9 @@ def list_request_items():
     except ValueError:
         return jsonify({"error": "Parâmetros limit/offset inválidos."}), 400
 
-    # mantém
     status_id = request.args.get("status_id")
     status_id = int(status_id) if status_id is not None and status_id != "" else None
 
-    # novos filtros
     created_by_name = (request.args.get("created_by_name") or "").strip() or None
 
     type_id = request.args.get("type_id")
@@ -298,7 +309,6 @@ def list_request_items():
             limit=limit,
             offset=offset,
             status_id=status_id,
-            # novos
             created_by_name=created_by_name,
             type_id=type_id,
             type_q=type_q,

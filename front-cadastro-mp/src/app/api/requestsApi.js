@@ -58,6 +58,11 @@ export async function changeRequestItemStatusApi(itemId, request_status_id) {
 	});
 }
 
+// -------- NEW: Resubmit (USER) --------
+export async function resubmitRequestItemApi(itemId) {
+  await httpClient.patch(`/requests/items/${itemId}/resubmit`);
+}
+
 // -------- Edição (USER quando RETURNED) --------
 export async function updateRequestItemApi(itemId, payload) {
 	// payload: { request_type_id?, request_status_id?, product_id? }
@@ -69,7 +74,7 @@ export async function updateRequestFieldApi(fieldId, payload) {
 	await httpClient.patch(`/requests/fields/${fieldId}`, payload);
 }
 
-// Criar field (necessário para executor_codigo_novo)
+// Criar field
 export async function createRequestFieldApi(itemId, payload) {
   // payload: { field_type_id, field_tag, field_value?, field_flag? }
   const { data } = await httpClient.post(`/requests/items/${itemId}/fields`, payload);

@@ -210,8 +210,8 @@ export function RequestItemFields({
             />
           </label>
         ) : null}
-        {/* CREATE (details): novo_codigo é o único campo de código, editável por ADMIN/ANALYST */}
-        {!isStructured && isCreate ? (
+        {/* CREATE (details): só mostra novo_codigo quando estiver liberado para editar (ADMIN/ANALYST) */}
+        {!isStructured && isCreate && canEditNovoCodigoField ? (
           <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
             <span>Novo código (obrigatório para finalizar CREATE)</span>
             <input

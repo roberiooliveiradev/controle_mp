@@ -1,5 +1,7 @@
 # app/services/request_service.py
 
+from __future__ import annotations
+
 from enum import IntEnum
 from typing import Optional
 from datetime import timezone, date
@@ -13,14 +15,11 @@ from app.repositories.message_repository import MessageRepository
 from app.repositories.request_repository import RequestRepository
 from app.repositories.request_item_repository import RequestItemRepository
 from app.repositories.request_item_field_repository import RequestItemFieldRepository
-
 from app.repositories.request_status_repository import RequestStatusRepository
 from app.repositories.request_type_repository import RequestTypeRepository
-
 from app.repositories.product_repository import ProductRepository
 from app.repositories.product_field_repository import ProductFieldRepository
 from app.services.product_service import ProductService
-
 from app.core.interfaces.request_notifier import (
     RequestNotifier,
     RequestCreatedEvent,
@@ -47,6 +46,7 @@ class RequestType(IntEnum):
     CREATE = 1
     UPDATE = 2
 
+
 class RequestService:
     def __init__(
         self,
@@ -69,10 +69,11 @@ class RequestService:
         self._field_repo = field_repo
         self._status_repo = status_repo
         self._type_repo = type_repo
-        self._notifier = notifier
         self._product_repo = product_repo
         self._pfield_repo = pfield_repo
+        self._notifier = notifier
 
+    # ---------------- Realtime events ----------------
     def _emit_request_created(self, *, req: RequestModel, conversation_id: int, created_by: int) -> None:
         if not self._notifier:
             return
@@ -85,8 +86,15 @@ class RequestService:
         )
         self._notifier.notify_request_created(evt)
 
-    
-    def _emit_item_changed(self, *, req: RequestModel, conversation_id: int, item: RequestItemModel, changed_by: int, change_kind: str) -> None:
+    def _emit_item_changed(
+        self,
+        *,
+        req: RequestModel,
+        conversation_id: int,
+        item: RequestItemModel,
+        changed_by: int,
+        change_kind: str,
+    ) -> None:
         if not self._notifier:
             return
 
@@ -105,7 +113,7 @@ class RequestService:
         )
         self._notifier.notify_request_item_changed(evt)
 
-    # -------- Access helpers --------
+    # ---------------- Access helpers ----------------
     def _ensure_access_by_conversation(self, *, conversation_id: int, user_id: int, role_id: int) -> None:
         row = self._conv_repo.get_row_by_id(conversation_id)
         if row is None:
@@ -116,7 +124,6 @@ class RequestService:
         if conv.created_by != user_id:
             raise ForbiddenError("Acesso negado.")
 
-
     def _conversation_id_from_message(self, message_id: int) -> int:
         row = self._msg_repo.get_row(message_id=message_id)
         if row is None:
@@ -124,13 +131,41 @@ class RequestService:
         msg, _sender = row
         return int(msg.conversation_id)
 
+    # ---------------- Global locks ----------------
+    def _ensure_not_locked(self, *, item: RequestItemModel) -> None:
+        if int(item.request_status_id) in (int(RequestStatus.FINALIZED), int(RequestStatus.REJECTED)):
+            raise ConflictError("Item FINALIZED/REJECTED não pode ser alterado.")
+
+    def _ensure_can_change_status(self, *, role_id: int) -> None:
+        if role_id not in (Role.ADMIN, Role.ANALYST):
+            raise ForbiddenError("Apenas ANALYST/ADMIN podem alterar o status.")
+
+    # ---------------- Type helpers ----------------
+    def _get_request_type_name(self, request_type_id: int | None) -> str | None:
+        if request_type_id is None:
+            return None
+        mp = self._type_repo.get_map_by_ids([int(request_type_id)])
+        t = mp.get(int(request_type_id))
+        if t is None:
+            return None
+        return str(getattr(t, "type_name", "") or "").strip().upper() or None
+
+    def _is_create_item(self, item: RequestItemModel) -> bool:
+        name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
+        if name:
+            return name == "CREATE"
+        return int(item.request_type_id or 0) == int(RequestType.CREATE)
+
+    def _is_update_item(self, item: RequestItemModel) -> bool:
+        name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
+        if name:
+            return name == "UPDATE"
+        return int(item.request_type_id or 0) == int(RequestType.UPDATE)
+
+    # ---------------- Permissions ----------------
     def _ensure_user_can_edit_item(self, *, req: RequestModel, item: RequestItemModel, user_id: int, role_id: int) -> None:
-        # regra global (vale para todos)
         self._ensure_not_locked(item=item)
 
-        # ✅ qualquer edição "normal" (item/fields normais) só quando:
-        # - for o criador
-        # - e status RETURNED
         if req.created_by != user_id:
             raise ForbiddenError("Acesso negado.")
 
@@ -148,20 +183,31 @@ class RequestService:
     ) -> None:
         self._ensure_not_locked(item=item)
 
-        # FINALIZED / REJECTED → ninguém
-        if int(item.request_status_id) in (
-            int(RequestStatus.FINALIZED),
-            int(RequestStatus.REJECTED),
-        ):
+        # FINALIZED/REJECTED -> ninguém
+        if int(item.request_status_id) in (int(RequestStatus.FINALIZED), int(RequestStatus.REJECTED)):
             raise ConflictError("Item FINALIZED/REJECTED não pode ser alterado.")
 
-        # CREATE → ADMIN / ANALYST podem editar novo_codigo
+        # CREATE
         if self._is_create_item(item):
-            if role_id in (Role.ADMIN, Role.ANALYST) and field_tag == "novo_codigo":
-                return
-            raise ForbiddenError("Apenas ADMIN/ANALYST podem editar 'novo_codigo' em CREATE.")
+            # ADMIN/ANALYST: podem editar SOMENTE novo_codigo
+            if role_id in (Role.ADMIN, Role.ANALYST):
+                if field_tag == "novo_codigo":
+                    return
+                raise ForbiddenError("Em CREATE, ADMIN/ANALYST podem editar apenas 'novo_codigo'.")
 
-        # UPDATE → criador somente se RETURNED
+            # USER (criador) em RETURNED: pode editar campos do formulário, EXCETO novo_codigo
+            if (
+                role_id == Role.USER
+                and req.created_by == user_id
+                and int(item.request_status_id) == int(RequestStatus.RETURNED)
+            ):
+                if field_tag == "novo_codigo":
+                    raise ForbiddenError("Em CREATE devolvido (RETURNED), o criador não pode editar 'novo_codigo'.")
+                return
+
+            raise ForbiddenError("Você não tem permissão para editar este campo em CREATE.")
+
+        # UPDATE -> criador somente se RETURNED
         if self._is_update_item(item):
             if (
                 req.created_by == user_id
@@ -173,23 +219,9 @@ class RequestService:
 
         raise ForbiddenError("Você não tem permissão para editar este campo.")
 
-    def _ensure_can_change_status(self, *, role_id: int) -> None:
-        if role_id not in (Role.ADMIN, Role.ANALYST):
-            raise ForbiddenError("Apenas ANALYST/ADMIN podem alterar o status.")
-        
-    # regra global: FINALIZED/REJECTED não permite alteração de nada
-    def _ensure_not_locked(self, *, item: RequestItemModel) -> None:
-        if int(item.request_status_id) in (int(RequestStatus.FINALIZED), int(RequestStatus.REJECTED)):
-            raise ConflictError("Item FINALIZED/REJECTED não pode ser alterado.")
-
-    def _resubmit_if_returned(self, *, item: RequestItemModel, role_id: int) -> None:
-        if role_id != Role.USER:
-            self._item_repo.touch_updated_at(int(item.id))
-            return
-        if int(item.request_status_id) != int(RequestStatus.RETURNED):
-            self._item_repo.touch_updated_at(int(item.id))
-            return
-        self._item_repo.update_fields(int(item.id), {"request_status_id": int(RequestStatus.CREATED)})
+    # ---------------- Small helpers ----------------
+    def _touch_item(self, *, item_id: int) -> None:
+        self._item_repo.touch_updated_at(int(item_id))
 
     def _get_field_value(self, item_fields: list[RequestItemFieldModel], tag: str) -> str | None:
         for f in item_fields:
@@ -198,7 +230,6 @@ class RequestService:
                 return v or None
         return None
 
-    # valida regras de finalização
     def _validate_finalize_rules(
         self,
         *,
@@ -217,35 +248,9 @@ class RequestService:
             if novo_codigo:
                 return
             if not codigo_atual:
-                raise ConflictError(
-                    "Para finalizar UPDATE, informe 'codigo_atual' ou preencha 'novo_codigo'."
-                )
+                raise ConflictError("Para finalizar UPDATE, informe 'codigo_atual' ou preencha 'novo_codigo'.")
 
-    def _get_request_type_name(self, request_type_id: int | None) -> str | None:
-        if request_type_id is None:
-            return None
-        mp = self._type_repo.get_map_by_ids([int(request_type_id)])
-        t = mp.get(int(request_type_id))
-        if t is None:
-            return None
-        # normaliza: CREATE / UPDATE
-        return str(getattr(t, "type_name", "") or "").strip().upper() or None
-
-    def _is_create_item(self, item: RequestItemModel) -> bool:
-        # Preferir o nome do tipo vindo do banco (evita mismatch de seeds)
-        name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
-        if name:
-            return name == "CREATE"
-        # fallback por id (caso o repo não retorne)
-        return int(item.request_type_id or 0) == int(RequestType.CREATE)
-
-    def _is_update_item(self, item: RequestItemModel) -> bool:
-        name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
-        if name:
-            return name == "UPDATE"
-        return int(item.request_type_id or 0) == int(RequestType.UPDATE)
-
-    # ---------------- listagem ----------------
+    # ---------------- Listagem ----------------
     def list_request_items(
         self,
         *,
@@ -296,8 +301,8 @@ class RequestService:
             r["request_status"] = {"id": s.id, "status_name": s.status_name} if s is not None else None
 
         return rows, int(total)
-    
-    # ---------------- status ----------------
+
+    # ---------------- Status ----------------
     def change_item_status(self, *, item_id: int, new_status_id: int, user_id: int, role_id: int) -> None:
         self._ensure_can_change_status(role_id=role_id)
 
@@ -305,7 +310,6 @@ class RequestService:
         if item is None:
             raise NotFoundError("Item não encontrado.")
 
-        # regra global: não muda status se já FINALIZED/REJECTED
         self._ensure_not_locked(item=item)
 
         req = self._req_repo.get_by_id(item.request_id)
@@ -324,11 +328,9 @@ class RequestService:
         if int(new_status_id) not in allowed:
             raise ConflictError("Status inválido para esta operação.")
 
-        # FINALIZE: valida regras + sync compat + aplica produto
         if int(new_status_id) == int(RequestStatus.FINALIZED):
             fields_map = self._field_repo.list_by_item_ids([int(item.id)])
             item_fields = fields_map.get(int(item.id), [])
-
             self._validate_finalize_rules(item=item, item_fields=item_fields)
 
             prod_svc = ProductService(
@@ -337,7 +339,6 @@ class RequestService:
                 item_repo=self._item_repo,
             )
             prod_svc.apply_request_item_finalized(item=item, item_fields=item_fields)
-
 
         ok = self._item_repo.update_fields(item_id, {"request_status_id": int(new_status_id)})
         if not ok:
@@ -352,8 +353,47 @@ class RequestService:
             change_kind="STATUS",
         )
 
+    # ---------------- NEW: Resubmit (explicit) ----------------
+    def resubmit_returned_item(self, *, item_id: int, user_id: int, role_id: int) -> None:
+        """
+        Usuário finaliza suas edições e reenviar item RETURNED -> CREATED.
+        Isso evita o bug de: ao editar 1 campo já mudar pra CREATED e bloquear as demais edições.
+        """
+        if role_id != Role.USER:
+            raise ForbiddenError("Apenas USER pode resubmeter item devolvido.")
 
-    # -------- CRUD: Request --------
+        item = self._item_repo.get_by_id(item_id)
+        if item is None:
+            raise NotFoundError("Item não encontrado.")
+
+        req = self._req_repo.get_by_id(item.request_id)
+        if req is None:
+            raise NotFoundError("Requisição não encontrada.")
+
+        if int(req.created_by) != int(user_id):
+            raise ForbiddenError("Apenas o criador pode resubmeter este item.")
+
+        # só permite resubmeter quando está RETURNED (caso contrário não faz sentido)
+        if int(item.request_status_id) != int(RequestStatus.RETURNED):
+            raise ConflictError("Só é possível resubmeter quando o status for RETURNED.")
+
+        conversation_id = self._conversation_id_from_message(req.message_id)
+        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+
+        ok = self._item_repo.update_fields(item_id, {"request_status_id": int(RequestStatus.CREATED)})
+        if not ok:
+            raise NotFoundError("Item não encontrado.")
+
+        item2 = self._item_repo.get_by_id(item_id) or item
+        self._emit_item_changed(
+            req=req,
+            conversation_id=conversation_id,
+            item=item2,
+            changed_by=user_id,
+            change_kind="STATUS",
+        )
+
+    # ---------------- CRUD: Request ----------------
     def create_request(
         self,
         *,
@@ -400,7 +440,6 @@ class RequestService:
                 ]
                 self._field_repo.add_many(field_models)
 
-        # eventos realtime
         self._emit_request_created(req=req, conversation_id=conversation_id, created_by=created_by)
         if created_first_item is not None:
             self._emit_item_changed(
@@ -419,13 +458,7 @@ class RequestService:
         request_id: int,
         user_id: int,
         role_id: int,
-    ) -> tuple[
-        RequestModel,
-        list[RequestItemModel],
-        dict[int, list[RequestItemFieldModel]],
-        dict[int, "RequestTypeModel"],
-        dict[int, "RequestStatusModel"],
-    ]:
+    ):
         req = self._req_repo.get_by_id(request_id)
         if req is None:
             raise NotFoundError("Requisição não encontrada.")
@@ -434,7 +467,6 @@ class RequestService:
         self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         items = self._item_repo.list_by_request_id(req.id)
-
         item_ids = [int(i.id) for i in items]
         fields_map = self._field_repo.list_by_item_ids(item_ids)
 
@@ -461,15 +493,8 @@ class RequestService:
         if not ok:
             raise NotFoundError("Requisição não encontrada.")
 
-    # -------- CRUD: Item --------
-    def add_item(
-        self,
-        *,
-        request_id: int,
-        user_id: int,
-        role_id: int,
-        payload: dict,
-    ) -> RequestItemModel:
+    # ---------------- CRUD: Item ----------------
+    def add_item(self, *, request_id: int, user_id: int, role_id: int, payload: dict) -> RequestItemModel:
         req = self._req_repo.get_by_id(request_id)
         if req is None:
             raise NotFoundError("Requisição não encontrada.")
@@ -519,7 +544,8 @@ class RequestService:
         if not ok:
             raise NotFoundError("Item não encontrado.")
 
-        self._resubmit_if_returned(item=item, role_id=role_id)
+        # ✅ NÃO muda status automaticamente (evita o bug de bloquear múltiplas edições)
+        self._touch_item(item_id=item_id)
 
     def delete_item(self, *, item_id: int, user_id: int, role_id: int) -> None:
         item = self._item_repo.get_by_id(item_id)
@@ -537,7 +563,7 @@ class RequestService:
         if not ok:
             raise NotFoundError("Item não encontrado.")
 
-    # -------- CRUD: Field --------
+    # ---------------- CRUD: Field ----------------
     def add_field(self, *, item_id: int, user_id: int, role_id: int, payload: dict) -> RequestItemFieldModel:
         item = self._item_repo.get_by_id(item_id)
         if item is None:
@@ -567,7 +593,8 @@ class RequestService:
         )
         created = self._field_repo.add(field)
 
-        self._resubmit_if_returned(item=item, role_id=role_id)
+        # ✅ não altera status automaticamente
+        self._touch_item(item_id=int(item.id))
         return created
 
     def update_field(self, *, field_id: int, user_id: int, role_id: int, values: dict) -> None:
@@ -594,7 +621,7 @@ class RequestService:
             field_tag=str(field.field_tag),
         )
 
-        # ✅ admin/analyst: só altera field_value
+        # admin/analyst: só altera field_value
         if role_id in (Role.ADMIN, Role.ANALYST):
             values = {"field_value": values.get("field_value")}
 
@@ -602,7 +629,8 @@ class RequestService:
         if not ok:
             raise NotFoundError("Campo não encontrado.")
 
-        self._resubmit_if_returned(item=item, role_id=role_id)
+        # ✅ não altera status automaticamente; só atualiza updated_at do item
+        self._touch_item(item_id=int(item.id))
 
         item2 = self._item_repo.get_by_id(int(item.id)) or item
         self._emit_item_changed(
@@ -641,4 +669,5 @@ class RequestService:
         if not ok:
             raise NotFoundError("Campo não encontrado.")
 
-        self._resubmit_if_returned(item=item, role_id=role_id)
+        # ✅ não altera status automaticamente
+        self._touch_item(item_id=int(item.id))

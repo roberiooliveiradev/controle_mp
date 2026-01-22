@@ -10,6 +10,7 @@ import {
   updateRequestFieldApi,
   changeRequestItemStatusApi,
   createRequestFieldApi,
+  resubmitRequestItemApi,
 } from "../app/api/requestsApi";
 
 import { RequestItemFields } from "../app/ui/requests/RequestItemFields";
@@ -27,6 +28,7 @@ import { socket } from "../app/realtime/socket";
 
 const ROLE_ADMIN = 1;
 const ROLE_ANALYST = 2;
+const ROLE_USER = 3;
 
 const STATUS = {
   CREATED: 1,
@@ -169,14 +171,17 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   const isCreate = Number(row?.request_type_id) === REQUEST_TYPE_ID_CREATE;
   const isUpdate = Number(row?.request_type_id) === REQUEST_TYPE_ID_UPDATE;
 
-  // ✅ edição NORMAL (campos gerais) só para criador quando RETURNED (e precisa ser mode edit)
+  // edição NORMAL só para criador quando RETURNED (e precisa ser mode edit)
   const canEditNormalFields = mode === "edit" && isOwner && isReturned && !lockAfterDone;
 
-  // ✅ CREATE: ADMIN/ANALYST pode editar SOMENTE novo_codigo (inclusive no "Abrir")
+  // CREATE: ADMIN/ANALYST pode editar SOMENTE novo_codigo (inclusive no "Abrir")
   const canEditNovoCodigo = isModerator && isCreate && !lockAfterDone;
 
-  // ✅ alguém pode salvar algo?
+  // alguém pode salvar algo?
   const canSaveSomething = canEditNormalFields || canEditNovoCodigo;
+
+  // USER pode "Salvar e reenviar" apenas se estiver editando e RETURNED
+  const canResubmit = user?.role_id === ROLE_USER && canEditNormalFields && isReturned;
 
   function hasAnyError(err) {
     const fc = Object.keys(err?.fields || {}).length;
@@ -285,6 +290,13 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     // TEXT fields existentes (menos fornecedores)
     for (const f of fields) {
       if (f.field_tag === TAGS.fornecedores) continue;
+      
+      // ✅ CREATE + RETURNED: não enviar novo_codigo ao salvar alterações do usuário
+      // (nesse cenário ele nem aparece no UI, mas garante que nunca será enviado)
+      if (isCreate && isReturned && f.field_tag === TAGS.novo_codigo) {
+        console.log("NÃO ENVIOU NOVO CÓDIGO ===============================");
+        continue;
+      }
 
       const nextVal = String(valuesByTag?.[f.field_tag] ?? "");
       const prevVal = String(f.field_value ?? "");
@@ -313,7 +325,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     const existing = byTag?.[TAGS.novo_codigo];
     let fieldId = existing?.id;
 
-    // se não existe e está vazio, não cria (deixa para quando preencher)
+    // se não existe e está vazio, não cria
     if (!fieldId && !String(v).trim()) return true;
 
     if (!fieldId) {
@@ -339,27 +351,60 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     return true;
   }
 
-  async function handleSave() {
-    if (!canSaveSomething || !item) return;
+  async function handleSave({ closeOnSuccess = true } = {}) {
+    if (!canSaveSomething || !item) return false;
+
+    if (canEditNormalFields && hasAnyError(editErrors)) return false;
+
+    if (canEditNormalFields) {
+      const ok = await saveNormalFields();
+      if (!ok) return false;
+    }
+
+    // admin/analyst em CREATE: salva só novo_codigo (quando não está salvando campos normais)
+    if (canEditNovoCodigo && !canEditNormalFields) {
+      const ok = await saveNovoCodigoOnly();
+      if (!ok) return false;
+    }
+
+    if (closeOnSuccess) {
+      onSaved?.();
+      onClose?.();
+    } else {
+      onSaved?.();
+    }
+    return true;
+  }
+
+  async function handleSaveClick() {
+    try {
+      setSaving(true);
+      await handleSave({ closeOnSuccess: true });
+    } catch (err) {
+      alert(err?.response?.data?.error ?? err?.message ?? "Falha ao salvar alterações.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // NOVO: Salvar e reenviar (USER + RETURNED)
+  async function handleSaveAndResubmit() {
+    if (!canResubmit || !row?.item_id) return;
 
     try {
       setSaving(true);
 
-      if (canEditNormalFields) {
-        const ok = await saveNormalFields();
-        if (!ok) return;
-      }
+      // 1) salva alterações sem fechar
+      const ok = await handleSave({ closeOnSuccess: false });
+      if (!ok) return;
 
-      // IMPORTANTE: se for admin/analyst em CREATE, salva só novo_codigo
-      if (canEditNovoCodigo && !canEditNormalFields) {
-        const ok = await saveNovoCodigoOnly();
-        if (!ok) return;
-      }
+      // 2) reenviar (RETURNED -> CREATED)
+      await resubmitRequestItemApi(row.item_id);
 
       onSaved?.();
       onClose?.();
     } catch (err) {
-      alert(err?.response?.data?.error ?? err?.message ?? "Falha ao salvar alterações.");
+      alert(err?.response?.data?.error ?? err?.message ?? "Falha ao salvar e reenviar.");
     } finally {
       setSaving(false);
     }
@@ -397,11 +442,28 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
       footer={
         <>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 12, padding: "4px 8px", borderRadius: 999, border: "1px solid var(--border)", background: "var(--surface)", fontWeight: 700 }}>
+            <span
+              style={{
+                fontSize: 12,
+                padding: "4px 8px",
+                borderRadius: 999,
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                fontWeight: 700,
+              }}
+            >
               Tipo: {typeName}
             </span>
 
-            <span style={{ fontSize: 12, padding: "4px 8px", borderRadius: 999, border: "1px solid var(--border)", background: "var(--surface)" }}>
+            <span
+              style={{
+                fontSize: 12,
+                padding: "4px 8px",
+                borderRadius: 999,
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+              }}
+            >
               Status: {statusName}
             </span>
 
@@ -415,15 +477,39 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
 
             {isModerator ? (
               <>
-                <button onClick={() => handleChangeStatus(STATUS.IN_PROGRESS)} disabled={lockAfterDone}>Em andamento</button>
-                <button onClick={() => handleChangeStatus(STATUS.RETURNED)} disabled={lockAfterDone}>Devolver</button>
-                <button onClick={() => handleChangeStatus(STATUS.REJECTED)} disabled={lockAfterDone}>Rejeitar</button>
-                <button onClick={() => handleChangeStatus(STATUS.FINALIZED)} disabled={lockAfterDone}>Finalizar</button>
+                <button onClick={() => handleChangeStatus(STATUS.IN_PROGRESS)} disabled={lockAfterDone}>
+                  Em andamento
+                </button>
+                <button onClick={() => handleChangeStatus(STATUS.RETURNED)} disabled={lockAfterDone}>
+                  Devolver
+                </button>
+                <button onClick={() => handleChangeStatus(STATUS.REJECTED)} disabled={lockAfterDone}>
+                  Rejeitar
+                </button>
+                <button onClick={() => handleChangeStatus(STATUS.FINALIZED)} disabled={lockAfterDone}>
+                  Finalizar
+                </button>
               </>
             ) : null}
 
+            {/* USER: Salvar e reenviar (resolve o bug de múltiplos campos) */}
+            {canResubmit ? (
+              <button
+                onClick={handleSaveAndResubmit}
+                disabled={saving || hasAnyError(editErrors)}
+                title="Salva suas alterações e reenviar para análise"
+              >
+                {saving ? "Salvando..." : "Salvar e reenviar"}
+              </button>
+            ) : null}
+
+            {/* salvar normal (não reenviar) */}
             {canSaveSomething ? (
-              <button onClick={handleSave} disabled={saving || (canEditNormalFields && hasAnyError(editErrors))}>
+              <button
+                onClick={handleSaveClick}
+                disabled={saving || (canEditNormalFields && hasAnyError(editErrors))}
+                title="Salva alterações sem reenviar"
+              >
                 {saving ? "Salvando..." : saveLabel}
               </button>
             ) : null}
@@ -434,7 +520,14 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
       {busy ? (
         <div>Carregando...</div>
       ) : error ? (
-        <div style={{ padding: 10, border: "1px solid var(--danger-border)", background: "var(--danger-bg)", borderRadius: 8 }}>
+        <div
+          style={{
+            padding: 10,
+            border: "1px solid var(--danger-border)",
+            background: "var(--danger-bg)",
+            borderRadius: 8,
+          }}
+        >
           {error}
         </div>
       ) : !item ? (
@@ -444,17 +537,26 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
           <div style={{ display: "grid", gap: 6 }}>
             <div style={{ fontWeight: 800 }}>Campos</div>
             <div style={{ fontSize: 12, opacity: 0.75 }}>
-              Criado por: {row.request_created_by_user?.full_name ?? "—"} • Criado em: {fmt(row.item_created_at)} • Atualizado em: {fmt(row.item_updated_at)}
+              Criado por: {row.request_created_by_user?.full_name ?? "—"} • Criado em: {fmt(row.item_created_at)} •
+              Atualizado em: {fmt(row.item_updated_at)}
             </div>
           </div>
 
           <RequestItemFields
             variant="fields"
             readOnly={!canEditNormalFields}
-            // ✅ CREATE: permite editar só o novo_codigo (ADMIN/ANALYST), mesmo no "Abrir"
+            // CREATE: permite editar só o novo_codigo (ADMIN/ANALYST), mesmo no "Abrir"
             canEditNovoCodigo={canEditNovoCodigo && !canEditNormalFields}
             requestTypeId={row?.request_type_id}
-            valuesByTag={valuesByTag}
+            // USER em UPDATE/RETURNED: nem mostra novo_codigo (não faz parte do fluxo de edição)
+            valuesByTag={
+              canResubmit
+                ? Object.fromEntries(
+                    Object.entries(valuesByTag || {}).filter(([k]) => k !== TAGS.novo_codigo)
+                  )
+                : valuesByTag
+            }
+
             onChangeTagValue={(tag, v) => {
               setValuesByTag((prev) => ({ ...(prev || {}), [tag]: v }));
               clearFieldError(tag);
@@ -470,12 +572,12 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
             {lockAfterDone
               ? "Solicitação FINALIZED/REJECTED: edição bloqueada."
               : canEditNormalFields
-                ? "Você pode editar os campos porque a solicitação foi devolvida (RETURNED)."
-                : canEditNovoCodigo
-                  ? "Você pode editar somente o campo 'novo_codigo' (CREATE) antes de rejeitar/finalizar."
-                  : mode === "edit"
-                    ? "Você não tem permissão para editar este item."
-                    : "Modo visualização."}
+              ? "Você pode editar os campos porque a solicitação foi devolvida (RETURNED). Quando terminar, use 'Salvar e reenviar'."
+              : canEditNovoCodigo
+              ? "Você pode editar somente o campo 'novo_codigo' (CREATE) antes de rejeitar/finalizar."
+              : mode === "edit"
+              ? "Você não tem permissão para editar este item."
+              : "Modo visualização."}
           </div>
         </div>
       )}
@@ -676,8 +778,18 @@ export default function RequestsPage() {
             />
           ) : null}
 
-          <input placeholder="Tipo (id ou nome)" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={{ width: 180 }} />
-          <input placeholder="Item (id)" value={itemFilter} onChange={(e) => setItemFilter(e.target.value)} style={{ width: 120 }} />
+          <input
+            placeholder="Tipo (id ou nome)"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            style={{ width: 180 }}
+          />
+          <input
+            placeholder="Item (id)"
+            value={itemFilter}
+            onChange={(e) => setItemFilter(e.target.value)}
+            style={{ width: 120 }}
+          />
 
           <select value={dateMode} onChange={(e) => setDateMode(e.target.value)} title="Qual data filtrar?">
             <option value="AUTO">Data: Atualizado (ou Criado)</option>
@@ -699,7 +811,14 @@ export default function RequestsPage() {
       </div>
 
       {error ? (
-        <div style={{ padding: 10, border: "1px solid var(--danger-border)", background: "var(--danger-bg)", borderRadius: 8 }}>
+        <div
+          style={{
+            padding: 10,
+            border: "1px solid var(--danger-border)",
+            background: "var(--danger-bg)",
+            borderRadius: 8,
+          }}
+        >
           {error}
         </div>
       ) : null}
@@ -727,11 +846,15 @@ export default function RequestsPage() {
           <tbody>
             {busy ? (
               <tr>
-                <td colSpan={9} style={{ padding: 12 }}>Carregando...</td>
+                <td colSpan={9} style={{ padding: 12 }}>
+                  Carregando...
+                </td>
               </tr>
             ) : filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: 12 }}>Nenhuma solicitação encontrada.</td>
+                <td colSpan={9} style={{ padding: 12 }}>
+                  Nenhuma solicitação encontrada.
+                </td>
               </tr>
             ) : (
               filteredRows.map((r) => {
@@ -741,7 +864,6 @@ export default function RequestsPage() {
                   Number(r.request_status_id) === STATUS.FINALIZED ||
                   Number(r.request_status_id) === STATUS.REJECTED;
 
-                // ✅ EDITAR (campos normais): somente criador+returned
                 const canEditNormal = isReturned && isOwner && !lockAfterDone;
 
                 return (
@@ -764,9 +886,7 @@ export default function RequestsPage() {
                       {r.request_created_by_user?.full_name ?? "—"}
                     </td>
 
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                      {fmt(r.item_created_at)}
-                    </td>
+                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{fmt(r.item_created_at)}</td>
 
                     <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
                       {fmt(r.item_updated_at ? r.item_updated_at : "")}
