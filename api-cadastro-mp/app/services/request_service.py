@@ -193,6 +193,8 @@ class RequestService:
             if role_id in (Role.ADMIN, Role.ANALYST):
                 if field_tag == "novo_codigo":
                     return
+                if (req.created_by == user_id and int(item.request_status_id) == int(RequestStatus.RETURNED)):
+                    return
                 raise ForbiddenError("Em CREATE, ADMIN/ANALYST podem editar apenas 'novo_codigo'.")
 
             # USER (criador) em RETURNED: pode editar campos do formulário, EXCETO novo_codigo
@@ -359,9 +361,6 @@ class RequestService:
         Usuário finaliza suas edições e reenviar item RETURNED -> CREATED.
         Isso evita o bug de: ao editar 1 campo já mudar pra CREATED e bloquear as demais edições.
         """
-        if role_id != Role.USER:
-            raise ForbiddenError("Apenas USER pode resubmeter item devolvido.")
-
         item = self._item_repo.get_by_id(item_id)
         if item is None:
             raise NotFoundError("Item não encontrado.")

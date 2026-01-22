@@ -181,7 +181,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   const canSaveSomething = canEditNormalFields || canEditNovoCodigo;
 
   // USER pode "Salvar e reenviar" apenas se estiver editando e RETURNED
-  const canResubmit = user?.role_id === ROLE_USER && canEditNormalFields && isReturned;
+  const canResubmit = canEditNormalFields && isReturned;
 
   function hasAnyError(err) {
     const fc = Object.keys(err?.fields || {}).length;
@@ -433,7 +433,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   }
 
   const saveLabel =
-    canEditNovoCodigo && !canEditNormalFields ? "Salvar novo código" : "Salvar alterações";
+    canEditNovoCodigo && !canEditNormalFields ? "Salvar novo código" : "Salvar";
 
   return (
     <ModalShell
@@ -492,27 +492,28 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
               </>
             ) : null}
 
-            {/* USER: Salvar e reenviar (resolve o bug de múltiplos campos) */}
-            {canResubmit ? (
-              <button
-                onClick={handleSaveAndResubmit}
-                disabled={saving || hasAnyError(editErrors)}
-                title="Salva suas alterações e reenviar para análise"
-              >
-                {saving ? "Salvando..." : "Salvar e reenviar"}
-              </button>
-            ) : null}
-
             {/* salvar normal (não reenviar) */}
             {canSaveSomething ? (
               <button
                 onClick={handleSaveClick}
                 disabled={saving || (canEditNormalFields && hasAnyError(editErrors))}
                 title="Salva alterações sem reenviar"
-              >
+                >
                 {saving ? "Salvando..." : saveLabel}
               </button>
             ) : null}
+
+            {/* USER: Salvar e reenviar (resolve o bug de múltiplos campos) */}
+            {canResubmit ? (
+              <button
+              onClick={handleSaveAndResubmit}
+              disabled={saving || hasAnyError(editErrors)}
+              title="Salva suas alterações e reenviar para análise"
+              >
+                {saving ? "Salvando..." : "Reenviar"}
+              </button>
+            ) : null}
+
           </div>
         </>
       }
