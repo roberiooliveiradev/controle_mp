@@ -153,9 +153,7 @@ function ProductDetailsModal({ open, productId, onClose }) {
           <RequestItemFields
             variant="fields"
             readOnly={true}
-            // produto pode ter vindo de CREATE ou UPDATE — aqui só impacta mostrar/ocultar codigo_atual/novo_codigo
-            // para manter sempre visível no produto, passamos UPDATE
-            requestTypeId={REQUEST_TYPE_ID_UPDATE}
+            isProduct={true}
             valuesByTag={valuesByTag}
             onChangeTagValue={() => {}}
             fornecedoresRows={fornecedoresRows}

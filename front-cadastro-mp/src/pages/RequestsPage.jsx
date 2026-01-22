@@ -169,14 +169,14 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   const isCreate = Number(row?.request_type_id) === REQUEST_TYPE_ID_CREATE;
   const isUpdate = Number(row?.request_type_id) === REQUEST_TYPE_ID_UPDATE;
 
-  // ✅ edição NORMAL só para criador quando RETURNED (e precisa ser mode edit)
+  // ✅ edição NORMAL (campos gerais) só para criador quando RETURNED (e precisa ser mode edit)
   const canEditNormalFields = mode === "edit" && isOwner && isReturned && !lockAfterDone;
 
-  // ✅ executor code: ADMIN/ANALYST pode editar no "Abrir" (view) também
-  const canEditExecutorCode = isModerator && isCreate && !lockAfterDone;
+  // ✅ CREATE: ADMIN/ANALYST pode editar SOMENTE novo_codigo (inclusive no "Abrir")
+  const canEditNovoCodigo = isModerator && isCreate && !lockAfterDone;
 
   // ✅ alguém pode salvar algo?
-  const canSaveSomething = canEditNormalFields || canEditExecutorCode;
+  const canSaveSomething = canEditNormalFields || canEditNovoCodigo;
 
   function hasAnyError(err) {
     const fc = Object.keys(err?.fields || {}).length;
@@ -285,8 +285,6 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     // TEXT fields existentes (menos fornecedores)
     for (const f of fields) {
       if (f.field_tag === TAGS.fornecedores) continue;
-      // executor_codigo_novo NÃO é campo normal: não deixa o usuário salvar por aqui
-      if (f.field_tag === TAGS.executor_codigo_novo) continue;
 
       const nextVal = String(valuesByTag?.[f.field_tag] ?? "");
       const prevVal = String(f.field_value ?? "");
@@ -308,19 +306,19 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     return true;
   }
 
-  async function saveExecutorCodeOnly() {
-    const v = String(valuesByTag?.[TAGS.executor_codigo_novo] ?? "").trim();
-    if (!v) {
-      setFieldError(TAGS.executor_codigo_novo, "Obrigatório para finalizar solicitações CREATE.");
-      return false;
-    }
+  async function saveNovoCodigoOnly() {
+    // CREATE: ADMIN/ANALYST podem salvar SOMENTE novo_codigo
+    const v = String(valuesByTag?.[TAGS.novo_codigo] ?? "");
 
-    const existing = byTag?.[TAGS.executor_codigo_novo];
+    const existing = byTag?.[TAGS.novo_codigo];
     let fieldId = existing?.id;
 
+    // se não existe e está vazio, não cria (deixa para quando preencher)
+    if (!fieldId && !String(v).trim()) return true;
+
     if (!fieldId) {
-      fieldId = await ensureTextFieldExists(TAGS.executor_codigo_novo, v);
-      if (!fieldId) throw new Error("Falha ao criar o campo executor_codigo_novo.");
+      fieldId = await ensureTextFieldExists(TAGS.novo_codigo, v);
+      if (!fieldId) throw new Error("Falha ao criar o campo novo_codigo.");
     }
 
     const prevVal = String(existing?.field_value ?? "");
@@ -328,10 +326,10 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
       await updateRequestFieldApi(fieldId, { field_value: v });
       setByTag((prev) => ({
         ...(prev || {}),
-        [TAGS.executor_codigo_novo]: {
-          ...(prev?.[TAGS.executor_codigo_novo] || {}),
+        [TAGS.novo_codigo]: {
+          ...(prev?.[TAGS.novo_codigo] || {}),
           id: fieldId,
-          field_tag: TAGS.executor_codigo_novo,
+          field_tag: TAGS.novo_codigo,
           field_value: v,
           field_type_id: FIELD_TYPE_ID_TEXT,
         },
@@ -352,8 +350,9 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
         if (!ok) return;
       }
 
-      if (canEditExecutorCode) {
-        const ok = await saveExecutorCodeOnly();
+      // IMPORTANTE: se for admin/analyst em CREATE, salva só novo_codigo
+      if (canEditNovoCodigo && !canEditNormalFields) {
+        const ok = await saveNovoCodigoOnly();
         if (!ok) return;
       }
 
@@ -388,7 +387,8 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     onClose?.();
   }
 
-  const saveLabel = canEditExecutorCode && !canEditNormalFields ? "Salvar código executor" : "Salvar alterações";
+  const saveLabel =
+    canEditNovoCodigo && !canEditNormalFields ? "Salvar novo código" : "Salvar alterações";
 
   return (
     <ModalShell
@@ -450,10 +450,9 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
 
           <RequestItemFields
             variant="fields"
-            // ✅ campos normais: só criador+returned+edit
             readOnly={!canEditNormalFields}
-            // ✅ libera SOMENTE o input do executor (CREATE) no Abrir (view) e no Editar
-            canEditExecutorCode={canEditExecutorCode}
+            // ✅ CREATE: permite editar só o novo_codigo (ADMIN/ANALYST), mesmo no "Abrir"
+            canEditNovoCodigo={canEditNovoCodigo && !canEditNormalFields}
             requestTypeId={row?.request_type_id}
             valuesByTag={valuesByTag}
             onChangeTagValue={(tag, v) => {
@@ -472,8 +471,8 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
               ? "Solicitação FINALIZED/REJECTED: edição bloqueada."
               : canEditNormalFields
                 ? "Você pode editar os campos porque a solicitação foi devolvida (RETURNED)."
-                : canEditExecutorCode
-                  ? "Você pode editar somente o campo 'código novo (executor)' antes de rejeitar/finalizar."
+                : canEditNovoCodigo
+                  ? "Você pode editar somente o campo 'novo_codigo' (CREATE) antes de rejeitar/finalizar."
                   : mode === "edit"
                     ? "Você não tem permissão para editar este item."
                     : "Modo visualização."}

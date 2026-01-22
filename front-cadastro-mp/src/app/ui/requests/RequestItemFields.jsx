@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import {
-  TAGS, // ✅ estava faltando em alguns projetos quando copiaram
+  TAGS,
   newSupplierRow,
   REQUEST_TYPE_ID_UPDATE,
   REQUEST_TYPE_ID_CREATE,
@@ -47,8 +47,11 @@ export function RequestItemFields({
   variant,
   readOnly = false,
 
-  // ✅ libera SOMENTE o campo executor_codigo_novo mesmo em modo readOnly
-  canEditExecutorCode = false,
+  // ✅ libera SOMENTE o campo novo_codigo (para CREATE) mesmo em readOnly (ADMIN/ANALYST)
+  canEditNovoCodigo = false,
+
+  // ✅ novo
+  isProduct = false,
 
   // ---------- structured ----------
   item,
@@ -79,11 +82,11 @@ export function RequestItemFields({
   const fieldErr = errors?.fields || {};
   const suppliersErr = errors?.suppliers || {};
 
-  // ✅ gating: "edit normal" = readOnly false
+  // edição normal = readOnly false
   const canEditNormal = !readOnly;
 
-  // ✅ gating: só o campo do executor pode furar o readOnly
-  const canEditExecutorField = !!canEditExecutorCode;
+  // furo de readOnly SOMENTE pro novo_codigo quando CREATE (details)
+  const canEditNovoCodigoField = !!canEditNovoCodigo && !isStructured && isCreate;
 
   const fornecedores = useMemo(() => {
     if (isStructured) {
@@ -102,12 +105,12 @@ export function RequestItemFields({
   }
 
   function setVal(tag, v) {
-    const isExecutorField = tag === TAGS.executor_codigo_novo;
+    const isSpecialNovoCodigo = tag === TAGS.novo_codigo && canEditNovoCodigoField;
 
-    // ✅ regra:
-    // - se readOnly: só permite alterar executor_codigo_novo e somente quando canEditExecutorCode=true
+    // regra:
+    // - se readOnly: só permite alterar novo_codigo quando CREATE e canEditNovoCodigo=true
     // - se não readOnly: permite tudo (edit normal)
-    if (!canEditNormal && !(isExecutorField && canEditExecutorField)) return;
+    if (!canEditNormal && !isSpecialNovoCodigo) return;
 
     if (isStructured) {
       onItemChange?.(tag, v);
@@ -116,7 +119,7 @@ export function RequestItemFields({
     }
 
     onChangeTagValue?.(tag, v);
-    onClearFieldError?.(tag); // ✅ estava faltando: limpa erro também no modo fields
+    onClearFieldError?.(tag);
   }
 
   function setRequestType(code) {
@@ -137,7 +140,7 @@ export function RequestItemFields({
   }
 
   function addSupplierRow() {
-    // ✅ fornecedores seguem sempre o readOnly (executor NÃO pode mexer)
+    // fornecedores seguem sempre o readOnly (ADMIN/ANALYST não mexe aqui)
     if (!canEditNormal) return;
 
     const next = [...fornecedores, newSupplierRow()];
@@ -169,7 +172,7 @@ export function RequestItemFields({
       return;
     }
     onChangeFornecedores?.(next);
-    onClearSupplierError?.(rowIndex, key); // ✅ também limpa no modo fields
+    onClearSupplierError?.(rowIndex, key);
   }
 
   return (
@@ -196,21 +199,32 @@ export function RequestItemFields({
 
       {/* Campos principais */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {/* ✅ CAMPO SEPARADO DO EXECUTOR (somente CREATE no details) */}
+        {/* PRODUTO: apenas um campo de código (codigo_atual) */}
+        {isProduct ? (
+          <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+            <span>Código</span>
+            <input
+              value={getVal(TAGS.codigo_atual)}
+              disabled={true}
+              style={inputStyle(false)}
+            />
+          </label>
+        ) : null}
+        {/* CREATE (details): novo_codigo é o único campo de código, editável por ADMIN/ANALYST */}
         {!isStructured && isCreate ? (
           <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
-            <span>Código novo (executor — obrigatório para finalizar)</span>
+            <span>Novo código (obrigatório para finalizar CREATE)</span>
             <input
-              value={getVal(TAGS.executor_codigo_novo)}
-              onChange={(e) => setVal(TAGS.executor_codigo_novo, e.target.value)}
-              disabled={!canEditExecutorField}
-              style={inputStyle(!!fieldErr[TAGS.executor_codigo_novo])}
+              value={getVal(TAGS.novo_codigo)}
+              onChange={(e) => setVal(TAGS.novo_codigo, e.target.value)}
+              disabled={!canEditNovoCodigoField}
+              style={inputStyle(!!fieldErr[TAGS.novo_codigo])}
             />
-            {fieldErr[TAGS.executor_codigo_novo] ? (
-              <span style={styles.errorText}>{fieldErr[TAGS.executor_codigo_novo]}</span>
+            {fieldErr[TAGS.novo_codigo] ? (
+              <span style={styles.errorText}>{fieldErr[TAGS.novo_codigo]}</span>
             ) : null}
             <div style={styles.subtle}>
-              Este campo é preenchido pelo executor (ADMIN/ANALYST) antes de rejeitar/finalizar.
+              Em CREATE, este campo é preenchido por ADMIN/ANALYST antes de rejeitar/finalizar.
             </div>
           </label>
         ) : null}

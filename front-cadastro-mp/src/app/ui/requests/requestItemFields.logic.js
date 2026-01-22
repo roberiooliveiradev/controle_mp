@@ -17,8 +17,6 @@ export const TAGS = {
   codigo_atual: "codigo_atual",
   grupo: "grupo",
   novo_codigo: "novo_codigo",
-  // ✅ NOVO: código novo do executor (para CREATE)
-  executor_codigo_novo: "executor_codigo_novo",
 
   descricao: "descricao",
   tipo: "tipo",
@@ -40,7 +38,7 @@ export function newStructuredItem() {
     codigo_atual: "",
     grupo: "",
     novo_codigo: "",
-    // ❗ executor_codigo_novo NÃO é usado no composer (somente executor no details)
+
     descricao: "",
     tipo: "",
     armazem_padrao: "",
@@ -85,8 +83,14 @@ export function pushTextField(fields, tag, value) {
 export function structuredItemToRequestPayloadItem(it) {
   const fields = [];
   const isUpdateItem = it.request_type_code === "UPDATE";
+  const isCreateItem = it.request_type_code === "CREATE";
 
-  // só enviar codigo_atual/novo_codigo se for UPDATE
+  // ✅ CREATE: pode enviar novo_codigo (se vier preenchido)
+  if (isCreateItem) {
+    pushTextField(fields, TAGS.novo_codigo, it.novo_codigo);
+  }
+
+  // ✅ UPDATE: envia codigo_atual e (opcional) novo_codigo
   if (isUpdateItem) {
     pushTextField(fields, TAGS.codigo_atual, it.codigo_atual);
     pushTextField(fields, TAGS.novo_codigo, it.novo_codigo);
@@ -185,11 +189,6 @@ export function fornecedoresToJson(rows) {
 
 /**
  * Validação para edição (valuesByTag + fornecedoresRows).
- *
- * ✅ IMPORTANT:
- * - Não valida executor_codigo_novo aqui, porque:
- *   - Ele só é REQUIRED no momento de FINALIZAR (backend)
- *   - E só executor vê/edita (front controla)
  */
 export function validateStructuredItemFromTags(valuesByTag, fornecedoresRows, isUpdate = false) {
   const fields = {};
