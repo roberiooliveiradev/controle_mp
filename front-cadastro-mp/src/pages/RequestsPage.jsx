@@ -247,6 +247,23 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     }
   }
 
+  function requireNovoCodigoForCreateFinalization() {
+  if (!isCreate) return true;
+
+  const v = String(valuesByTag?.[TAGS.novo_codigo] ?? "").trim();
+
+  if (!v) {
+    setFieldError(
+      TAGS.novo_codigo,
+      "Novo código é obrigatório para finalizar solicitações do tipo CREATE."
+    );
+    return false;
+  }
+
+  return true;
+}
+
+
   useEffect(() => {
     if (!open) return;
     reloadDetails();
@@ -428,14 +445,20 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
       return;
     }
 
+    // ✅ REGRA FRONTEND: CREATE + FINALIZED exige novo_codigo
+    if (
+      Number(newStatusId) === STATUS.FINALIZED &&
+      isCreate &&
+      !requireNovoCodigoForCreateFinalization()
+    ) {
+      return;
+    }
+
     try {
       await changeRequestItemStatusApi(row.item_id, newStatusId);
       onSaved?.();
-
-      // ✅ puxa dados atualizados do banco (status + fields + updated_at etc.)
       await reloadDetails();
 
-      // ✅ NÃO fechar ao marcar "Em andamento"
       if (Number(newStatusId) !== Number(STATUS.IN_PROGRESS)) {
         onClose?.();
       }
@@ -443,6 +466,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
       alert(err?.response?.data?.error ?? "Falha ao alterar status.");
     }
   }
+
 
   function goToConversation() {
     navigate(`/conversations/${row.conversation_id}?messageId=${row.message_id}`);
