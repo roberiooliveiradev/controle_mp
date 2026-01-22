@@ -7,9 +7,10 @@ import { Layout } from "../ui/Layout";
 import LoginPage from "../../pages/LoginPage";
 import ConversationsPage from "../../pages/ConversationsPage";
 import RequestsPage from "../../pages/RequestsPage";
-import { RealtimeProvider } from "../realtime/RealtimeContext"
+import { RealtimeProvider } from "../realtime/RealtimeContext";
 import RegisterPage from "../../pages/RegisterPage";
 import ProductsPage from "../../pages/ProductsPage";
+import AccountPage from "../../pages/AccountPage";
 
 export function AppRouter() {
   return (
@@ -17,6 +18,7 @@ export function AppRouter() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+
         <Route
           path="/"
           element={
@@ -34,6 +36,8 @@ export function AppRouter() {
 
           <Route path="requests" element={<RequestsPage />} />
           <Route path="products" element={<ProductsPage />} />
+
+          <Route path="account" element={<AccountPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

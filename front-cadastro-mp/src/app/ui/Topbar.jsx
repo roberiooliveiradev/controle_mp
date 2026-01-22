@@ -1,5 +1,3 @@
-// src/app/ui/Topbar.jsx
-
 import { useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -16,10 +14,12 @@ export function Topbar() {
 
   const profiles = useMemo(() => listProfiles(), [listProfiles]);
 
+  const isActive = (path) => location.pathname.startsWith(path);
+
   return (
     <header
       style={{
-        borderBottom: "1px solid #eee",
+        borderBottom: "1px solid var(--border, #eee)",
         padding: "12px 16px",
         display: "flex",
         justifyContent: "space-between",
@@ -27,37 +27,53 @@ export function Topbar() {
         gap: 12,
       }}
     >
-        <strong>Controle MP</strong>
-        <nav style={{ display: "flex", gap: 20, alignItems: "center", justifyContent: "end", width: "75dvw"}}>
-          <Link
-            to="/conversations"
-            style={{
-              textDecoration: "none",
-              fontWeight: location.pathname.startsWith("/conversations") ? 700 : 500,
-            }}
-          >
-            Conversas
-          </Link>
-          <Link
-            to="/requests"
-            style={{
-              textDecoration: "none",
-              fontWeight: location.pathname.startsWith("/requests") ? 700 : 500,
-            }}
-          >
-            Solicitações
-          </Link>
-          <Link
-            to="/products"
-            style={{
-              textDecoration: "none",
-              fontWeight: location.pathname.startsWith("/products") ? 700 : 500,
-            }}
-          >
-            Produtos
-          </Link>
-        </nav>
+      <strong>Controle MP</strong>
 
+      {/* Navegação principal */}
+      <nav
+        style={{
+          display: "flex",
+          gap: 20,
+          alignItems: "center",
+          justifyContent: "end",
+          width: "75dvw",
+        }}
+      >
+        <Link
+          to="/conversations"
+          style={{
+            textDecoration: "none",
+            fontWeight: isActive("/conversations") ? 700 : 500,
+          }}
+        >
+          Conversas
+        </Link>
+
+        <Link
+          to="/requests"
+          style={{
+            textDecoration: "none",
+            fontWeight: isActive("/requests") ? 700 : 500,
+          }}
+        >
+          Solicitações
+        </Link>
+
+        <Link
+          to="/products"
+          style={{
+            textDecoration: "none",
+            fontWeight: isActive("/products") ? 700 : 500,
+          }}
+        >
+          Produtos
+        </Link>
+
+        {/* ✅ novo link */}
+
+      </nav>
+
+      {/* Área do usuário */}
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         {profiles.length > 1 && (
           <select
@@ -73,9 +89,19 @@ export function Topbar() {
           </select>
         )}
 
-        <span style={{ opacity: 0.8 }}>
-          {user?.full_name ?? user?.email} {user?.role_id ? `(${roleLabel(user.role_id)})` : ""}
-        </span>
+        {/* ✅ nome do usuário como link para Minha Conta */}
+        <Link
+          to="/account"
+          style={{
+            textDecoration: "none",
+            opacity: 0.85,
+            fontWeight: isActive("/account") ? 700 : 500,
+          }}
+          title="Editar meus dados"
+        >
+          {user?.full_name ?? user?.email}
+          {user?.role_id ? ` (${roleLabel(user.role_id)})` : ""}
+        </Link>
 
         <button onClick={logout}>Sair</button>
       </div>

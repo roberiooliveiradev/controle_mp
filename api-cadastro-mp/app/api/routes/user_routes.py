@@ -38,10 +38,18 @@ def list_users():
 @bp_users.put("/<int:user_id>")
 def update_user(user_id: int):
     payload = UpdateUserRequest.model_validate(request.get_json(force=True))
+    data = payload.model_dump(exclude_none=True)
+
+    current_password = data.pop("current_password")  # ✅ obrigatório
+    update_fields = data  # full_name/email/password (opcionais)
 
     with db_session() as session:
         service = UserService(UserRepository(session))
-        updated = service.update_user(user_id=user_id, **payload.model_dump(exclude_none=True))
+        updated = service.update_user(
+            user_id=user_id,
+            current_password=current_password,
+            **update_fields,
+        )
 
     return jsonify(
         UserResponse(id=updated.id, full_name=updated.full_name, email=updated.email, role_id=updated.role_id).model_dump()

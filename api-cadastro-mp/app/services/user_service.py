@@ -9,6 +9,7 @@ from app.repositories.user_repository import UserRepository
 
 ROLE_USER_ID = 3
 
+
 class UserService:
     def __init__(self, user_repository: UserRepository) -> None:
         self._user_repository = user_repository
@@ -23,7 +24,7 @@ class UserService:
         now = datetime.utcnow()
         model = UserModel(
             full_name=full_name.strip(),
-            email=email.strip(),
+            email=email.strip().lower(),
             role_id=ROLE_USER_ID,
             password_algo=algo,
             password_iterations=iterations,
@@ -40,26 +41,46 @@ class UserService:
         self,
         *,
         user_id: int,
+        current_password: str,
         full_name: str | None = None,
         email: str | None = None,
         role_id: int | None = None,
         password: str | None = None,
     ) -> UserModel:
+        """
+        Regra: qualquer alteração (nome/email/senha/role) exige validação da senha atual.
+        """
         user = self._user_repository.get_by_id(user_id)
         if user is None:
             raise NotFoundError("Usuário não encontrado.")
 
+        # ✅ valida senha atual
+        ok = PasswordHasher.verify_password(
+            current_password,
+            password_hash=user.password_hash,
+            password_salt=user.password_salt,
+            iterations=user.password_iterations,
+            algo=user.password_algo,
+        )
+        if not ok:
+            raise UnauthorizedError("Senha atual inválida.")
+
+        # valida email único (se mudou)
         if email and email.strip().lower() != user.email:
             existing = self._user_repository.get_by_email(email.strip().lower())
             if existing is not None:
                 raise ConflictError("Email já cadastrado.")
 
+        # atualiza campos
         if full_name is not None:
             user.full_name = full_name.strip()
+
         if email is not None:
             user.email = email.strip().lower()
+
         if role_id is not None:
             user.role_id = role_id
+
         if password is not None:
             password_hash, password_salt, algo, iterations = PasswordHasher.hash_password(password)
             user.password_hash = password_hash

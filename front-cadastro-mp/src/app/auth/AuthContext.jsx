@@ -91,7 +91,19 @@ export function AuthProvider({ children }) {
     return authStorage.listProfileUserIds().map((id) => authStorage.getUser(id)).filter(Boolean);
   }
 
-  // ✅ Socket lifecycle: sempre manter autenticado pelo token ativo
+  function updateActiveUserProfile(updatedUser) {
+    const uid = authStorage.getActiveUserId();
+    if (!uid) return;
+
+    // se o backend retornou o id, validamos; senão assume o ativo
+    const targetId = updatedUser?.id ? Number(updatedUser.id) : uid;
+    if (targetId !== uid) return;
+
+    authStorage.setUser(uid, updatedUser);
+    setUser(updatedUser);
+  }
+
+  // Socket lifecycle: sempre manter autenticado pelo token ativo
   useEffect(() => {
     if (!token) {
       setSocketAuthToken(null);
@@ -113,6 +125,7 @@ export function AuthProvider({ children }) {
       logout,
       setActiveUserId,
       listProfiles,
+      updateActiveUserProfile, 
     }),
     [user, token, activeUserId, isAuthenticated]
   );
