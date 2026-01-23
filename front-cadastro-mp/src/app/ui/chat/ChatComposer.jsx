@@ -128,7 +128,6 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
           rows={5}
           style={{ flex: 1, padding: 12, resize: "none", borderRadius: 10, border: "1px solid var(--border-2)", lineHeight: 1.4 }}
         />
-
         <input
           ref={fileRef}
           type="file"
@@ -137,6 +136,7 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
           onChange={(e) => addFiles(Array.from(e.target.files || []))}
         />
 
+        <div style={{display:"flex", gap:"10px"}}>
         <button type="button" onClick={pickFiles}>
           Anexar
         </button>
@@ -189,6 +189,7 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
         </div>
 
         <button type="submit">Enviar</button>
+        </div>
       </form>
 
       {/* Modal do carrinho */}

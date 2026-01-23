@@ -15,7 +15,9 @@ export function Topbar() {
   const location = useLocation();
 
   const profiles = useMemo(() => listProfiles(), [listProfiles]);
+
   const isActive = (path) => location.pathname.startsWith(path);
+  const linkClass = (path) => (isActive(path) ? "select" : "");
 
   const isAdmin = user?.role_id === 1;
 
@@ -37,36 +39,23 @@ export function Topbar() {
           display: "flex",
           gap: 20,
           alignItems: "center",
-          justifyContent: "end",
-          width: "75dvw",
+          justifyContent: "space-around",
         }}
       >
-        <Link
-          to="/conversations"
-          style={{ textDecoration: "none", fontWeight: isActive("/conversations") ? 700 : 500 }}
-        >
+        <Link to="/conversations" className={linkClass("/conversations")}>
           Conversas
         </Link>
 
-        <Link
-          to="/requests"
-          style={{ textDecoration: "none", fontWeight: isActive("/requests") ? 700 : 500 }}
-        >
+        <Link to="/requests" className={linkClass("/requests")}>
           Solicitações
         </Link>
 
-        <Link
-          to="/products"
-          style={{ textDecoration: "none", fontWeight: isActive("/products") ? 700 : 500 }}
-        >
+        <Link to="/products" className={linkClass("/products")}>
           Produtos
         </Link>
 
         {isAdmin && (
-          <Link
-            to="/admin/users"
-            style={{ textDecoration: "none", fontWeight: isActive("/admin/users") ? 700 : 500 }}
-          >
+          <Link to="/admin/users" className={linkClass("/admin/users")}>
             Admin · Usuários
           </Link>
         )}
@@ -89,11 +78,7 @@ export function Topbar() {
 
         <Link
           to="/account"
-          style={{
-            textDecoration: "none",
-            opacity: 0.85,
-            fontWeight: isActive("/account") ? 700 : 500,
-          }}
+          className={linkClass("/account")}
           title="Editar meus dados"
         >
           {user?.full_name ?? user?.email}

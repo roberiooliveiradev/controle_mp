@@ -146,3 +146,8 @@ class RequestItemListResponse(BaseModel):
     offset: int
 
 
+class RequestMetaResponse(BaseModel):
+    types: List[RequestTypeMiniResponse]
+    statuses: List[RequestStatusMiniResponse]
+
+

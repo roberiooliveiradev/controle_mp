@@ -22,3 +22,11 @@ class RequestTypeRepository(BaseRepository[RequestTypeModel]):
         )
         rows = list(self._session.execute(stmt).scalars().all())
         return {int(r.id): r for r in rows}
+
+    def list_active(self) -> list[RequestTypeModel]:
+        stmt = (
+            select(RequestTypeModel)
+            .where(RequestTypeModel.is_deleted.is_(False))
+            .order_by(RequestTypeModel.id.asc())
+        )
+        return list(self._session.execute(stmt).scalars().all())

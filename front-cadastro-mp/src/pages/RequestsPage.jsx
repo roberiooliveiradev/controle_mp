@@ -1,6 +1,6 @@
 // src/pages/RequestsPage.jsx
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../app/auth/AuthContext";
@@ -11,6 +11,7 @@ import {
   changeRequestItemStatusApi,
   createRequestFieldApi,
   resubmitRequestItemApi,
+  getRequestsMetaApi,
 } from "../app/api/requestsApi";
 
 import { RequestItemFields } from "../app/ui/requests/RequestItemFields";
@@ -30,6 +31,7 @@ const ROLE_ADMIN = 1;
 const ROLE_ANALYST = 2;
 const ROLE_USER = 3;
 
+// Mantém constantes para regras e botões do modal (não dependem do meta)
 const STATUS = {
   CREATED: 1,
   IN_PROGRESS: 2,
@@ -167,23 +169,15 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   const statusIdEffective = statusIdNow != null ? Number(statusIdNow) : Number(row?.request_status_id);
   const isReturned = statusIdEffective === STATUS.RETURNED;
 
-  const lockAfterDone =
-  statusIdEffective === STATUS.FINALIZED || statusIdEffective === STATUS.REJECTED;
+  const lockAfterDone = statusIdEffective === STATUS.FINALIZED || statusIdEffective === STATUS.REJECTED;
   const isOwner = Number(row?.request_created_by) === Number(user?.id);
 
   const isCreate = Number(row?.request_type_id) === REQUEST_TYPE_ID_CREATE;
   const isUpdate = Number(row?.request_type_id) === REQUEST_TYPE_ID_UPDATE;
 
-  // edição NORMAL só para criador quando RETURNED (e precisa ser mode edit)
   const canEditNormalFields = mode === "edit" && isOwner && isReturned && !lockAfterDone;
-
-  // CREATE: ADMIN/ANALYST pode editar SOMENTE novo_codigo (inclusive no "Abrir")
   const canEditNovoCodigo = isModerator && isCreate && !lockAfterDone;
-
-  // alguém pode salvar algo?
   const canSaveSomething = canEditNormalFields || canEditNovoCodigo;
-
-  // USER pode "Salvar e reenviar" apenas se estiver editando e RETURNED
   const canResubmit = canEditNormalFields && isReturned;
 
   function hasAnyError(err) {
@@ -235,7 +229,6 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
       setValuesByTag(st.values);
       setFornecedoresRows(st.fornecedoresRows);
 
-      // ✅ status "ao vivo"
       setStatusIdNow(it?.request_status_id ?? row?.request_status_id);
       setStatusNameNow(it?.request_status?.status_name ?? row?.request_status?.status_name ?? "");
 
@@ -248,21 +241,15 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   }
 
   function requireNovoCodigoForCreateFinalization() {
-  if (!isCreate) return true;
+    if (!isCreate) return true;
 
-  const v = String(valuesByTag?.[TAGS.novo_codigo] ?? "").trim();
-
-  if (!v) {
-    setFieldError(
-      TAGS.novo_codigo,
-      "Novo código é obrigatório para finalizar solicitações do tipo CREATE."
-    );
-    return false;
+    const v = String(valuesByTag?.[TAGS.novo_codigo] ?? "").trim();
+    if (!v) {
+      setFieldError(TAGS.novo_codigo, "Novo código é obrigatório para finalizar solicitações do tipo CREATE.");
+      return false;
+    }
+    return true;
   }
-
-  return true;
-}
-
 
   useEffect(() => {
     if (!open) return;
@@ -270,16 +257,10 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, row?.request_id, row?.item_id]);
 
-
   if (!open) return null;
 
   const typeName = row?.request_type?.type_name ?? `#${row?.request_type_id}`;
-
-  const statusName =
-    statusNameNow ||
-    row?.request_status?.status_name ||
-    `#${row?.request_status_id}`;
-
+  const statusName = statusNameNow || row?.request_status?.status_name || `#${row?.request_status_id}`;
 
   async function ensureTextFieldExists(tag, fieldValue) {
     const existing = byTag?.[tag];
@@ -314,14 +295,10 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
 
     const fields = Array.isArray(item.fields) ? item.fields : [];
 
-    // TEXT fields existentes (menos fornecedores)
     for (const f of fields) {
       if (f.field_tag === TAGS.fornecedores) continue;
-      
-      // ✅ CREATE + RETURNED: não enviar novo_codigo ao salvar alterações do usuário
-      // (nesse cenário ele nem aparece no UI, mas garante que nunca será enviado)
+
       if (isCreate && isReturned && f.field_tag === TAGS.novo_codigo) {
-        console.log("NÃO ENVIOU NOVO CÓDIGO ===============================");
         continue;
       }
 
@@ -332,7 +309,6 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
       }
     }
 
-    // fornecedores JSON
     const fornecedoresField = byTag?.[TAGS.fornecedores];
     if (fornecedoresField?.id) {
       const nextJson = fornecedoresToJson(fornecedoresRows);
@@ -346,13 +322,11 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   }
 
   async function saveNovoCodigoOnly() {
-    // CREATE: ADMIN/ANALYST podem salvar SOMENTE novo_codigo
     const v = String(valuesByTag?.[TAGS.novo_codigo] ?? "");
 
     const existing = byTag?.[TAGS.novo_codigo];
     let fieldId = existing?.id;
 
-    // se não existe e está vazio, não cria
     if (!fieldId && !String(v).trim()) return true;
 
     if (!fieldId) {
@@ -388,7 +362,6 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
       if (!ok) return false;
     }
 
-    // admin/analyst em CREATE: salva só novo_codigo (quando não está salvando campos normais)
     if (canEditNovoCodigo && !canEditNormalFields) {
       const ok = await saveNovoCodigoOnly();
       if (!ok) return false;
@@ -414,18 +387,15 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     }
   }
 
-  // NOVO: Salvar e reenviar (USER + RETURNED)
   async function handleSaveAndResubmit() {
     if (!canResubmit || !row?.item_id) return;
 
     try {
       setSaving(true);
 
-      // 1) salva alterações sem fechar
       const ok = await handleSave({ closeOnSuccess: false });
       if (!ok) return;
 
-      // 2) reenviar (RETURNED -> CREATED)
       await resubmitRequestItemApi(row.item_id);
 
       onSaved?.();
@@ -445,12 +415,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
       return;
     }
 
-    // ✅ REGRA FRONTEND: CREATE + FINALIZED exige novo_codigo
-    if (
-      Number(newStatusId) === STATUS.FINALIZED &&
-      isCreate &&
-      !requireNovoCodigoForCreateFinalization()
-    ) {
+    if (Number(newStatusId) === STATUS.FINALIZED && isCreate && !requireNovoCodigoForCreateFinalization()) {
       return;
     }
 
@@ -467,14 +432,12 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     }
   }
 
-
   function goToConversation() {
     navigate(`/conversations/${row.conversation_id}?messageId=${row.message_id}`);
     onClose?.();
   }
 
-  const saveLabel =
-    canEditNovoCodigo && !canEditNormalFields ? "Salvar novo código" : "Salvar";
+  const saveLabel = canEditNovoCodigo && !canEditNormalFields ? "Salvar novo código" : "Salvar";
 
   return (
     <ModalShell
@@ -533,28 +496,25 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
               </>
             ) : null}
 
-            {/* salvar normal (não reenviar) */}
             {canSaveSomething ? (
               <button
                 onClick={handleSaveClick}
                 disabled={saving || (canEditNormalFields && hasAnyError(editErrors))}
                 title="Salva alterações sem reenviar"
-                >
+              >
                 {saving ? "Salvando..." : saveLabel}
               </button>
             ) : null}
 
-            {/* USER: Salvar e reenviar (resolve o bug de múltiplos campos) */}
             {canResubmit ? (
               <button
-              onClick={handleSaveAndResubmit}
-              disabled={saving || hasAnyError(editErrors)}
-              title="Salva suas alterações e reenviar para análise"
+                onClick={handleSaveAndResubmit}
+                disabled={saving || hasAnyError(editErrors)}
+                title="Salva suas alterações e reenviar para análise"
               >
                 {saving ? "Salvando..." : "Reenviar"}
               </button>
             ) : null}
-
           </div>
         </>
       }
@@ -587,18 +547,13 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
           <RequestItemFields
             variant="fields"
             readOnly={!canEditNormalFields}
-            // CREATE: permite editar só o novo_codigo (ADMIN/ANALYST), mesmo no "Abrir"
             canEditNovoCodigo={canEditNovoCodigo && !canEditNormalFields}
             requestTypeId={row?.request_type_id}
-            // USER em UPDATE/RETURNED: nem mostra novo_codigo (não faz parte do fluxo de edição)
             valuesByTag={
               canResubmit
-                ? Object.fromEntries(
-                    Object.entries(valuesByTag || {}).filter(([k]) => k !== TAGS.novo_codigo)
-                  )
+                ? Object.fromEntries(Object.entries(valuesByTag || {}).filter(([k]) => k !== TAGS.novo_codigo))
                 : valuesByTag
             }
-
             onChangeTagValue={(tag, v) => {
               setValuesByTag((prev) => ({ ...(prev || {}), [tag]: v }));
               clearFieldError(tag);
@@ -642,18 +597,58 @@ export default function RequestsPage() {
   const [limit] = useState(15);
   const [offset, setOffset] = useState(0);
 
-  const [statusId, setStatusId] = useState("");
+  // meta (API)
+  const [requestTypes, setRequestTypes] = useState([]);
+  const [requestStatuses, setRequestStatuses] = useState([]);
 
+  // filtros (UI)
+  const [statusId, setStatusId] = useState("");
   const [createdByName, setCreatedByName] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
+  const [typeId, setTypeId] = useState("");
   const [itemFilter, setItemFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [dateMode, setDateMode] = useState("AUTO");
 
+  // estado aplicado (debounced)
+  const [appliedFilters, setAppliedFilters] = useState({
+    statusId: "",
+    createdByName: "",
+    typeId: "",
+    itemFilter: "",
+    dateFrom: "",
+    dateTo: "",
+    dateMode: "AUTO",
+  });
+
+  const debounceRef = useRef(null);
+  const skipNextOffsetLoadRef = useRef(false);
+
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsMode, setDetailsMode] = useState("view");
   const [selectedRow, setSelectedRow] = useState(null);
+
+  // carrega meta (types/statuses) uma vez
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      try {
+        const meta = await getRequestsMetaApi();
+        if (!alive) return;
+        setRequestTypes(Array.isArray(meta?.types) ? meta.types : []);
+        setRequestStatuses(Array.isArray(meta?.statuses) ? meta.statuses : []);
+      } catch {
+        if (!alive) return;
+        setRequestTypes([]);
+        setRequestStatuses([]);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   function getRowSortTime(row) {
     const iso = row?.item_updated_at || row?.item_created_at;
@@ -662,8 +657,8 @@ export default function RequestsPage() {
   }
 
   function getRowTimeForFilter(row) {
-    if (dateMode === "UPDATED") return row?.item_updated_at || null;
-    if (dateMode === "CREATED") return row?.item_created_at || null;
+    if (appliedFilters.dateMode === "UPDATED") return row?.item_updated_at || null;
+    if (appliedFilters.dateMode === "CREATED") return row?.item_created_at || null;
     return row?.item_updated_at || row?.item_created_at || null;
   }
 
@@ -677,14 +672,13 @@ export default function RequestsPage() {
       const data = await listRequestItemsApi({
         limit,
         offset: nextOffset,
-        status_id: statusId ? Number(statusId) : null,
-        created_by_name: createdByName?.trim() || null,
-        type_id: /^\d+$/.test(typeFilter?.trim() || "") ? Number(typeFilter.trim()) : null,
-        type_q: !/^\d+$/.test(typeFilter?.trim() || "") ? (typeFilter?.trim() || null) : null,
-        item_id: itemFilter?.trim() ? Number(itemFilter.trim()) : null,
-        date_mode: dateMode,
-        date_from: dateFrom || null,
-        date_to: dateTo || null,
+        status_id: appliedFilters.statusId ? Number(appliedFilters.statusId) : null,
+        created_by_name: appliedFilters.createdByName?.trim() || null,
+        type_id: appliedFilters.typeId ? Number(appliedFilters.typeId) : null,
+        item_id: appliedFilters.itemFilter?.trim() ? Number(appliedFilters.itemFilter.trim()) : null,
+        date_mode: appliedFilters.dateMode,
+        date_from: appliedFilters.dateFrom || null,
+        date_to: appliedFilters.dateTo || null,
       });
 
       const items = Array.isArray(data?.items) ? data.items : [];
@@ -692,7 +686,13 @@ export default function RequestsPage() {
 
       setRows(items);
       setTotal(Number(data?.total ?? 0));
-      if (resetOffset) setOffset(0);
+
+      if (resetOffset) {
+        if (offset !== 0) {
+          skipNextOffsetLoadRef.current = true;
+          setOffset(0);
+        }
+      }
     } catch (err) {
       setError(err?.response?.data?.error ?? "Erro ao carregar solicitações.");
     } finally {
@@ -700,10 +700,51 @@ export default function RequestsPage() {
     }
   }
 
+  // paginação: sempre que offset muda, recarrega
   useEffect(() => {
-    load();
+    if (skipNextOffsetLoadRef.current) {
+      skipNextOffsetLoadRef.current = false;
+      return;
+    }
+    load({ resetOffset: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [limit, offset]);
+  }, [limit, offset, appliedFilters]);
+
+  // aplica filtros automaticamente:
+  // - status: imediato
+  // - demais: debounce
+  useEffect(() => {
+    const statusChanged = appliedFilters.statusId !== statusId;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (statusChanged) {
+      setAppliedFilters((prev) => ({
+        ...prev,
+        statusId,
+      }));
+      load({ resetOffset: true });
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
+      setAppliedFilters({
+        statusId,
+        createdByName,
+        typeId,
+        itemFilter,
+        dateFrom,
+        dateTo,
+        dateMode,
+      });
+      load({ resetOffset: true });
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusId, createdByName, typeId, itemFilter, dateFrom, dateTo, dateMode]);
 
   useEffect(() => {
     const onCreated = () => load({ resetOffset: false });
@@ -717,11 +758,10 @@ export default function RequestsPage() {
       socket.off("request:item_changed", onItemChanged);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [limit, offset, statusId]);
+  }, [limit, offset, appliedFilters]);
 
   const filteredRows = useMemo(() => {
     const nameQ = norm(createdByName);
-    const typeQ = norm(typeFilter);
     const itemQ = norm(itemFilter);
 
     const { fromMs, toMs } = parseDateRange(dateFrom, dateTo);
@@ -732,11 +772,9 @@ export default function RequestsPage() {
         if (!norm(itemId).includes(itemQ)) return false;
       }
 
-      if (typeQ) {
-        const typeId = String(r?.request_type_id ?? "");
-        const typeName = String(r?.request_type?.type_name ?? "");
-        const hay = norm(`${typeId} ${typeName}`);
-        if (!hay.includes(typeQ)) return false;
+      // tipo selecionado (refino local)
+      if (typeId) {
+        if (String(r?.request_type_id ?? "") !== String(typeId)) return false;
       }
 
       if (nameQ) {
@@ -759,7 +797,7 @@ export default function RequestsPage() {
 
       return true;
     });
-  }, [rows, createdByName, typeFilter, itemFilter, dateFrom, dateTo, dateMode]);
+  }, [rows, createdByName, typeId, itemFilter, dateFrom, dateTo, dateMode, appliedFilters.dateMode]);
 
   const pageInfo = useMemo(() => {
     const start = total === 0 ? 0 : offset + 1;
@@ -784,14 +822,30 @@ export default function RequestsPage() {
   }
 
   function clearFilters() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
     setStatusId("");
     setCreatedByName("");
-    setTypeFilter("");
+    setTypeId("");
     setItemFilter("");
     setDateFrom("");
     setDateTo("");
     setDateMode("AUTO");
-    setOffset(0);
+
+    setAppliedFilters({
+      statusId: "",
+      createdByName: "",
+      typeId: "",
+      itemFilter: "",
+      dateFrom: "",
+      dateTo: "",
+      dateMode: "AUTO",
+    });
+
+    if (offset !== 0) {
+      skipNextOffsetLoadRef.current = true;
+      setOffset(0);
+    }
     load({ resetOffset: true });
   }
 
@@ -801,15 +855,26 @@ export default function RequestsPage() {
         <h2 style={{ margin: 0 }}>Solicitações</h2>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {/* TIPO (API) */}
+          <select value={typeId} onChange={(e) => setTypeId(e.target.value)} title="Tipo da solicitação">
+            <option value="">Tipo (todos)</option>
+            {(requestTypes || []).map((t) => (
+              <option key={t.id} value={String(t.id)}>
+                {String(t.type_name ?? "").toUpperCase()}
+              </option>
+            ))}
+          </select>
+          
+          {/* STATUS (API) */}
           <select value={statusId} onChange={(e) => setStatusId(e.target.value)}>
             <option value="">Status (todos)</option>
-            <option value={STATUS.CREATED}>CREATED</option>
-            <option value={STATUS.IN_PROGRESS}>IN_PROGRESS</option>
-            <option value={STATUS.FINALIZED}>FINALIZED</option>
-            <option value={STATUS.RETURNED}>RETURNED</option>
-            <option value={STATUS.REJECTED}>REJECTED</option>
-            <option value={STATUS.FAILED}>FAILED</option>
+            {(requestStatuses || []).map((s) => (
+              <option key={s.id} value={String(s.id)}>
+                {String(s.status_name ?? "").toUpperCase()}
+              </option>
+            ))}
           </select>
+          
 
           {isModerator ? (
             <input
@@ -820,12 +885,6 @@ export default function RequestsPage() {
             />
           ) : null}
 
-          <input
-            placeholder="Tipo (id ou nome)"
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            style={{ width: 180 }}
-          />
           <input
             placeholder="Item (id)"
             value={itemFilter}
@@ -841,10 +900,6 @@ export default function RequestsPage() {
 
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="De (data)" />
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="Até (data)" />
-
-          <button onClick={() => load({ resetOffset: true })} disabled={busy}>
-            Aplicar (status)
-          </button>
 
           <button onClick={clearFilters} disabled={busy}>
             Limpar
@@ -866,7 +921,7 @@ export default function RequestsPage() {
       ) : null}
 
       <div style={{ fontSize: 12, opacity: 0.75 }}>
-        Filtrando na tela: <b>{filteredRows.length}</b> itens desta página (status é filtrado na API).
+        Itens na página (após refino local): <b>{filteredRows.length}</b> • Total na API: <b>{total}</b>
       </div>
 
       <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "auto" }}>
@@ -878,7 +933,9 @@ export default function RequestsPage() {
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Status</th>
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado por</th>
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado em</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Atualizado em</th>
+              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>
+                Atualizado em
+              </th>
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Abrir</th>
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Editar</th>
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Conversa</th>
@@ -903,8 +960,7 @@ export default function RequestsPage() {
                 const isReturned = Number(r.request_status_id) === STATUS.RETURNED;
                 const isOwner = Number(r.request_created_by) === Number(user?.id);
                 const lockAfterDone =
-                  Number(r.request_status_id) === STATUS.FINALIZED ||
-                  Number(r.request_status_id) === STATUS.REJECTED;
+                  Number(r.request_status_id) === STATUS.FINALIZED || Number(r.request_status_id) === STATUS.REJECTED;
 
                 const canEditNormal = isReturned && isOwner && !lockAfterDone;
 

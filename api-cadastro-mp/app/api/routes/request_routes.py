@@ -30,6 +30,7 @@ from app.repositories.product_field_repository import ProductFieldRepository
 from app.api.schemas.request_schema import (
     RequestTypeMiniResponse,
     RequestStatusMiniResponse,
+    RequestMetaResponse,
 )
 from app.infrastructure.realtime.socketio_request_notifier import SocketIORequestNotifier
 
@@ -347,3 +348,21 @@ def change_item_status(item_id: int):
         )
 
     return ("", 204)
+
+
+@bp_req.get("/meta")
+@require_auth
+def get_requests_meta():
+    with db_session() as session:
+        type_repo = RequestTypeRepository(session)
+        status_repo = RequestStatusRepository(session)
+
+        types = type_repo.list_active()
+        statuses = status_repo.list_active()
+
+    payload = RequestMetaResponse(
+        types=[{"id": int(t.id), "type_name": t.type_name} for t in types],
+        statuses=[{"id": int(s.id), "status_name": s.status_name} for s in statuses],
+    ).model_dump()
+
+    return jsonify(payload), 200
