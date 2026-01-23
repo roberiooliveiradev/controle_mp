@@ -850,7 +850,7 @@ export default function RequestsPage() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection:"column", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0 }}>Solicitações</h2>
 
@@ -923,94 +923,95 @@ export default function RequestsPage() {
       <div style={{ fontSize: 12, opacity: 0.75 }}>
         Itens na página (após refino local): <b>{filteredRows.length}</b> • Total na API: <b>{total}</b>
       </div>
-
-      <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1200 }}>
-          <thead>
-            <tr style={{ background: "var(--surface-2)" }}>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Item</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Tipo</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Status</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado por</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado em</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>
-                Atualizado em
-              </th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Abrir</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Editar</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Conversa</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {busy ? (
-              <tr>
-                <td colSpan={9} style={{ padding: 12 }}>
-                  Carregando...
-                </td>
+      <div style={{height:"100%", flexShrink: "0", display:"flex", flexDirection:"column", width:"100%"}}>
+        <div style={{ border: "1px solid var(--border)", borderRadius: 8, height:"100%", overflow:"auto"}}>
+          <table style={{ width: "100%", borderCollapse: "collapse"}}>
+            <thead>
+              <tr style={{ background: "var(--surface-2)" }}>
+                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Item</th>
+                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Tipo</th>
+                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Status</th>
+                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado por</th>
+                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado em</th>
+                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>
+                  Atualizado em
+                </th>
+                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Abrir</th>
+                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Editar</th>
+                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Conversa</th>
               </tr>
-            ) : filteredRows.length === 0 ? (
-              <tr>
-                <td colSpan={9} style={{ padding: 12 }}>
-                  Nenhuma solicitação encontrada.
-                </td>
-              </tr>
-            ) : (
-              filteredRows.map((r) => {
-                const isReturned = Number(r.request_status_id) === STATUS.RETURNED;
-                const isOwner = Number(r.request_created_by) === Number(user?.id);
-                const lockAfterDone =
-                  Number(r.request_status_id) === STATUS.FINALIZED || Number(r.request_status_id) === STATUS.REJECTED;
+            </thead>
 
-                const canEditNormal = isReturned && isOwner && !lockAfterDone;
+            <tbody>
+              {busy ? (
+                <tr>
+                  <td colSpan={9} style={{ padding: 12 }}>
+                    Carregando...
+                  </td>
+                </tr>
+              ) : filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={9} style={{ padding: 12 }}>
+                    Nenhuma solicitação encontrada.
+                  </td>
+                </tr>
+              ) : (
+                filteredRows.map((r) => {
+                  const isReturned = Number(r.request_status_id) === STATUS.RETURNED;
+                  const isOwner = Number(r.request_created_by) === Number(user?.id);
+                  const lockAfterDone =
+                    Number(r.request_status_id) === STATUS.FINALIZED || Number(r.request_status_id) === STATUS.REJECTED;
 
-                return (
-                  <tr key={r.item_id}>
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                      <div style={{ display: "grid" }}>
-                        <span style={{ fontWeight: 700 }}>#{r.item_id}</span>
-                      </div>
-                    </td>
+                  const canEditNormal = isReturned && isOwner && !lockAfterDone;
 
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                      {r.request_type?.type_name ?? r.request_type_id}
-                    </td>
+                  return (
+                    <tr key={r.item_id}>
+                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                        <div style={{ display: "grid" }}>
+                          <span style={{ fontWeight: 700 }}>#{r.item_id}</span>
+                        </div>
+                      </td>
 
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                      {r.request_status?.status_name ?? r.request_status_id}
-                    </td>
+                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                        {r.request_type?.type_name ?? r.request_type_id}
+                      </td>
 
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                      {r.request_created_by_user?.full_name ?? "—"}
-                    </td>
+                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                        {r.request_status?.status_name ?? r.request_status_id}
+                      </td>
 
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{fmt(r.item_created_at)}</td>
+                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                        {r.request_created_by_user?.full_name ?? "—"}
+                      </td>
 
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                      {fmt(r.item_updated_at ? r.item_updated_at : "")}
-                    </td>
+                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{fmt(r.item_created_at)}</td>
 
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                      <button onClick={() => openDetails(r, "view")}>Abrir</button>
-                    </td>
+                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                        {fmt(r.item_updated_at ? r.item_updated_at : "")}
+                      </td>
 
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                      {canEditNormal ? (
-                        <button onClick={() => openDetails(r, "edit")}>Editar</button>
-                      ) : (
-                        <span style={{ opacity: 0.6 }}>—</span>
-                      )}
-                    </td>
+                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                        <button onClick={() => openDetails(r, "view")}>Abrir</button>
+                      </td>
 
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                      <button onClick={() => goToConversation(r)}>Ir para conversa</button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                        {canEditNormal ? (
+                          <button onClick={() => openDetails(r, "edit")}>Editar</button>
+                        ) : (
+                          <span style={{ opacity: 0.6 }}>—</span>
+                        )}
+                      </td>
+
+                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                        <button onClick={() => goToConversation(r)}>Ir para conversa</button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>

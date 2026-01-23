@@ -13,7 +13,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <AuthProvider>
       <RealtimeProvider>
         <AppRouter />
-        <Toaster position="top-right" />
+        <Toaster position="top-center" />
       </RealtimeProvider>
     </AuthProvider>
   </React.StrictMode>

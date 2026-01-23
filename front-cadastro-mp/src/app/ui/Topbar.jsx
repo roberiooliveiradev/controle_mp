@@ -25,15 +25,17 @@ export function Topbar() {
     <header
       style={{
         borderBottom: "1px solid var(--border, #eee)",
-        padding: "12px 16px",
+        padding: "12px 0px",
         display: "flex",
-        justifyContent: "space-between",
+        justifyContent: "space-around",
         alignItems: "center",
         gap: 12,
+        flexShrink: 0
       }}
     >
-      <strong>Controle MP</strong>
-
+      <div>
+        <img src="../../../public/logoTransformaMaisDelpi.svg" alt="Transforma mais DELPI" style={{maxHeight:"80px"}} />
+      </div>
       <nav
         style={{
           display: "flex",
@@ -85,7 +87,7 @@ export function Topbar() {
           {user?.role_id ? ` (${roleLabel(user.role_id)})` : ""}
         </Link>
 
-        <button onClick={logout}>Sair</button>
+        <button onClick={logout} id="btn-logout">Sair</button>
       </div>
     </header>
   );

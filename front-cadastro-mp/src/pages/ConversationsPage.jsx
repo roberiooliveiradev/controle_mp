@@ -564,7 +564,8 @@ export default function ConversationsPage() {
         display: "grid",
         gridTemplateColumns: `${leftWidth}px ${DIVIDER_W}px 1fr`,
         gap: 0,
-        height: "calc(100vh - 110px)",
+        height:"100%",
+
       }}
     >
       <aside
@@ -574,7 +575,6 @@ export default function ConversationsPage() {
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          minHeight: 0,
         }}
       >
         <div style={{ padding: 12, borderBottom: "1px solid var(--border)" }}>

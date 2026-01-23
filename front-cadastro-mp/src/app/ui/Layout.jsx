@@ -5,9 +5,9 @@ import { Topbar } from "./Topbar";
 
 export function Layout() {
   return (
-    <div style={{ minHeight: "calc(100dvh)" }}>
+    <div style={{display:"flex", flexDirection:"column", height:"100%"}}>
       <Topbar />
-      <main style={{ maxWidth: "calc(100dvw - 100px)", margin: "0 auto", padding: 16 }}>
+      <main style={{ Width: "calc(100vw)", height:"100%", flexShrink:1, padding: 16 }}>
         <Outlet />
       </main>
     </div>
