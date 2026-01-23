@@ -1,5 +1,4 @@
 // src/pages/ConversationsPage.jsx
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 
@@ -12,6 +11,7 @@ import {
   createConversationApi,
 } from "../app/api/conversationsApi";
 import { listMessagesApi, createMessageApi, markReadApi } from "../app/api/messagesApi";
+import { uploadFilesApi } from "../app/api/filesApi";
 
 import { ConversationCard } from "../app/ui/conversations/ConversationCard";
 import { MessageBubble } from "../app/ui/chat/MessageBubble";
@@ -153,11 +153,8 @@ export default function ConversationsPage() {
   // Active conversation (Fonte ÚNICA p/ evitar duplicação de unread)
   // -------------------------
   useEffect(() => {
-    // RealtimeContext usa esse ref para decidir se incrementa unread ou não
     activeConvRef.current = selectedId ?? null;
-
     return () => {
-      // ao sair da página (ou desmontar), “libera” para voltar a contar globalmente
       activeConvRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -320,7 +317,6 @@ export default function ConversationsPage() {
 
       const currentSelected = selectedIdRef.current;
       if (!currentSelected || cid !== currentSelected) {
-        // ❌ NÃO incrementa unread aqui (isso é do RealtimeContext)
         return;
       }
 
@@ -332,12 +328,10 @@ export default function ConversationsPage() {
         const items = Array.isArray(m) ? m : m?.items ?? [];
         setMessages(items);
 
-        // se chegou mensagem na conversa ativa, o unread global deve ficar 0
         setUnreadCounts((prev) => ({ ...(prev ?? {}), [cid]: 0 }));
 
         if (shouldAutoScroll) scrollToBottom();
 
-        // marca como lidas as mensagens de outros
         const me = myUserIdRef.current;
         const unreadIds = items
           .filter((x) => !x.is_read && x.sender?.id !== me)
@@ -408,7 +402,7 @@ export default function ConversationsPage() {
   }
 
   // -------------------------
-  // Send message (inclui REQUEST) - MANTIDO
+  // Send message (inclui upload de anexos)
   // -------------------------
   async function handleSend({ text, files, createRequest, requestItems }) {
     if (!selectedId) return;
@@ -429,7 +423,7 @@ export default function ConversationsPage() {
       size_bytes: Number.isFinite(f.size) ? f.size : null,
       sha256: null,
       _local_preview_url: f.type?.startsWith("image/") ? URL.createObjectURL(f) : null,
-      _status: "pending",
+      _status: "uploading",
     }));
 
     const optimistic = {
@@ -448,36 +442,59 @@ export default function ConversationsPage() {
     const shouldAutoScroll = isNearBottom(messagesContainerRef.current, 180);
 
     setMessages((prev) => [...prev, optimistic]);
-
-    // sobe conversa na lista (global) pelo timestamp
     bumpConversation(selectedId, optimistic.created_at);
 
     try {
+      // 1) upload binário (se houver)
+      let uploadedMeta = null;
+      if (hasFilesArr) {
+        uploadedMeta = await uploadFilesApi(files);
+
+        // marca anexos como "uploaded" (ainda falta criar a mensagem)
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== tempId) return m;
+            const nextFiles = (m.files || []).map((x) => ({ ...x, _status: "uploaded" }));
+            return { ...m, files: nextFiles };
+          })
+        );
+      }
+
+      // 2) cria mensagem com metadata
       const payload = {
         message_type_id: hasRequest ? MESSAGE_TYPE_REQUEST : MESSAGE_TYPE_TEXT,
         body: hasRequest ? null : (text ?? null),
-        files: null,
+        files: uploadedMeta, // ✅ agora vai populated
         create_request: hasRequest,
         request_items: hasRequest ? (requestItems ?? []) : null,
       };
 
       const created = await createMessageApi(selectedId, payload);
-
       bumpConversation(selectedId, created?.created_at);
+
+      // 3) mescla resposta do servidor + mantém preview local (imagem) até reload
+      const createdFiles = Array.isArray(created?.files) ? created.files : [];
+      const mergedFiles = createdFiles.map((srv, idx) => {
+        const opt = optimisticFiles[idx];
+        return {
+          ...srv,
+          _local_preview_url: opt?._local_preview_url ?? null,
+          _status: null,
+        };
+      });
 
       const merged = {
         ...created,
-        files: optimisticFiles,
+        files: mergedFiles,
         _status: "sent",
       };
 
       setMessages((prev) => prev.map((m) => (m.id === tempId ? merged : m)));
-
-      // mensagem enviada -> unread dessa conversa deve ficar 0
       setUnreadCounts((prev) => ({ ...(prev ?? {}), [selectedId]: 0 }));
 
       if (shouldAutoScroll) scrollToBottom();
     } catch (err) {
+      // remove a mensagem otimista
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       throw err;
     }
@@ -564,8 +581,7 @@ export default function ConversationsPage() {
         display: "grid",
         gridTemplateColumns: `${leftWidth}px ${DIVIDER_W}px 1fr`,
         gap: 0,
-        height:"100%",
-
+        height: "100%",
       }}
     >
       <aside
@@ -608,7 +624,7 @@ export default function ConversationsPage() {
           </form>
         </div>
 
-        <div style={{ padding: 12, overflow: "auto", display: "flex", flexDirection: "column", gap: 10, }}>
+        <div style={{ padding: 12, overflow: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
           {conversations.length === 0 ? (
             <div style={{ opacity: "var(--text-muted)" }}>Nenhuma conversa encontrada.</div>
           ) : null}

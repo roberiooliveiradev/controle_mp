@@ -1,10 +1,10 @@
 # app/repositories/message_file_repository.py
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.base_repository import BaseRepository
 from app.infrastructure.database.models.message_file_model import MessageFileModel
+from app.infrastructure.database.models.message_model import MessageModel
 
 
 class MessageFileRepository(BaseRepository[MessageFileModel]):
@@ -30,3 +30,19 @@ class MessageFileRepository(BaseRepository[MessageFileModel]):
         for f in rows:
             grouped.setdefault(f.message_id, []).append(f)
         return grouped
+
+    def get_file_and_message(self, *, file_id: int) -> tuple[MessageFileModel, MessageModel] | None:
+        stmt = (
+            select(MessageFileModel, MessageModel)
+            .join(MessageModel, MessageModel.id == MessageFileModel.message_id)
+            .where(
+                MessageFileModel.id == file_id,
+                MessageFileModel.is_deleted.is_(False),
+                MessageModel.is_deleted.is_(False),
+            )
+        )
+        row = self._session.execute(stmt).first()
+        if row is None:
+            return None
+        f, msg = row
+        return f, msg

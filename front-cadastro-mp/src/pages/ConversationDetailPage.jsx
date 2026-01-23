@@ -82,7 +82,7 @@ export default function ConversationDetailPage() {
   if (!conv) return <div>Conversa não encontrada.</div>;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 70px)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 70px)", background:"red" }}>
       <div style={{ padding: "12px 0" }}>
         <h2 style={{ margin: 0 }}>{conv.title ?? `Conversa #${conv.id}`}</h2>
         <div style={{ opacity: 0.7, marginTop: 4 }}>

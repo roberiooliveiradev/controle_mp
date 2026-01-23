@@ -1,4 +1,5 @@
 // src/app/ui/chat/MessageBubble.jsx
+import { downloadFileApi } from "../../api/filesApi"
 
 function myStatusLabel(status) {
   if (status === "sending") return "🕓 Enviando";
@@ -13,7 +14,7 @@ function fileLabel(originalName) {
 }
 
 const FIELD_LABELS = {
-  codigo_atual: "Código anterior",
+  codigo_atual: "Código atual",
   grupo: "Grupo",
   novo_codigo: "Novo código",
   descricao: "Descrição",
@@ -117,9 +118,7 @@ function RequestItemReadonlyCard({ item, index }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 10 }}>
-        {isUpdate ? (
-            <ReadonlyInput label={FIELD_LABELS.codigo_atual} value={map.codigo_atual} />
-          ) : null}
+        {isUpdate ? <ReadonlyInput label={FIELD_LABELS.codigo_atual} value={map.codigo_atual} /> : null}
         <ReadonlyInput label={FIELD_LABELS.grupo} value={map.grupo} />
         <ReadonlyInput label={FIELD_LABELS.novo_codigo} value={map.novo_codigo} />
         <div style={{ gridColumn: "1 / -1" }}>
@@ -185,6 +184,18 @@ export function MessageBubble({ message, isMine }) {
   const status = message._status ?? (isMine ? "sent" : "received");
   const files = Array.isArray(message.files) ? message.files : [];
 
+  async function handleDownload(f) {
+    if (!f?.id) return;
+    try {
+      await downloadFileApi(f.id, f.original_name || "arquivo");
+    } catch (err) {
+      // opcional: aqui você pode plugar um toast
+      // eslint-disable-next-line no-console
+      console.error(err);
+      alert(err?.response?.data?.error ?? "Falha ao baixar arquivo.");
+    }
+  }
+
   return (
     <div style={{ display: "flex", justifyContent: isMine ? "flex-end" : "flex-start", marginBottom: 10 }}>
       <div
@@ -205,7 +216,6 @@ export function MessageBubble({ message, isMine }) {
 
         {message.body ? <div style={{ whiteSpace: "pre-wrap" }}>{message.body}</div> : null}
 
-        {/* stack de forms read-only quando for Request */}
         {message.request_full ? <RequestReadonlyStack requestFull={message.request_full} /> : null}
 
         {files.length > 0 ? (
@@ -219,7 +229,7 @@ export function MessageBubble({ message, isMine }) {
                   key={f.id ?? `${f.original_name}-${idx}`}
                   title={f.original_name}
                   style={{
-                    width: 160,
+                    width: 180,
                     border: "1px solid var(--border)",
                     borderRadius: 12,
                     overflow: "hidden",
@@ -248,23 +258,42 @@ export function MessageBubble({ message, isMine }) {
                     )}
                   </div>
 
-                  <div
-                    style={{
-                      padding: 8,
-                      fontSize: 12,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {f.original_name}
-                  </div>
-
-                  {f._status ? (
-                    <div style={{ padding: "0 8px 8px", fontSize: 11, opacity: 0.65 }}>
-                      {f._status === "pending" ? "🕓 Anexo pendente" : ""}
+                  <div style={{ padding: 8, display: "grid", gap: 8 }}>
+                    <div
+                      style={{
+                        padding:12,
+                        fontSize: 12,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {f.original_name}
                     </div>
-                  ) : null}
+
+                    {f._status ? (
+                      <div style={{ fontSize: 11, opacity: 0.65 }}>
+                        {f._status === "uploading" ? "🕓 Upload..." : f._status === "uploaded" ? "✓ Upload ok" : ""}
+                      </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      disabled={!f.id}
+                      onClick={() => handleDownload(f)}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 10,
+                        border: "1px solid var(--border)",
+                        background: "var(--surface)",
+                        cursor: f.id ? "pointer" : "not-allowed",
+                        opacity: f.id ? 1 : 0.6,
+                        fontSize: 12,
+                      }}
+                    >
+                      Baixar
+                    </button>
+                  </div>
                 </div>
               );
             })}

@@ -1,3 +1,4 @@
+# app/api/middlewares/auth_middleware.py
 from functools import wraps
 from typing import Any, Callable, TypeVar
 
@@ -22,6 +23,10 @@ def _get_bearer_token() -> str:
 def require_auth(fn: F) -> F:
     @wraps(fn)
     def wrapper(*args, **kwargs):
+        # ✅ CORS preflight: nunca exige token
+        if request.method == "OPTIONS":
+            return ("", 204)
+
         token = _get_bearer_token()
         jwt_provider = JwtProvider()
 
@@ -39,6 +44,7 @@ def require_auth(fn: F) -> F:
             if revoked_repo.is_revoked(str(jti)):
                 raise UnauthorizedError("Token revogado.")
 
+            # disponibiliza claims para as rotas
             g.auth = claims
 
         return fn(*args, **kwargs)
@@ -50,11 +56,15 @@ def require_roles(*allowed_role_ids: int):
     def decorator(fn: F) -> F:
         @wraps(fn)
         def wrapper(*args, **kwargs):
+            # OPTIONS também passa direto
+            if request.method == "OPTIONS":
+                return ("", 204)
+
             if not hasattr(g, "auth"):
                 raise UnauthorizedError("Token ausente.")
 
             role_id = g.auth.get("role_id")
-            if role_id is None or int(role_id) not in set(int(x) for x in allowed_role_ids):
+            if role_id is None or int(role_id) not in {int(x) for x in allowed_role_ids}:
                 raise ForbiddenError("Acesso negado.")
 
             return fn(*args, **kwargs)

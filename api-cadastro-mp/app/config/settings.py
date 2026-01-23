@@ -23,6 +23,43 @@ class Settings(BaseSettings):
     jwt_audience: str = os.getenv("JWT_AUDIENCE", "cadastro-mp-front")
     jwt_refresh_minutes: int = int(os.getenv("JWT_REFRESH_MINUTES", str(60 * 24 * 7)))
 
+    files_storage_type: str = os.getenv("FILES_STORAGE_TYPE", "local")
+    files_base_path: str = os.getenv("FILES_BASE_PATH", "./_uploads")
+    max_file_size_mb: int = int(os.getenv("MAX_FILE_SIZE_MB", "20"))
+
+    # ✅ Whitelist de tipos permitidos
+    # Ex: "application/pdf,image/png,image/jpeg"
+    allowed_mime_types_raw: str = os.getenv(
+        "ALLOWED_MIME_TYPES",
+        ",".join(
+            [
+                # PDFs
+                "application/pdf",
+
+                # Imagens
+                "image/png",
+                "image/jpeg",
+                "image/jpg",
+
+                # Texto
+                "text/plain",
+                "text/csv",
+
+                # Excel
+                "application/vnd.ms-excel",  # .xls
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
+
+                # Word
+                "application/msword",  # .doc
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+
+                # PowerPoint
+                "application/vnd.ms-powerpoint",  # .ppt
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+            ]
+        ),
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
@@ -39,7 +76,7 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         user = quote_plus(self.db_user)
-        password = quote_plus(self.db_password)  # ✅ aqui resolve o '@' e qualquer caractere especial
+        password = quote_plus(self.db_password) 
         host = self.db_host
         port = self.db_port
         db = self.db_name
