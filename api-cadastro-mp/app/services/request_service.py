@@ -151,15 +151,15 @@ class RequestService:
         return str(getattr(t, "type_name", "") or "").strip().upper() or None
 
     def _is_create_item(self, item: RequestItemModel) -> bool:
-        name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
-        if name:
-            return name == "CREATE"
+        # name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
+        # if name:
+        #     return name == "CREATE"
         return int(item.request_type_id or 0) == int(RequestType.CREATE)
 
     def _is_update_item(self, item: RequestItemModel) -> bool:
-        name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
-        if name:
-            return name == "UPDATE"
+        # name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
+        # if name:
+        #     return name == "UPDATE"
         return int(item.request_type_id or 0) == int(RequestType.UPDATE)
 
     # ---------------- Permissions ----------------
