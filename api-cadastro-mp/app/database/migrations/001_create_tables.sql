@@ -210,9 +210,7 @@ CREATE TABLE IF NOT EXISTS "tbRequestItem"(
     CONSTRAINT fk_ritem_rtype
         FOREIGN KEY (request_type_id) REFERENCES "tbRequestType"(id),
     CONSTRAINT fk_ritem_rstatus
-        FOREIGN KEY (request_status_id) REFERENCES "tbRequestStatus"(id),
-    -- CONSTRAINT fk_ritem_product
-    --     FOREIGN KEY (product_id) REFERENCES "tbProduct"(id)
+        FOREIGN KEY (request_status_id) REFERENCES "tbRequestStatus"(id)
 );
 
 -- =========================
