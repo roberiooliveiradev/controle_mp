@@ -11,19 +11,19 @@ ON CONFLICT DO NOTHING;
 -- tbRequestType
 INSERT INTO "tbRequestType" (id, type_name, is_deleted)
 VALUES
-    (1, 'CREATE', FALSE),
-    (2, 'UPDATE', FALSE)
+    (1, 'CRIAR', FALSE),
+    (2, 'ALTERAR', FALSE)
 ON CONFLICT (id) DO NOTHING;
 
 -- tbRequestStatus
 INSERT INTO "tbRequestStatus" (id, status_name, is_deleted)
 VALUES
-    (1, 'CREATED', FALSE),
-    (2, 'IN_PROGRESS', FALSE),
-    (3, 'FINALIZED', FALSE),
-    (4, 'FAILED', FALSE),
-    (5, 'RETURNED', FALSE),
-    (6, 'REJECTED', FALSE)
+    (1, 'CRIADO', FALSE),
+    (2, 'EM PROCESSO', FALSE),
+    (3, 'FINALIZADO', FALSE),
+    (4, 'FRACASSADO', FALSE),
+    (5, 'DEVOLVIDO', FALSE),
+    (6, 'REJEITADO', FALSE)
 ON CONFLICT (id) DO NOTHING;
 
 
