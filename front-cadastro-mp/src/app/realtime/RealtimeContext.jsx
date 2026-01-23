@@ -377,10 +377,19 @@ export function RealtimeProvider({ children }) {
       const keys = [itemId ? `request:item_changed|item:${itemId}|st:${statusId}` : "", fp];
       if (markSeenAny(keys)) return;
 
+      console.log(payload)
+
+      if (isUserOnly && sid !== Number(activeUserId)) return;
+      // if (payload.user_id !== payload.created_by)
+      // {
+      //   alert("Entrou aqui")
+      //   return;
+      // }
       // 🔒 Notificação APENAS para o criador da solicitação
-      if (Number(sid) !== Number(activeUserId)) {
-        return;
-      }
+      // if (Number(sid) !== Number(activeUserId)) {
+      //   return;
+      // }
+
 
       if (statusId === 3) toastSuccess("Item finalizado.");
       else if (statusId === 5) toastWarning("Item devolvido (RETURNED).");
