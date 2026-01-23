@@ -34,7 +34,7 @@ export function Topbar() {
       }}
     >
       <div>
-        <img src="../../../public/logoTransformaMaisDelpi.svg" alt="Transforma mais DELPI" style={{maxHeight:"80px"}} />
+        <img src="/logoTransformaMaisDelpi.svg" alt="Transforma mais DELPI" style={{maxHeight:"80px"}} />
       </div>
       <nav
         style={{
