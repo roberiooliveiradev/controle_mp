@@ -360,7 +360,10 @@ export function RealtimeProvider({ children }) {
       const keys = [Number.isFinite(reqId) && reqId ? `request:created|rid:${reqId}` : "", fp];
       if (markSeenAny(keys)) return;
 
-      if (isUserOnly && sid && sid !== Number(activeUserId)) return;
+      // 🔒 Notificação APENAS para o criador da solicitação
+      if (Number(sid) !== Number(activeUserId)) {
+        return;
+      }
 
       toastSuccess("Solicitação criada.");
       showBrowserNotification({
