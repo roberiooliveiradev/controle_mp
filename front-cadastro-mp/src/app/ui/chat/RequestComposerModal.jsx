@@ -95,6 +95,41 @@ export function RequestComposerModal({ onClose, onSubmit }) {
     setActiveIndex(items.length);
   }
 
+  function duplicateItem(idx) {
+    setItems((prev) => {
+      const list = Array.isArray(prev) ? [...prev] : [];
+      const src = list[idx];
+      if (!src) return list;
+
+      // clone profundo suficiente pro formato atual (inclui fornecedores)
+      const cloned = {
+        ...src,
+        fornecedores: Array.isArray(src.fornecedores)
+          ? src.fornecedores.map((r) => ({ ...r }))
+          : [],
+      };
+
+      // insere logo após o item original
+      list.splice(idx + 1, 0, cloned);
+      return list;
+    });
+
+    // seleciona o item duplicado
+    setActiveIndex(idx + 1);
+
+    // não duplica erros: o novo item começa “limpo”
+    setErrors((prev) => {
+      const next = {};
+      Object.keys(prev || {}).forEach((k) => {
+        const i = Number(k);
+        if (Number.isNaN(i)) return;
+        // desloca erros dos itens depois do idx
+        next[i > idx ? i + 1 : i] = prev[i];
+      });
+      return next;
+    });
+  }
+
   function removeItem(idx) {
     setItems((prev) => prev.filter((_, i) => i !== idx));
 
@@ -217,27 +252,40 @@ export function RequestComposerModal({ onClose, onSubmit }) {
                       borderRadius: 12,
                       padding: 10,
                       cursor: "pointer",
-                      background: "var(--surface)",
+                      background: isActive? "var(--surface)" : "var(--surface-2)",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <div style={{ fontWeight: isActive ? 800 : 500 }}>Item #{idx + 1}</div>
+                        <div style={{fontSize:15}}>Item #{idx + 1}</div>
                         {hasErr ? <span title="Há campos obrigatórios faltando" style={styles.itemErrorBadge}>!</span> : null}
                       </div>
-
-                      {items.length > 1 ? (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            removeItem(idx);
+                            duplicateItem(idx);
                           }}
-                          style={{ padding: "6px 10px", borderRadius: 10 }}
+                          style={{ padding: "6px 10px", borderRadius: 10, fontSize:12}}
                         >
-                          Remover
+                          Duplicar
                         </button>
-                      ) : null}
+
+                        {items.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeItem(idx);
+                            }}
+                            style={{ padding: "6px 10px", borderRadius: 10, fontSize:12}}
+                          >
+                            Remover
+                          </button>
+                        ) : null}
+                      </div>
+
                     </div>
 
                     <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
