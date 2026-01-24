@@ -1,12 +1,11 @@
 /* src/index.css */
 
 * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box; /* Boa prática para controle de tamanho */
-  transition: all 0.3s ease;
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box; /* Boa prática para controle de tamanho */
+	transition: all 0.3s ease;
 }
-
 
 :root {
 	/* Diz ao navegador que suportamos ambos (ajuda em inputs/scrollbars nativos) */
@@ -163,7 +162,7 @@ body {
 	margin: 0;
 	display: flex;
 	flex-direction: column;
-	place-items: center; 
+	place-items: center;
 	background-color: var(--bg);
 }
 
@@ -195,20 +194,17 @@ button:focus-visible {
 	outline: 4px auto -webkit-focus-ring-color;
 }
 
-#btn-logout{
-	background-color:var(--primary);
+#btn-logout {
+	background-color: var(--primary);
 	color: #eee;
 	min-width: 100px;
-	
 }
 
-#btn-logout:hover{
-	background-color:var(--danger-bg);
+#btn-logout:hover {
+	background-color: var(--danger-bg);
 	color: #000000;
 	transition: all 0.3s ease;
 }
-
-
 
 /* @media (prefers-color-scheme: light) {
 	:root {

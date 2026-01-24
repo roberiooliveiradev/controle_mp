@@ -20,26 +20,18 @@ import {
   fornecedoresToJson,
   validateStructuredItemFromTags,
   TAGS,
-  REQUEST_TYPE_ID_UPDATE,
-  REQUEST_TYPE_ID_CREATE,
   FIELD_TYPE_ID_TEXT,
 } from "../app/ui/requests/requestItemFields.logic";
 
+import {
+  ROLES,
+  REQUEST_STATUS,
+  REQUEST_TYPES,
+  isModerator,
+  LOCKED_STATUSES,
+} from "../app/constants";
+
 import { socket } from "../app/realtime/socket";
-
-const ROLE_ADMIN = 1;
-const ROLE_ANALYST = 2;
-const ROLE_USER = 3;
-
-// Mantém constantes para regras e botões do modal (não dependem do meta)
-const STATUS = {
-  CREATED: 1,
-  IN_PROGRESS: 2,
-  FINALIZED: 3,
-  FAILED: 4,
-  RETURNED: 5,
-  REJECTED: 6,
-};
 
 function fmt(iso) {
   if (!iso) return "-";
@@ -149,8 +141,8 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const isModerator = user?.role_id === ROLE_ADMIN || user?.role_id === ROLE_ANALYST;
-
+  const isMod = isModerator(user?.role_id);
+  
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
 
@@ -167,16 +159,16 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   const [statusNameNow, setStatusNameNow] = useState("");
 
   const statusIdEffective = statusIdNow != null ? Number(statusIdNow) : Number(row?.request_status_id);
-  const isReturned = statusIdEffective === STATUS.RETURNED;
+  const isReturned = statusIdEffective === REQUEST_STATUS.RETURNED;
 
-  const lockAfterDone = statusIdEffective === STATUS.FINALIZED || statusIdEffective === STATUS.REJECTED;
+  const lockAfterDone = LOCKED_STATUSES.has(Number(statusIdEffective))
   const isOwner = Number(row?.request_created_by) === Number(user?.id);
 
-  const isCreate = Number(row?.request_type_id) === REQUEST_TYPE_ID_CREATE;
-  const isUpdate = Number(row?.request_type_id) === REQUEST_TYPE_ID_UPDATE;
+  const isCreate = Number(row?.request_type_id) === REQUEST_TYPES.CREATE;
+  const isUpdate = Number(row?.request_type_id) === REQUEST_TYPES.UPDATE;
 
   const canEditNormalFields = mode === "edit" && isOwner && isReturned && !lockAfterDone;
-  const canEditNovoCodigo = isModerator && isCreate && !lockAfterDone;
+  const canEditNovoCodigo = isMod && isCreate && !lockAfterDone;
   const canSaveSomething = canEditNormalFields || canEditNovoCodigo;
   const canResubmit = canEditNormalFields && isReturned;
 
@@ -408,14 +400,14 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
   }
 
   async function handleChangeStatus(newStatusId) {
-    if (!isModerator) return;
+    if (!isMod) return;
 
     if (lockAfterDone) {
       alert("Solicitação FINALIZED/REJECTED não pode ser alterada.");
       return;
     }
 
-    if (Number(newStatusId) === STATUS.FINALIZED && isCreate && !requireNovoCodigoForCreateFinalization()) {
+    if (Number(newStatusId) === REQUEST_STATUS.FINALIZED && isCreate && !requireNovoCodigoForCreateFinalization()) {
       return;
     }
 
@@ -424,7 +416,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
       onSaved?.();
       await reloadDetails();
 
-      if (Number(newStatusId) !== Number(STATUS.IN_PROGRESS)) {
+      if (Number(newStatusId) !== Number(REQUEST_STATUS.IN_PROGRESS)) {
         onClose?.();
       }
     } catch (err) {
@@ -479,18 +471,18 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={goToConversation}>Ir para conversa</button>
 
-            {isModerator ? (
+            {isMod ? (
               <>
-                <button onClick={() => handleChangeStatus(STATUS.IN_PROGRESS)} disabled={lockAfterDone}>
+                <button onClick={() => handleChangeStatus(REQUEST_STATUS.IN_PROGRESS)} disabled={lockAfterDone}>
                   Em andamento
                 </button>
-                <button onClick={() => handleChangeStatus(STATUS.RETURNED)} disabled={lockAfterDone}>
+                <button onClick={() => handleChangeStatus(REQUEST_STATUS.RETURNED)} disabled={lockAfterDone}>
                   Devolver
                 </button>
-                <button onClick={() => handleChangeStatus(STATUS.REJECTED)} disabled={lockAfterDone}>
+                <button onClick={() => handleChangeStatus(REQUEST_STATUS.REJECTED)} disabled={lockAfterDone}>
                   Rejeitar
                 </button>
-                <button onClick={() => handleChangeStatus(STATUS.FINALIZED)} disabled={lockAfterDone}>
+                <button onClick={() => handleChangeStatus(REQUEST_STATUS.FINALIZED)} disabled={lockAfterDone}>
                   Finalizar
                 </button>
               </>
@@ -586,7 +578,7 @@ export default function RequestsPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const isModerator = user?.role_id === ROLE_ADMIN || user?.role_id === ROLE_ANALYST;
+  const isMod = user?.role_id === ROLES.ADMIN || user?.role_id === ROLES.ANALYST;
 
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
@@ -876,7 +868,7 @@ export default function RequestsPage() {
           </select>
           
 
-          {isModerator ? (
+          {isMod ? (
             <input
               placeholder="Criado por (nome ou e-mail)"
               value={createdByName}
@@ -957,10 +949,10 @@ export default function RequestsPage() {
                 </tr>
               ) : (
                 filteredRows.map((r) => {
-                  const isReturned = Number(r.request_status_id) === STATUS.RETURNED;
+                  const isReturned = Number(r.request_status_id) === REQUEST_STATUS.RETURNED;
                   const isOwner = Number(r.request_created_by) === Number(user?.id);
                   const lockAfterDone =
-                    Number(r.request_status_id) === STATUS.FINALIZED || Number(r.request_status_id) === STATUS.REJECTED;
+                    Number(r.request_status_id) === REQUEST_STATUS.FINALIZED || Number(r.request_status_id) === REQUEST_STATUS.REJECTED;
 
                   const canEditNormal = isReturned && isOwner && !lockAfterDone;
 
