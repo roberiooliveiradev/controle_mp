@@ -38,8 +38,6 @@ export const UNIT_OPTIONS = Object.freeze([
 
 export const WAREHOUSE_OPTIONS = Object.freeze([
 	{ value: "01", text: "01 - Almoxarifado" },
-	{ value: "25", text: "25 - " },
-	{ value: "50", text: "50 - " },
 	{ value: "99", text: "99 - Fábrica" },
 ]);
 
