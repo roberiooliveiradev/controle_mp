@@ -374,13 +374,6 @@ export function RealtimeProvider({ children }) {
         title: title ? `Mensagem • ${title}` : "Nova mensagem",
         body: prev ? `${who}: ${prev}` : `${who} enviou uma mensagem.`,
       });
-
-
-      // ✅ notificação do navegador (somente fora de foco)
-      showBrowserNotification({
-        title: "Controle MP",
-        body: "Nova mensagem recebida.",
-      });
     };
 
     const onConversationNew = async (payload) => {
@@ -450,7 +443,7 @@ export function RealtimeProvider({ children }) {
         currentUserId === changedBy || // quem alterou
         currentUserId === requestOwnerId; // criador da solicitação
 
-      if (!shouldNotify) {
+      if (!shouldNotify && !(statusId===2) && !(statusId===1)) {
         return; // ❌ sai silenciosamente
       }
 
