@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Optional
+from typing import Optional, Any
 from datetime import timezone, date
 
 from app.core.exceptions import ForbiddenError, NotFoundError, ConflictError
@@ -73,16 +73,140 @@ class RequestService:
         self._pfield_repo = pfield_repo
         self._notifier = notifier
 
+    # ---------------- Realtime payload builder ----------------
+    def _iso(self, dt) -> str | None:
+        if not dt:
+            return None
+        return dt.astimezone(timezone.utc).isoformat()
+
+    def _pack_request_full(self, req: RequestModel) -> dict[str, Any]:
+        """
+        Monta um payload "completo" do request (similar ao GET /api/requests/<id>),
+        sem depender da camada API/schemas (mantém camadas).
+        """
+        items = self._item_repo.list_by_request_id(req.id)
+        item_ids = [int(i.id) for i in items]
+        fields_map = self._field_repo.list_by_item_ids(item_ids)
+
+        type_ids = list({int(i.request_type_id) for i in items if i.request_type_id is not None})
+        status_ids = list({int(i.request_status_id) for i in items if i.request_status_id is not None})
+
+        type_map = self._type_repo.get_map_by_ids(type_ids)
+        status_map = self._status_repo.get_map_by_ids(status_ids)
+
+        payload_items: list[dict[str, Any]] = []
+        for it in items:
+            t = type_map.get(int(it.request_type_id)) if it.request_type_id is not None else None
+            s = status_map.get(int(it.request_status_id)) if it.request_status_id is not None else None
+            f_list = fields_map.get(int(it.id), []) or []
+
+            payload_items.append(
+                {
+                    "id": int(it.id),
+                    "request_id": int(it.request_id),
+                    "request_type_id": int(it.request_type_id) if it.request_type_id is not None else None,
+                    "request_status_id": int(it.request_status_id) if it.request_status_id is not None else None,
+                    "request_type": (
+                        {"id": int(t.id), "type_name": str(getattr(t, "type_name", None))}
+                        if t is not None
+                        else None
+                    ),
+                    "request_status": (
+                        {"id": int(s.id), "status_name": str(getattr(s, "status_name", None))}
+                        if s is not None
+                        else None
+                    ),
+                    "product_id": int(it.product_id) if it.product_id is not None else None,
+                    "created_at": self._iso(it.created_at),
+                    "updated_at": self._iso(it.updated_at),
+                    "fields": [
+                        {
+                            "id": int(f.id),
+                            "request_items_id": int(f.request_items_id),
+                            "field_type_id": int(f.field_type_id) if f.field_type_id is not None else None,
+                            "field_tag": str(f.field_tag),
+                            "field_value": f.field_value,
+                            "field_flag": f.field_flag,
+                            "created_at": self._iso(f.created_at),
+                            "updated_at": self._iso(f.updated_at),
+                        }
+                        for f in f_list
+                        if not (getattr(f, "is_deleted", False) or False)
+                    ],
+                }
+            )
+
+        return {
+            "id": int(req.id),
+            "message_id": int(req.message_id),
+            "created_by": int(req.created_by),
+            "created_at": self._iso(req.created_at),
+            "updated_at": self._iso(req.updated_at),
+            "items": payload_items,
+        }
+
+    def _pack_item_full(self, item: RequestItemModel) -> dict[str, Any]:
+        """
+        Monta o payload do item + fields + labels type/status.
+        """
+        type_map = self._type_repo.get_map_by_ids([int(item.request_type_id)] if item.request_type_id is not None else [])
+        status_map = self._status_repo.get_map_by_ids([int(item.request_status_id)] if item.request_status_id is not None else [])
+        fields_map = self._field_repo.list_by_item_ids([int(item.id)])
+
+        t = type_map.get(int(item.request_type_id)) if item.request_type_id is not None else None
+        s = status_map.get(int(item.request_status_id)) if item.request_status_id is not None else None
+        f_list = fields_map.get(int(item.id), []) or []
+
+        return {
+            "id": int(item.id),
+            "request_id": int(item.request_id),
+            "request_type_id": int(item.request_type_id) if item.request_type_id is not None else None,
+            "request_status_id": int(item.request_status_id) if item.request_status_id is not None else None,
+            "request_type": (
+                {"id": int(t.id), "type_name": str(getattr(t, "type_name", None))}
+                if t is not None
+                else None
+            ),
+            "request_status": (
+                {"id": int(s.id), "status_name": str(getattr(s, "status_name", None))}
+                if s is not None
+                else None
+            ),
+            "product_id": int(item.product_id) if item.product_id is not None else None,
+            "created_at": self._iso(item.created_at),
+            "updated_at": self._iso(item.updated_at),
+            "fields": [
+                {
+                    "id": int(f.id),
+                    "request_items_id": int(f.request_items_id),
+                    "field_type_id": int(f.field_type_id) if f.field_type_id is not None else None,
+                    "field_tag": str(f.field_tag),
+                    "field_value": f.field_value,
+                    "field_flag": f.field_flag,
+                    "created_at": self._iso(f.created_at),
+                    "updated_at": self._iso(f.updated_at),
+                }
+                for f in f_list
+                if not (getattr(f, "is_deleted", False) or False)
+            ],
+        }
+
     # ---------------- Realtime events ----------------
     def _emit_request_created(self, *, req: RequestModel, conversation_id: int, created_by: int) -> None:
         if not self._notifier:
             return
+
+        # ✅ payload completo para o front não precisar fazer GET extra
+        request_payload = self._pack_request_full(req)
+
         evt = RequestCreatedEvent(
             request_id=int(req.id),
             message_id=int(req.message_id),
             conversation_id=int(conversation_id),
             created_by=int(created_by),
             created_at_iso=req.created_at.astimezone(timezone.utc).isoformat(),
+            # ✅ novo campo
+            request=request_payload,
         )
         self._notifier.notify_request_created(evt)
 
@@ -101,6 +225,10 @@ class RequestService:
         dt = item.updated_at or item.created_at
         iso = dt.astimezone(timezone.utc).isoformat() if dt else ""
 
+        # ✅ payload completo do request + item
+        request_payload = self._pack_request_full(req)
+        item_payload = self._pack_item_full(item)
+
         evt = RequestItemChangedEvent(
             request_id=int(req.id),
             item_id=int(item.id),
@@ -110,6 +238,9 @@ class RequestService:
             change_kind=change_kind,
             request_status_id=int(item.request_status_id) if item.request_status_id is not None else None,
             updated_at_iso=iso,
+            # ✅ novos campos
+            request=request_payload,
+            item=item_payload,
         )
         self._notifier.notify_request_item_changed(evt)
 
@@ -141,25 +272,10 @@ class RequestService:
             raise ForbiddenError("Apenas ANALYST/ADMIN podem alterar o status.")
 
     # ---------------- Type helpers ----------------
-    def _get_request_type_name(self, request_type_id: int | None) -> str | None:
-        if request_type_id is None:
-            return None
-        mp = self._type_repo.get_map_by_ids([int(request_type_id)])
-        t = mp.get(int(request_type_id))
-        if t is None:
-            return None
-        return str(getattr(t, "type_name", "") or "").strip().upper() or None
-
     def _is_create_item(self, item: RequestItemModel) -> bool:
-        # name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
-        # if name:
-        #     return name == "CREATE"
         return int(item.request_type_id or 0) == int(RequestType.CREATE)
 
     def _is_update_item(self, item: RequestItemModel) -> bool:
-        # name = self._get_request_type_name(int(item.request_type_id) if item.request_type_id is not None else None)
-        # if name:
-        #     return name == "UPDATE"
         return int(item.request_type_id or 0) == int(RequestType.UPDATE)
 
     # ---------------- Permissions ----------------
@@ -183,13 +299,10 @@ class RequestService:
     ) -> None:
         self._ensure_not_locked(item=item)
 
-        # FINALIZED/REJECTED -> ninguém
         if int(item.request_status_id) in (int(RequestStatus.FINALIZED), int(RequestStatus.REJECTED)):
             raise ConflictError("Item FINALIZED/REJECTED não pode ser alterado.")
 
-        # CREATE
         if self._is_create_item(item):
-            # ADMIN/ANALYST: podem editar SOMENTE novo_codigo
             if role_id in (Role.ADMIN, Role.ANALYST):
                 if field_tag == "novo_codigo":
                     return
@@ -197,7 +310,6 @@ class RequestService:
                     return
                 raise ForbiddenError("Em CREATE, ADMIN/ANALYST podem editar apenas 'novo_codigo'.")
 
-            # USER (criador) em RETURNED: pode editar campos do formulário, EXCETO novo_codigo
             if (
                 role_id == Role.USER
                 and req.created_by == user_id
@@ -209,7 +321,6 @@ class RequestService:
 
             raise ForbiddenError("Você não tem permissão para editar este campo em CREATE.")
 
-        # UPDATE -> criador somente se RETURNED
         if self._is_update_item(item):
             if (
                 req.created_by == user_id
@@ -357,10 +468,6 @@ class RequestService:
 
     # ---------------- NEW: Resubmit (explicit) ----------------
     def resubmit_returned_item(self, *, item_id: int, user_id: int, role_id: int) -> None:
-        """
-        Usuário finaliza suas edições e reenviar item RETURNED -> CREATED.
-        Isso evita o bug de: ao editar 1 campo já mudar pra CREATED e bloquear as demais edições.
-        """
         item = self._item_repo.get_by_id(item_id)
         if item is None:
             raise NotFoundError("Item não encontrado.")
@@ -372,7 +479,6 @@ class RequestService:
         if int(req.created_by) != int(user_id):
             raise ForbiddenError("Apenas o criador pode resubmeter este item.")
 
-        # só permite resubmeter quando está RETURNED (caso contrário não faz sentido)
         if int(item.request_status_id) != int(RequestStatus.RETURNED):
             raise ConflictError("Só é possível resubmeter quando o status for RETURNED.")
 
@@ -543,7 +649,6 @@ class RequestService:
         if not ok:
             raise NotFoundError("Item não encontrado.")
 
-        # ✅ NÃO muda status automaticamente (evita o bug de bloquear múltiplas edições)
         self._touch_item(item_id=item_id)
 
     def delete_item(self, *, item_id: int, user_id: int, role_id: int) -> None:
@@ -592,7 +697,6 @@ class RequestService:
         )
         created = self._field_repo.add(field)
 
-        # ✅ não altera status automaticamente
         self._touch_item(item_id=int(item.id))
         return created
 
@@ -620,7 +724,6 @@ class RequestService:
             field_tag=str(field.field_tag),
         )
 
-        # admin/analyst: só altera field_value
         if role_id in (Role.ADMIN, Role.ANALYST):
             values = {"field_value": values.get("field_value")}
 
@@ -628,7 +731,6 @@ class RequestService:
         if not ok:
             raise NotFoundError("Campo não encontrado.")
 
-        # ✅ não altera status automaticamente; só atualiza updated_at do item
         self._touch_item(item_id=int(item.id))
 
         item2 = self._item_repo.get_by_id(int(item.id)) or item
@@ -668,5 +770,4 @@ class RequestService:
         if not ok:
             raise NotFoundError("Campo não encontrado.")
 
-        # ✅ não altera status automaticamente
         self._touch_item(item_id=int(item.id))

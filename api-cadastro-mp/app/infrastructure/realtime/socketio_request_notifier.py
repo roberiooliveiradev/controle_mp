@@ -8,7 +8,6 @@ from app.core.interfaces.request_notifier import (
 )
 from app.infrastructure.realtime.socketio_server import socketio
 
-
 class SocketIORequestNotifier(RequestNotifier):
     def notify_request_created(self, event: RequestCreatedEvent) -> None:
         payload = {
@@ -18,10 +17,12 @@ class SocketIORequestNotifier(RequestNotifier):
             "created_by": event.created_by,
             "created_at": event.created_at_iso,
         }
+        if event.request is not None:
+            payload["request"] = event.request
 
         room = f"conversation:{event.conversation_id}"
         socketio.emit("request:created", payload, room=room)
-        socketio.emit("request:created", payload)  # fallback global
+        socketio.emit("request:created", payload)  # ✅ fallback global (volta!)
 
     def notify_request_item_changed(self, event: RequestItemChangedEvent) -> None:
         payload = {
@@ -34,7 +35,11 @@ class SocketIORequestNotifier(RequestNotifier):
             "request_status_id": event.request_status_id,
             "updated_at": event.updated_at_iso,
         }
+        if event.request is not None:
+            payload["request"] = event.request
+        if event.item is not None:
+            payload["item"] = event.item
 
         room = f"conversation:{event.conversation_id}"
         socketio.emit("request:item_changed", payload, room=room)
-        socketio.emit("request:item_changed", payload)  # fallback global
+        socketio.emit("request:item_changed", payload)  # ✅ fallback global (volta!)

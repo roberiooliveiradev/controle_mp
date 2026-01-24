@@ -135,6 +135,45 @@ export function RealtimeProvider({ children }) {
     return stableText(body).slice(0, 80);
   }
 
+  function senderNameOf(payload) {
+    const n =
+      payload?.sender?.full_name ??
+      payload?.sender?.name ??
+      payload?.message?.sender?.full_name ??
+      payload?.message?.sender?.name ??
+      payload?.sender_name;
+    return stableText(n) || "Alguém";
+  }
+
+  function conversationTitleOf(payload) {
+    const t =
+      payload?.conversation?.title ??
+      payload?.conversation_title ??
+      payload?.title ??
+      payload?.subject;
+    return stableText(t);
+  }
+
+  function messagePreviewOf(payload) {
+    const p =
+      payload?.preview ??
+      payload?.message?.preview ??
+      payload?.message?.msg?.body ??
+      payload?.message?.msg?.text ??
+      payload?.message?.body ??
+      payload?.body;
+    return stableText(p).slice(0, 90);
+  }
+
+  function isConversationAssignedToMe(payload) {
+    const assigneeId =
+      payload?.conversation?.assigned_to ??
+      payload?.conversation?.assignee?.id ??
+      payload?.assigned_to;
+    const n = Number(assigneeId);
+    return Number.isFinite(n) && n > 0 && n === Number(activeUserId);
+  }
+
   function senderIdOf(payload) {
     const sid =
       payload?.sender_id ??
@@ -285,12 +324,8 @@ export function RealtimeProvider({ children }) {
       prevConvIdsRef.current = newIds;
 
       if (hasNew) {
-        toastSuccess("Nova conversa criada.");
-        // notificação do navegador (apenas se não estiver focado)
-        showBrowserNotification({
-          title: "Controle MP",
-          body: "Nova conversa criada.",
-        });
+        toastSuccess("Você recebeu uma nova conversa.");
+        showBrowserNotification({ title: "Controle MP", body: "Você recebeu uma nova conversa." });
       }
     }
 
@@ -320,11 +355,26 @@ export function RealtimeProvider({ children }) {
       if (activeConvRef.current === cid) return;
       if (isMine) return;
 
-      toastSuccess("Nova mensagem recebida.");
-      setUnreadCounts((prev) => ({
-        ...(prev ?? {}),
-        [cid]: Number((prev ?? {})[cid] ?? 0) + 1,
+      const who = senderNameOf(payload);
+      const title = conversationTitleOf(payload);
+      const prev = messagePreviewOf(payload);
+
+      const toastText = title
+        ? `Nova mensagem de ${who} • ${title}`
+        : `Nova mensagem de ${who}`;
+
+      toastSuccess(toastText);
+
+      setUnreadCounts((prevCounts) => ({
+        ...(prevCounts ?? {}),
+        [cid]: Number((prevCounts ?? {})[cid] ?? 0) + 1,
       }));
+
+      showBrowserNotification({
+        title: title ? `Mensagem • ${title}` : "Nova mensagem",
+        body: prev ? `${who}: ${prev}` : `${who} enviou uma mensagem.`,
+      });
+
 
       // ✅ notificação do navegador (somente fora de foco)
       showBrowserNotification({
@@ -341,11 +391,24 @@ export function RealtimeProvider({ children }) {
       if (markSeenAny(keys)) return;
 
       if (isPrivileged) {
-        toastSuccess("Nova conversa criada.");
+
+        const title = conversationTitleOf(payload);
+        const creator = payload?.creator?.full_name ?? payload?.creator?.name ?? "Alguém";
+        const assignedToMe = isConversationAssignedToMe(payload);
+
+        const toastText = title
+          ? `Nova conversa: ${title}${assignedToMe ? " • atribuída a você" : ""}`
+          : `Nova conversa criada${assignedToMe ? " • atribuída a você" : ""}`;
+
+        toastSuccess(toastText);
+
         showBrowserNotification({
-          title: "Controle MP",
-          body: "Nova conversa criada.",
+          title: "Nova conversa",
+          body: title
+            ? `${title}${assignedToMe ? " (atribuída a você)" : ""}`
+            : `Criada por ${creator}${assignedToMe ? " (atribuída a você)" : ""}`,
         });
+        
         await loadInitial();
       } else {
         await reloadAndToastIfUserCanSeeNewConversation();
@@ -369,27 +432,31 @@ export function RealtimeProvider({ children }) {
       });
     };
 
+    // dentro do onRequestItemChanged
     const onRequestItemChanged = (payload) => {
       const itemId = requestItemIdOf(payload);
       const statusId = Number(payload?.request_status_id ?? payload?.status_id);
-      const sid = Number(payload?.created_by ?? payload?.user_id ?? payload?.owner_id) || senderIdOf(payload);
-      const fp = `request:item_changed|fp:${sid}|${conversationIdOf(payload)}|${stableText(payload?.change_kind)}|${statusId}`;
+
+      const changedBy = Number(payload?.changed_by ?? senderIdOf(payload));
+      const requestOwnerId = Number(payload?.request?.created_by);
+      const currentUserId = Number(activeUserId);
+
+      const fp = `request:item_changed|fp:${changedBy}|${conversationIdOf(payload)}|${stableText(payload?.change_kind)}|${statusId}`;
       const keys = [itemId ? `request:item_changed|item:${itemId}|st:${statusId}` : "", fp];
       if (markSeenAny(keys)) return;
 
-      console.log(payload)
+      // 🔐 regra de visibilidade de toast
+      const shouldNotify =
+        currentUserId === changedBy || // quem alterou
+        currentUserId === requestOwnerId; // criador da solicitação
 
-      if (isUserOnly && sid !== Number(activeUserId)) return;
-      // if (payload.user_id !== payload.created_by)
-      // {
-      //   alert("Entrou aqui")
-      //   return;
-      // }
-      // 🔒 Notificação APENAS para o criador da solicitação
-      // if (Number(sid) !== Number(activeUserId)) {
-      //   return;
-      // }
+      if (!shouldNotify) {
+        return; // ❌ sai silenciosamente
+      }
 
+      // ✅ payload completo disponível
+      const fullRequest = payload?.request;
+      const fullItem = payload?.item;
 
       if (statusId === 3) toastSuccess("Item finalizado.");
       else if (statusId === 5) toastWarning("Item devolvido (RETURNED).");

@@ -1,6 +1,8 @@
 # app/core/interfaces/conversation_notifier.py
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
@@ -10,6 +12,11 @@ class ConversationCreatedEvent:
     created_by: int
     assigned_to: int | None
     created_at_iso: str
+
+    # ✅ NOVOS
+    conversation: dict[str, Any] | None = None
+    creator: dict[str, Any] | None = None
+    assignee: dict[str, Any] | None = None
 
 
 class ConversationNotifier(Protocol):
