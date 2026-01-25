@@ -1,8 +1,10 @@
 # app/services/product_service.py
 
 from sqlalchemy.orm import Session
+from enum import IntEnum
 
-from app.core.exceptions import ConflictError, NotFoundError
+
+from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.infrastructure.database.models.product_model import ProductModel
 from app.infrastructure.database.models.product_field_model import ProductFieldModel
 from app.infrastructure.database.models.request_item_model import RequestItemModel
@@ -11,6 +13,12 @@ from app.infrastructure.database.models.request_item_field_model import RequestI
 from app.repositories.product_repository import ProductRepository
 from app.repositories.product_field_repository import ProductFieldRepository
 from app.repositories.request_item_repository import RequestItemRepository
+
+
+class Role(IntEnum):
+    ADMIN = 1
+    ANALYST = 2
+    USER = 3
 
 class ProductService:
     def __init__(
@@ -159,3 +167,24 @@ class ProductService:
         self._item_repo.update_fields(int(item.id), {"product_id": product_id})
 
         return product_id
+    
+
+    def set_product_field_flag(
+        self,
+        *,
+        field_id: int,
+        role_id: int,
+        field_flag: str | None,
+    ) -> None:
+        if role_id not in (Role.ADMIN, Role.ANALYST):
+            raise ForbiddenError("Apenas ANALYST/ADMIN podem adicionar/remover flag em produtos.")
+
+        pf = self._pfield_repo.get_by_id(int(field_id))
+        if pf is None:
+            raise NotFoundError("Campo do produto não encontrado.")
+
+        ok = self._pfield_repo.update_field(int(field_id), {"field_flag": field_flag})
+        if not ok:
+            raise NotFoundError("Campo do produto não encontrado.")
+
+        self._product_repo.touch_updated_at(int(pf.product_id))

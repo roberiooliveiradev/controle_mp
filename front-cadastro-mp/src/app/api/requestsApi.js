@@ -84,6 +84,12 @@ export async function createRequestFieldApi(itemId, payload) {
 	return data;
 }
 
+// Flag (ANALYST/ADMIN)
+export async function setRequestFieldFlagApi(fieldId, field_flag) {
+	// field_flag: string | null
+	await httpClient.patch(`/requests/fields/${fieldId}/flag`, { field_flag });
+}
+
 export async function getRequestsMetaApi() {
 	const { data } = await httpClient.get(`/requests/meta`);
 	return data; // { types: [...], statuses: [...] }

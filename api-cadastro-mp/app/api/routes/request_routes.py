@@ -246,6 +246,22 @@ def update_field(field_id: int):
 
     return ("", 204)
 
+@bp_req.patch("/fields/<int:field_id>/flag")
+@require_auth
+def set_field_flag(field_id: int):
+    user_id, role_id = _auth_user()
+    body = request.get_json(force=True) or {}
+
+    # aceita string ou null para remover
+    flag = body.get("field_flag")
+    if flag is not None:
+        flag = str(flag).strip() or None
+
+    with db_session() as session:
+        svc = _build_service(session)
+        svc.set_field_flag(field_id=int(field_id), user_id=user_id, role_id=role_id, field_flag=flag)
+
+    return ("", 204)
 
 @bp_req.delete("/fields/<int:field_id>")
 @require_auth

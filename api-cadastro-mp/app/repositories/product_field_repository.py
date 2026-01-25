@@ -1,10 +1,11 @@
 # app/repositories/product_field_repository.py
 
-from sqlalchemy import select, update, func, or_
+from sqlalchemy import select, update, func
 from sqlalchemy.orm import Session
 
 from app.core.base_repository import BaseRepository
 from app.infrastructure.database.models.product_field_model import ProductFieldModel
+
 
 class ProductFieldRepository(BaseRepository[ProductFieldModel]):
     def __init__(self, session: Session) -> None:
@@ -13,6 +14,13 @@ class ProductFieldRepository(BaseRepository[ProductFieldModel]):
     def add_many(self, models: list[ProductFieldModel]) -> None:
         self._session.add_all(models)
         self._session.flush()
+
+    def get_by_id(self, field_id: int) -> ProductFieldModel | None:
+        stmt = select(ProductFieldModel).where(
+            ProductFieldModel.id == int(field_id),
+            ProductFieldModel.is_deleted.is_(False),
+        )
+        return self._session.execute(stmt).scalars().first()
 
     def list_by_product_id(self, product_id: int) -> list[ProductFieldModel]:
         stmt = (
@@ -66,8 +74,7 @@ class ProductFieldRepository(BaseRepository[ProductFieldModel]):
         )
 
         return self._session.execute(stmt).scalar()
-    
-    
+
     def find_product_id_by_codigo_atual(self, *, codigo_atual: str | None) -> int | None:
         code = (codigo_atual or "").strip()
         if not code:
@@ -83,4 +90,3 @@ class ProductFieldRepository(BaseRepository[ProductFieldModel]):
             .limit(1)
         )
         return self._session.execute(stmt).scalar()
-

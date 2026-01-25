@@ -1,8 +1,13 @@
 // src/pages/ProductsPage.jsx
 
 import { useEffect, useMemo, useState } from "react";
-import { listProductsApi, getProductApi } from "../app/api/productsApi";
+import { listProductsApi, getProductApi, setProductFieldFlagApi } from "../app/api/productsApi";
 import { RequestItemFields } from "../app/ui/requests/RequestItemFields";
+
+import { useAuth } from "../app/auth/AuthContext";
+import { isModerator } from "../app/constants";
+
+
 import { fieldsToFormState, TAGS, REQUEST_TYPE_ID_UPDATE } from "../app/ui/requests/requestItemFields.logic";
 
 function fmt(iso) {
@@ -81,6 +86,9 @@ function ModalShell({ title, onClose, children, footer }) {
 }
 
 function ProductDetailsModal({ open, productId, onClose }) {
+  const { user } = useAuth();
+  const canEditFlags = isModerator(user?.role_id);
+
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [product, setProduct] = useState(null);
@@ -88,6 +96,20 @@ function ProductDetailsModal({ open, productId, onClose }) {
   // adapter para RequestItemFields (fieldsToFormState espera array com field_tag/field_value)
   const [valuesByTag, setValuesByTag] = useState({});
   const [fornecedoresRows, setFornecedoresRows] = useState([]);
+  
+  const [byTag, setByTag] = useState({});
+
+  async function handleSetProductFieldFlag(fieldId, nextFlag) {
+    await setProductFieldFlagApi(fieldId, nextFlag);
+    // recarrega o produto pra refletir (simples e consistente)
+    const p = await getProductApi(productId);
+    setProduct(p);
+    const st = fieldsToFormState(p?.fields || []);
+    setValuesByTag(st.values);
+    setFornecedoresRows(st.fornecedoresRows);
+    setByTag(st.byTag);
+  }
+
 
   useEffect(() => {
     let alive = true;
@@ -105,6 +127,7 @@ function ProductDetailsModal({ open, productId, onClose }) {
         const st = fieldsToFormState(p?.fields || []);
         setValuesByTag(st.values);
         setFornecedoresRows(st.fornecedoresRows);
+        setByTag(st.byTag);
       } catch (err) {
         if (!alive) return;
         setError(err?.response?.data?.error ?? "Erro ao carregar produto.");
@@ -154,12 +177,19 @@ function ProductDetailsModal({ open, productId, onClose }) {
             variant="fields"
             readOnly={true}
             isProduct={true}
+
+            // flags
+            byTag={byTag}
+            canEditFlags={canEditFlags}
+            onSetFieldFlag={(fieldId, nextFlag) => handleSetProductFieldFlag(fieldId, nextFlag)}
+
             valuesByTag={valuesByTag}
             onChangeTagValue={() => {}}
             fornecedoresRows={fornecedoresRows}
             onChangeFornecedores={() => {}}
             errors={{ fields: {}, suppliers: {} }}
           />
+
         </div>
       )}
     </ModalShell>

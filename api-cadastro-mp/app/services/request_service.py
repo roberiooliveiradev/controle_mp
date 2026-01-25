@@ -277,6 +277,10 @@ class RequestService:
 
     def _is_update_item(self, item: RequestItemModel) -> bool:
         return int(item.request_type_id or 0) == int(RequestType.UPDATE)
+    
+    def _ensure_can_change_field_flag(self, role_id: int)->None:
+        if role_id not in (Role.ADMIN, Role.ANALYST):
+            raise ForbiddenError("Apenas ANALYST/ADMIN podem adicionar/remover flag em campos.")
 
     # ---------------- Permissions ----------------
     def _ensure_user_can_edit_item(self, *, req: RequestModel, item: RequestItemModel, user_id: int, role_id: int) -> None:
@@ -650,6 +654,48 @@ class RequestService:
             raise NotFoundError("Item não encontrado.")
 
         self._touch_item(item_id=item_id)
+
+    def set_field_flag(
+        self,
+        *,
+        field_id: int,
+        user_id: int,
+        role_id: int,
+        field_flag: str | None,
+    ) -> None:
+        self._ensure_can_change_field_flag(role_id)
+
+        field = self._field_repo.get_by_id(int(field_id))
+        if field is None:
+            raise NotFoundError("Campo não encontrado.")
+
+        item = self._item_repo.get_by_id(int(field.request_items_id))
+        if item is None:
+            raise NotFoundError("Item não encontrado.")
+
+        self._ensure_not_locked(item=item)
+
+        req = self._req_repo.get_by_id(int(item.request_id))
+        if req is None:
+            raise NotFoundError("Requisição não encontrada.")
+
+        conversation_id = self._conversation_id_from_message(int(req.message_id))
+        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+
+        ok = self._field_repo.update_fields(int(field_id), {"field_flag": field_flag})
+        if not ok:
+            raise NotFoundError("Campo não encontrado.")
+
+        self._touch_item(item_id=int(item.id))
+
+        item2 = self._item_repo.get_by_id(int(item.id)) or item
+        self._emit_item_changed(
+            req=req,
+            conversation_id=conversation_id,
+            item=item2,
+            changed_by=user_id,
+            change_kind="FIELD_FLAG",
+        )
 
     def delete_item(self, *, item_id: int, user_id: int, role_id: int) -> None:
         item = self._item_repo.get_by_id(item_id)

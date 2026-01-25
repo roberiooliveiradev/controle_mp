@@ -1,6 +1,6 @@
 // src/app/ui/requests/RequestItemFields.jsx
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   TAGS,
   newSupplierRow,
@@ -52,15 +52,21 @@ function selectStyle(hasError) {
   };
 }
 
+
 export function RequestItemFields({
   variant,
   readOnly = false,
 
-  // ✅ libera SOMENTE o campo novo_codigo (para CREATE) mesmo em readOnly (ADMIN/ANALYST)
+  // libera SOMENTE o campo novo_codigo (para CREATE) mesmo em readOnly (ADMIN/ANALYST)
   canEditNovoCodigo = false,
 
-  // ✅ novo
+  // produtos
   isProduct = false,
+
+  // flags
+  byTag = null,                 // { [tag]: { id, field_flag, ... } }
+  canEditFlags = false,         // bool
+  onSetFieldFlag = null,        // (fieldId:number, nextFlag:string|null, tag:string)=>Promise|void
 
   // ---------- structured ----------
   item,
@@ -78,15 +84,35 @@ export function RequestItemFields({
   // usado no details (variant="fields")
   requestTypeId,
 }) {
+
+const [flagModal, setFlagModal] = useState({
+    open: false,
+    tag: null,
+    fieldId: null,
+    fieldLabel: "",
+    fieldValuePreview: "",
+    value: "",
+    saving: false,
+    error: "",
+  });
+
+  function closeFlagModal() {
+    setFlagModal((s) => ({ ...s, open: false, tag: null, fieldId: null, error: "" }));
+  }
+
   const isStructured = variant === "structured";
 
-  const isUpdate = isStructured
-    ? item?.request_type_code === "UPDATE"
-    : Number(requestTypeId) === REQUEST_TYPE_ID_UPDATE;
+  const isUpdate =
+    !isProduct &&
+    (isStructured
+      ? item?.request_type_code === "UPDATE"
+      : Number(requestTypeId) === REQUEST_TYPE_ID_UPDATE);
 
-  const isCreate = isStructured
-    ? item?.request_type_code === "CREATE"
-    : Number(requestTypeId) === REQUEST_TYPE_ID_CREATE;
+  const isCreate =
+    !isProduct &&
+    (isStructured
+      ? item?.request_type_code === "CREATE"
+      : Number(requestTypeId) === REQUEST_TYPE_ID_CREATE);
 
   const fieldErr = errors?.fields || {};
   const suppliersErr = errors?.suppliers || {};
@@ -95,7 +121,7 @@ export function RequestItemFields({
   const canEditNormal = !readOnly;
 
   // furo de readOnly SOMENTE pro novo_codigo quando CREATE (details)
-  const canEditNovoCodigoField = !!canEditNovoCodigo && !isStructured && isCreate;
+  const canEditNovoCodigoField = !isProduct && !!canEditNovoCodigo && !isStructured && isCreate;
 
   const fornecedores = useMemo(() => {
     if (isStructured) {
@@ -195,6 +221,336 @@ export function RequestItemFields({
     onClearSupplierError?.(rowIndex, key);
   }
 
+  async function saveFlagFromModal() {
+    if (!flagModal.open) return;
+
+    if (!flagModal.fieldId) {
+      // não existe campo pra salvar flag
+      return;
+    }
+
+    const next = String(flagModal.value || "").trim();
+    const nextFlag = next ? next : null;
+
+    setFlagModal((s) => ({ ...s, saving: true, error: "" }));
+
+    try {
+      await onSetFieldFlag?.(Number(flagModal.fieldId), nextFlag, flagModal.tag);
+      closeFlagModal();
+    } catch (err) {
+      const msg = err?.response?.data?.error ?? "Falha ao atualizar flag.";
+      setFlagModal((s) => ({ ...s, saving: false, error: msg }));
+    }
+  }
+
+  function getFieldObj(tag) {
+    if (isStructured) return null; 
+    return byTag?.[tag] || null;
+  }
+
+  function getFlag(tag) {
+    return String(getFieldObj(tag)?.field_flag ?? "").trim();
+  }
+
+  function safePreview(v) {
+    if (v === null || v === undefined) return "";
+    if (typeof v === "string") return v;
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return String(v);
+    }
+  }
+
+  function getFieldLabelFromTag(tag) {
+    // melhor: você pode mapear pelos labels reais se quiser.
+    // aqui fica um fallback aceitável.
+    return String(tag || "").replaceAll("_", " ").toUpperCase();
+  }
+
+  function editFlag(tag) {
+    if (!canEditFlags) return;
+
+    const f = getFieldObj(tag);
+    if (!f?.id) {
+      setFlagModal({
+        open: true,
+        tag,
+        fieldId: null,
+        fieldLabel: getFieldLabelFromTag(tag),
+        fieldValuePreview: safePreview(valuesByTag?.[tag] ?? ""),
+        value: "",
+        saving: false,
+        error: "Campo ainda não existe para receber flag.",
+      });
+      return;
+    }
+
+    const current = getFlag(tag);
+
+    setFlagModal({
+      open: true,
+      tag,
+      fieldId: Number(f.id),
+      fieldLabel: getFieldLabelFromTag(tag),
+      fieldValuePreview: safePreview(valuesByTag?.[tag] ?? ""),
+      value: current || "",
+      saving: false,
+      error: "",
+    });
+  }
+
+  function FlagChip({ tag }) {
+    const v = getFlag(tag);
+    if (!v) return null;
+    return (
+      <span
+        style={{
+          fontSize: 11,
+          padding: "2px 8px",
+          borderRadius: 999,
+          border: "1px solid var(--border)",
+          background: "var(--surface-2)",
+          fontWeight: 800,
+        }}
+        title={`Flag: ${v}`}
+      >
+        🚩 {v}
+      </span>
+    );
+  }
+
+  function FlagButton({ tag }) {
+    if (!canEditFlags) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => editFlag(tag)}
+        style={{
+          padding: "4px 8px",
+          borderRadius: 10,
+          border: "1px solid var(--border)",
+          background: "var(--surface)",
+          fontSize: 12,
+          cursor: "pointer",
+        }}
+        title="Adicionar/remover flag"
+      >
+        {getFlag(tag) ? "Editar flag" : "Add flag"}
+      </button>
+    );
+  }
+
+  function LabelRow({ tag, children }) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center"}}>
+          {children}
+          <FlagChip tag={tag} />
+        </div>
+        <FlagButton tag={tag} />
+      </div>
+    );
+  }
+
+  // ---------------------------------
+  function tryParseJsonArray(value) {
+    if (!value) return null;
+
+    if (Array.isArray(value)) return value;
+
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  function JsonTable({ data }) {
+    if (!Array.isArray(data) || data.length === 0) return null;
+
+    const columns = Object.keys(data[0] || {});
+
+    return (
+      <div
+        style={{
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+          overflow: "auto",
+          background: "var(--surface-2)",
+        }}
+      >
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr>
+              {columns.map((col) => (
+                <th
+                  key={col}
+                  style={{
+                    textAlign: "left",
+                    padding: "6px 8px",
+                    borderBottom: "1px solid var(--border)",
+                    fontWeight: 800,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((row, idx) => (
+              <tr key={idx}>
+                {columns.map((col) => (
+                  <td
+                    key={col}
+                    style={{
+                      padding: "6px 8px",
+                      borderBottom: "1px solid var(--border)",
+                      verticalAlign: "top",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {String(row[col] ?? "")}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  function FlagModal() {
+    if (!flagModal.open) return null;
+
+    const canSave = !!flagModal.fieldId && !flagModal.saving;
+
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        onMouseDown={(e) => {
+          if (e.target === e.currentTarget) closeFlagModal();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") closeFlagModal();
+          if (e.key === "Enter") saveFlagFromModal();
+        }}
+        tabIndex={-1}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.45)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
+          zIndex: 9999,
+        }}
+      >
+        <div
+          style={{
+            width: "min(560px, 100%)",
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 14,
+            boxShadow: "0 20px 70px rgba(0,0,0,0.35)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: 14, borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ fontWeight: 900 }}>🚩 Flag do campo</div>
+            <button type="button" onClick={closeFlagModal} style={{ borderRadius: 10, padding: "6px 10px" }}>
+              Fechar
+            </button>
+          </div>
+
+          <div style={{ padding: 14, display: "grid", gap: 10 }}>
+            <div style={{ display: "grid", gap: 6 }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Campo</div>
+              <div style={{ fontWeight: 800 }}>{flagModal.fieldLabel}</div>
+            </div>
+            {(() => {
+              const jsonArray = tryParseJsonArray(flagModal.fieldValuePreview);
+
+              if (jsonArray) {
+                return <JsonTable data={jsonArray} />;
+              }
+
+              return (
+                <div
+                  style={{
+                    padding: 10,
+                    border: "1px solid var(--border)",
+                    borderRadius: 12,
+                    background: "var(--surface-2)",
+                    maxHeight: 120,
+                    overflow: "auto",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    fontSize: 13,
+                  }}
+                >
+                  {flagModal.fieldValuePreview || <span style={{ opacity: 0.6 }}>(vazio)</span>}
+                </div>
+              );
+            })()}
+            <div style={{ display: "grid", gap: 6 }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Flag (vazio remove)</div>
+              <input
+                value={flagModal.value}
+                onChange={(e) => setFlagModal((s) => ({ ...s, value: e.target.value }))}
+                placeholder="ex.: IMPORTANTE / VALIDAR / REVISAR..."
+                style={{
+                  padding: 10,
+                  borderRadius: 12,
+                  border: "1px solid var(--border)",
+                  outline: "none",
+                }}
+                autoFocus
+              />
+            </div>
+
+            {flagModal.error ? (
+              <div style={{ padding: 10, borderRadius: 12, border: "1px solid var(--border)", background: "var(--danger-weak, #2a0f0f)" }}>
+                {flagModal.error}
+              </div>
+            ) : null}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+              <button type="button" onClick={closeFlagModal} style={{ borderRadius: 10, padding: "8px 12px" }}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!canSave}
+                onClick={saveFlagFromModal}
+                style={{
+                  borderRadius: 10,
+                  padding: "8px 12px",
+                  opacity: canSave ? 1 : 0.6,
+                  cursor: canSave ? "pointer" : "not-allowed",
+                }}
+              >
+                {flagModal.saving ? "Salvando..." : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
+
   return (
     <div style={{ display: "grid", gap: 14 }}>
       {/* Tipo (só no structured) */}
@@ -233,7 +589,7 @@ export function RequestItemFields({
         {/* CREATE (details): só mostra novo_codigo quando estiver liberado para editar (ADMIN/ANALYST) */}
         {!isStructured && isCreate && canEditNovoCodigoField ? (
           <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
-            <span>Novo código (obrigatório para finalizar CREATE)</span>
+            <span>Novo código (obrigatório para finalizar CRIAR)</span>
             <input
               value={getVal(TAGS.novo_codigo)}
               onChange={(e) => setVal(TAGS.novo_codigo, e.target.value)}
@@ -253,7 +609,9 @@ export function RequestItemFields({
         {isUpdate ? (
           <>
             <label style={styles.label}>
-              <span>Código atual</span>
+              <LabelRow tag={TAGS.codigo_atual}>
+                <span>Código atual</span>
+              </LabelRow>
               <input
                 value={getVal(TAGS.codigo_atual)}
                 onChange={(e) => setVal(TAGS.codigo_atual, e.target.value)}
@@ -266,7 +624,9 @@ export function RequestItemFields({
             </label>
 
             <label style={styles.label}>
-              <span>Novo código (opcional)</span>
+              <LabelRow tag={TAGS.novo_codigo}>
+                <span>Novo código (opcional)</span>
+              </LabelRow>
               <input
                 value={getVal(TAGS.novo_codigo)}
                 onChange={(e) => setVal(TAGS.novo_codigo, e.target.value)}
@@ -281,7 +641,9 @@ export function RequestItemFields({
         ) : null}
 
         <label style={styles.label}>
-          <span>Grupo</span>
+          <LabelRow tag={TAGS.grupo}>
+            <span>Grupo</span>
+          </LabelRow>
           <select
             value={getVal(TAGS.grupo)}
             onChange={(e) => setVal(TAGS.grupo, e.target.value)}
@@ -299,7 +661,9 @@ export function RequestItemFields({
         </label>
 
         <label style={styles.label}>
-          <span>Tipo</span>
+          <LabelRow tag={TAGS.tipo}>
+            <span>Tipo</span>
+          </LabelRow>
           <input
             value={getVal(TAGS.tipo)}
             onChange={(e) => setVal(TAGS.tipo, e.target.value)}
@@ -312,7 +676,9 @@ export function RequestItemFields({
         </label>
 
         <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
-          <span>Descrição</span>
+          <LabelRow tag={TAGS.descricao}>
+            <span>Descrição</span>
+          </LabelRow>
           <input
             value={getVal(TAGS.descricao)}
             onChange={(e) => setVal(TAGS.descricao, e.target.value)}
@@ -323,7 +689,9 @@ export function RequestItemFields({
         </label>
 
         <label style={styles.label}>
-          <span>Armazém padrão</span>
+          <LabelRow tag={TAGS.armazem_padrao}>
+            <span>Armazém padrão</span>
+          </LabelRow>
           <select
             value={getVal(TAGS.armazem_padrao)}
             onChange={(e) => setVal(TAGS.armazem_padrao, e.target.value)}
@@ -344,7 +712,9 @@ export function RequestItemFields({
         </label>
 
         <label style={styles.label}>
-          <span>Unidade</span>
+          <LabelRow tag={TAGS.unidade}>
+            <span>Unidade</span>
+          </LabelRow>
           <select
             value={getVal(TAGS.unidade)}
             onChange={(e) => setVal(TAGS.unidade, e.target.value)}
@@ -365,7 +735,9 @@ export function RequestItemFields({
         </label>
 
         <label style={styles.label}>
-          <span>Produto terceiro</span>
+          <LabelRow tag={TAGS.produto_terceiro}>
+            <span>Produto terceiro</span>
+          </LabelRow>
           <select
             value={getVal(TAGS.produto_terceiro)}
             onChange={(e) => setVal(TAGS.produto_terceiro, e.target.value)}
@@ -382,7 +754,9 @@ export function RequestItemFields({
         </label>
 
         <label style={styles.label}>
-          <span>CTA contábil</span>
+          <LabelRow tag={TAGS.cta_contabil}>
+            <span>CTA contábil</span>
+          </LabelRow>
           <input
             value={getVal(TAGS.cta_contabil)}
             onChange={(e) => setVal(TAGS.cta_contabil, e.target.value)}
@@ -393,7 +767,9 @@ export function RequestItemFields({
         </label>
 
         <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
-          <span>Ref. cliente</span>
+          <LabelRow tag={TAGS.ref_cliente}>
+            <span>Ref. cliente</span>
+          </LabelRow>
           <input
             value={getVal(TAGS.ref_cliente)}
             onChange={(e) => setVal(TAGS.ref_cliente, e.target.value)}
@@ -415,7 +791,10 @@ export function RequestItemFields({
             alignItems: "center",
           }}
         >
-          <div style={styles.sectionTitle}>Fornecedores</div>
+          <LabelRow tag={TAGS.fornecedores}>
+            <span style={styles.sectionTitle}>Fornecedores</span>
+          </LabelRow>
+
           {canEditNormal ? (
             <button
               type="button"
@@ -511,7 +890,7 @@ export function RequestItemFields({
           Os fornecedores são armazenados em um field JSON (tag: fornecedores).
         </div>
       </div>
-
+     <FlagModal />
     </div>
   );
 }

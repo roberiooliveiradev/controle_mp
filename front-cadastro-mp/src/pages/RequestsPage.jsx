@@ -12,6 +12,7 @@ import {
   createRequestFieldApi,
   resubmitRequestItemApi,
   getRequestsMetaApi,
+  setRequestFieldFlagApi, 
 } from "../app/api/requestsApi";
 
 import { RequestItemFields } from "../app/ui/requests/RequestItemFields";
@@ -424,6 +425,22 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     }
   }
 
+  async function handleSetFieldFlag(fieldId, nextFlag) {
+    await setRequestFieldFlagApi(fieldId, nextFlag);
+
+    // atualiza estado local (pra refletir chip sem recarregar tudo)
+    setByTag((prev) => ({
+      ...(prev || {}),
+      [prev?.[Object.keys(prev).find((k) => Number(prev?.[k]?.id) === Number(fieldId))]?.field_tag]: {
+        ...(prev?.[Object.keys(prev).find((k) => Number(prev?.[k]?.id) === Number(fieldId))] || {}),
+        field_flag: nextFlag,
+      },
+    }));
+
+    // mais simples/seguro: recarrega detalhes (mantém tudo consistente)
+    await reloadDetails();
+  }
+
   function goToConversation() {
     navigate(`/conversations/${row.conversation_id}?messageId=${row.message_id}`);
     onClose?.();
@@ -464,7 +481,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
             </span>
 
             <span style={{ fontSize: 12, opacity: 0.75 }}>
-              Request #{row.request_id} • Message #{row.message_id} • Conversation #{row.conversation_id}
+              Solicitação #{row.request_id} • Mensagem #{row.message_id} • Conversa #{row.conversation_id}
             </span>
           </div>
 
@@ -541,6 +558,11 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
             readOnly={!canEditNormalFields}
             canEditNovoCodigo={canEditNovoCodigo && !canEditNormalFields}
             requestTypeId={row?.request_type_id}
+
+            byTag={byTag}
+            canEditFlags={isMod && !lockAfterDone}
+            onSetFieldFlag={(fieldId, nextFlag) => handleSetFieldFlag(fieldId, nextFlag)}
+
             valuesByTag={
               canResubmit
                 ? Object.fromEntries(Object.entries(valuesByTag || {}).filter(([k]) => k !== TAGS.novo_codigo))
@@ -559,11 +581,11 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
 
           <div style={{ fontSize: 12, opacity: 0.7 }}>
             {lockAfterDone
-              ? "Solicitação FINALIZED/REJECTED: edição bloqueada."
+              ? "Solicitação FINALIZADA/REJEITADA: edição bloqueada."
               : canEditNormalFields
-              ? "Você pode editar os campos porque a solicitação foi devolvida (RETURNED). Quando terminar, use 'Salvar e reenviar'."
+              ? "Você pode editar os campos porque a solicitação foi devolvida (DEVOLVIDA). Quando terminar, use 'Salvar e reenviar'."
               : canEditNovoCodigo
-              ? "Você pode editar somente o campo 'novo_codigo' (CREATE) antes de rejeitar/finalizar."
+              ? "Você pode editar somente o campo 'novo_codigo' (CRIAR) antes de rejeitar/finalizar."
               : mode === "edit"
               ? "Você não tem permissão para editar este item."
               : "Modo visualização."}
