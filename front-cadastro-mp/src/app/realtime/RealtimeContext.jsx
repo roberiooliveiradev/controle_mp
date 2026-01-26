@@ -24,14 +24,69 @@ function getGlobalDedupeStore() {
   return g.__cadmpDedupe;
 }
 
-function canUseBrowserNotifications() {
-  return typeof window !== "undefined" && "Notification" in window;
-}
-
 function isTabFocused() {
   // document.hasFocus() pode ser melhor em alguns browsers
   return !document.hidden && (document.hasFocus?.() ?? true);
 }
+
+// --- mantém os helpers acima ---
+
+function canUseBrowserNotifications() {
+  return typeof window !== "undefined" && "Notification" in window;
+}
+
+function isSecureForNotifications() {
+  // Chrome exige contexto seguro p/ Notification:
+  // https://, localhost, 127.0.0.1 (isSecureContext = true)
+  return typeof window !== "undefined" && window.isSecureContext === true;
+}
+
+// -----------------------------
+// ✅ Notificação do navegador (Chrome-safe)
+// -----------------------------
+async function requestBrowserNotificationsPermission() {
+  if (!canUseBrowserNotifications()) return { ok: false, reason: "unsupported" };
+  if (!isSecureForNotifications()) return { ok: false, reason: "insecure_context" };
+
+  if (Notification.permission === "granted") return { ok: true };
+  if (Notification.permission === "denied") return { ok: false, reason: "denied" };
+
+  // ⚠️ IMPORTANTE: isso deve ser chamado por clique do usuário
+  try {
+    const res = await Notification.requestPermission();
+    return { ok: res === "granted", reason: res };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
+}
+
+function canShowBrowserNotificationNow() {
+  if (!canUseBrowserNotifications()) return false;
+  if (!isSecureForNotifications()) return false;
+  return Notification.permission === "granted";
+}
+
+async function showBrowserNotification({ title, body }) {
+  // só quando não está focado (pra não duplicar a UX)
+  if (isTabFocused()) return;
+
+  // ✅ não tenta pedir permissão aqui (evento de socket no Chrome costuma falhar)
+  if (!canShowBrowserNotificationNow()) return;
+
+  try {
+    const n = new Notification(title, { body });
+    setTimeout(() => n.close(), 6000);
+  } catch {
+    // ignore
+  }
+}
+
+
+
+
+
+
+
 
 export function RealtimeProvider({ children }) {
   const auth = useAuth();
@@ -374,6 +429,7 @@ export function RealtimeProvider({ children }) {
         title: title ? `Mensagem • ${title}` : "Nova mensagem",
         body: prev ? `${who}: ${prev}` : `${who} enviou uma mensagem.`,
       });
+
     };
 
     const onConversationNew = async (payload) => {
@@ -452,9 +508,9 @@ export function RealtimeProvider({ children }) {
       const fullItem = payload?.item;
 
       if (statusId === 3) toastSuccess("Item finalizado.");
-      else if (statusId === 5) toastWarning("Item devolvido (RETURNED).");
-      else if (statusId === 6) toastError("Item rejeitado (REJECTED).");
-      else if (statusId === 4) toastError("Falha ao processar item (FAILED).");
+      else if (statusId === 5) toastWarning("Item devolvido atualizado.");
+      else if (statusId === 6) toastError("Item rejeitado atualizado.");
+      else if (statusId === 4) toastError("Falha ao processar item.");
       else toastWarning("Solicitação atualizada.");
 
       showBrowserNotification({
@@ -485,6 +541,10 @@ export function RealtimeProvider({ children }) {
         unreadCounts,
         setUnreadCounts,
         activeConvRef,
+
+        requestBrowserNotificationsPermission,
+        canShowBrowserNotificationNow,
+        isSecureForNotifications,
       }}
     >
       {children}

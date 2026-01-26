@@ -4,10 +4,35 @@ import { useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
+import { useRealtime } from "../realtime/RealtimeContext";
+import { toastSuccess, toastWarning, toastError } from "../ui/toast";
+
 function roleLabel(roleId) {
   if (roleId === 1) return "ADMIN";
   if (roleId === 2) return "ANALYST";
   return "USER";
+}
+
+export function EnableNotificationsButton() {
+  const rt = useRealtime();
+
+  async function onEnable() {
+    if (!rt.isSecureForNotifications?.()) {
+      toastWarning("No Chrome, notificações precisam de HTTPS (ou localhost).");
+      return;
+    }
+
+    const res = await rt.requestBrowserNotificationsPermission?.();
+    if (res?.ok) toastSuccess("Notificações do navegador ativadas.");
+    else if (res?.reason === "denied") toastError("Permissão de notificações negada no navegador.");
+    else toastWarning("Não foi possível ativar as notificações agora.");
+  }
+
+  return (
+    <button type="button" onClick={onEnable} style={{ padding: "8px 10px", borderRadius: 10 }}>
+      Ativar notificações
+    </button>
+  );
 }
 
 export function Topbar() {
