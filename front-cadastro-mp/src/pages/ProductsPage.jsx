@@ -308,7 +308,7 @@ export default function ProductsPage() {
               rows.map((r) => (
                 <tr key={r.id}>
                   <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                    <b>#{r.id}</b>
+                    <b>{r.id}</b>
                   </td>
                   <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.codigo_atual ?? "—"}</td>
                   <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.descricao ?? "—"}</td>
