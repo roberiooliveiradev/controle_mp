@@ -55,13 +55,18 @@ def list_products():
     if flag_mode not in ("all", "with", "without"):
         return jsonify({"error": "Parâmetro flag inválido. Use: all | with | without"}), 400
 
+    date_from = (request.args.get("date_from") or "").strip() or None
+    date_to = (request.args.get("date_to") or "").strip() or None
+
     with db_session() as session:
         svc = ProductQueryService(session)
         rows, total = svc.list_products(
             limit=limit,
             offset=offset,
             q=q,
-            flag=flag_mode,  # ✅ agora passa o filtro
+            flag=flag_mode,
+            date_from=date_from,
+            date_to=date_to,
         )
 
     payload = ProductListResponse(

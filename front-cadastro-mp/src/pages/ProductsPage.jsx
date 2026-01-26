@@ -202,39 +202,73 @@ export default function ProductsPage() {
 
   const [limit] = useState(15);
   const [offset, setOffset] = useState(0);
+
   const [q, setQ] = useState("");
+  const [flagFilter, setFlagFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState(""); // YYYY-MM-DD
+  const [dateTo, setDateTo] = useState("");     // YYYY-MM-DD
 
-  const [flagFilter, setFlagFilter] = useState("all"); // all | with | without
-
+  const filtersTimerRef = useRef(null);
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
-
   const reloadTimerRef = useRef(null);
-
-  async function load({ resetOffset = false } = {}) {
+  
+  async function load({ resetOffset = false, nextOffsetOverride = null } = {}) {
     try {
       setBusy(true);
       setError("");
 
-      const nextOffset = resetOffset ? 0 : offset;
+      const nextOffset = nextOffsetOverride ?? (resetOffset ? 0 : offset);
 
       const data = await listProductsApi({
         limit,
         offset: nextOffset,
         q: q?.trim() || null,
         flag: flagFilter,
+        date_from: dateFrom || null,
+        date_to: dateTo || null,
       });
 
       const items = Array.isArray(data?.items) ? data.items : [];
       setRows(items);
       setTotal(Number(data?.total ?? 0));
+
       if (resetOffset) setOffset(0);
     } catch (err) {
       setError(err?.response?.data?.error ?? "Erro ao carregar produtos.");
     } finally {
       setBusy(false);
     }
+  }
+
+  // ✅ paginação (não debounce)
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [limit, offset]);
+
+  // ✅ filtros automáticos (com debounce)
+  useEffect(() => {
+    if (filtersTimerRef.current) clearTimeout(filtersTimerRef.current);
+
+    filtersTimerRef.current = setTimeout(() => {
+      // sempre volta pra primeira página quando muda filtro
+      load({ resetOffset: true, nextOffsetOverride: 0 });
+    }, 350);
+
+    return () => {
+      if (filtersTimerRef.current) clearTimeout(filtersTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, flagFilter, dateFrom, dateTo]);
+
+  function clearFilters() {
+    setQ("");
+    setFlagFilter("all");
+    setDateFrom("");
+    setDateTo("");
+    setOffset(0);
   }
 
   // Carregamento normal por paginação
@@ -272,7 +306,7 @@ export default function ProductsPage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [limit, offset, q]);
+  }, [limit, offset, q, flagFilter, dateFrom, dateTo]);
 
   const pageInfo = useMemo(() => {
     const start = total === 0 ? 0 : offset + 1;
@@ -297,18 +331,27 @@ export default function ProductsPage() {
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
           <select value={flagFilter} onChange={(e) => setFlagFilter(e.target.value)}>
-            <option value="all">Filtro flag todos</option>
-            <option value="with">Com flag</option>
-            <option value="without">Sem flag</option>
+            <option value="all">Flags: Todos</option>
+            <option value="with">Flags: Com flag</option>
+            <option value="without">Flags: Sem flag</option>
           </select>
+
           <input
             placeholder="Buscar (código/descrição)"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             style={{ width: 260 }}
           />
-          <button onClick={() => load({ resetOffset: true })} disabled={busy}>
-            Buscar
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 12, opacity: 0.75 }}>De</span>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            <span style={{ fontSize: 12, opacity: 0.75 }}>Até</span>
+            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </div>
+
+          <button type="button" onClick={clearFilters} disabled={busy && rows.length === 0}>
+            Limpar filtros
           </button>
         </div>
       </div>

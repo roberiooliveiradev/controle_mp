@@ -5,12 +5,16 @@ export async function listProductsApi({
   limit = 30,
   offset = 0,
   q = null,
-  flag = "all", // ✅ novo parâmetro
+  flag = "all",
+  date_from = null, // YYYY-MM-DD
+  date_to = null,   // YYYY-MM-DD
 } = {}) {
   const params = { limit, offset };
 
   if (q) params.q = q;
   if (flag) params.flag = flag;
+  if (date_from) params.date_from = date_from;
+  if (date_to) params.date_to = date_to;
 
   const { data } = await httpClient.get("/products", { params });
   return data;

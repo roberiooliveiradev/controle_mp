@@ -1,8 +1,9 @@
 # app/services/product_query_service.py
+from datetime import datetime, timedelta
 from sqlalchemy import select, func, exists, and_
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ConflictError
 from app.infrastructure.database.models.product_model import ProductModel
 from app.infrastructure.database.models.product_field_model import ProductFieldModel
 
@@ -11,6 +12,13 @@ class ProductQueryService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def _parse_date(self, s: str) -> datetime:
+        # aceita YYYY-MM-DD
+        try:
+            return datetime.strptime(s, "%Y-%m-%d")
+        except Exception:
+            raise ConflictError("Data inválida. Use o formato YYYY-MM-DD.")
+
     def list_products(
         self,
         *,
@@ -18,6 +26,8 @@ class ProductQueryService:
         offset: int,
         q: str | None,
         flag: str = "all",  # all | with | without
+        date_from: str | None = None,
+        date_to: str | None = None,
     ) -> tuple[list[dict], int]:
 
         base = select(ProductModel).where(ProductModel.is_deleted.is_(False))
@@ -38,6 +48,15 @@ class ProductQueryService:
             base = base.where(flag_predicate)
         elif flag == "without":
             base = base.where(~flag_predicate)
+
+        # filtro por data (coalesce(updated_at, created_at))
+        if date_from:
+            dt_from = self._parse_date(date_from)
+            base = base.where(func.coalesce(ProductModel.updated_at, ProductModel.created_at) >= dt_from)
+
+        if date_to:
+            dt_to = self._parse_date(date_to) + timedelta(days=1)  # exclusivo no próximo dia
+            base = base.where(func.coalesce(ProductModel.updated_at, ProductModel.created_at) < dt_to)
 
         total_stmt = select(func.count()).select_from(base.subquery())
         total = int(self._session.execute(total_stmt).scalar_one())
@@ -71,14 +90,11 @@ class ProductQueryService:
         for f in fields:
             by_pid.setdefault(int(f.product_id), {})[f.field_tag] = f.field_value
 
-        # contagem de flags por produto (para exibir na listagem)
+        # contagem de flags por produto
         flags_by_pid: dict[int, int] = {}
         if pids:
             flags_stmt = (
-                select(
-                    ProductFieldModel.product_id,
-                    func.count(ProductFieldModel.id),
-                )
+                select(ProductFieldModel.product_id, func.count(ProductFieldModel.id))
                 .where(
                     ProductFieldModel.product_id.in_(pids),
                     ProductFieldModel.is_deleted.is_(False),
@@ -87,7 +103,6 @@ class ProductQueryService:
                 )
                 .group_by(ProductFieldModel.product_id)
             )
-
             for product_id, total_flags in self._session.execute(flags_stmt).all():
                 flags_by_pid[int(product_id)] = int(total_flags)
 
@@ -116,6 +131,29 @@ class ProductQueryService:
             ]
 
         return rows, total
+
+    def get_product(self, *, product_id: int):
+        p = (
+            self._session.execute(
+                select(ProductModel).where(ProductModel.id == int(product_id), ProductModel.is_deleted.is_(False))
+            )
+            .scalars()
+            .first()
+        )
+        if p is None:
+            raise NotFoundError("Produto não encontrado.")
+
+        fields = list(
+            self._session.execute(
+                select(ProductFieldModel)
+                .where(ProductFieldModel.product_id == int(product_id), ProductFieldModel.is_deleted.is_(False))
+                .order_by(ProductFieldModel.id.asc())
+            )
+            .scalars()
+            .all()
+        )
+        return p, fields
+
 
     def get_product(self, *, product_id: int) -> tuple[ProductModel, list[ProductFieldModel]]:
         p = self._session.execute(
