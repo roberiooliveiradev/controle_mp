@@ -1,4 +1,5 @@
 # app/api/routes/file_routes.py
+
 from __future__ import annotations
 
 from flask import Blueprint, jsonify, request, send_file, g
@@ -15,16 +16,24 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_file_repository import MessageFileRepository
 from app.services.file_service import FileService
 
-
-bp_files = Blueprint(
-    "files",
-    __name__,
-)
+from app.services.audit_service import AuditService
+from app.repositories.audit_log_repository import AuditLogRepository
 
 
-def _auth_user():
+bp_files = Blueprint("files", __name__)
+
+
+# -------------------------
+# Helpers
+# -------------------------
+
+def _auth_user() -> tuple[int, int]:
     auth = getattr(g, "auth", None)
     return int(auth["sub"]), int(auth["role_id"])
+
+
+def _build_audit(session) -> AuditService:
+    return AuditService(AuditLogRepository(session))
 
 
 def _get_upload_files() -> list[WzFileStorage]:
@@ -55,9 +64,15 @@ def _validate_mime(mimetype: str | None) -> None:
         raise ConflictError(f"Tipo de arquivo não permitido: '{mimetype}'.")
 
 
+# -------------------------
+# Upload (mutação) + Auditoria
+# -------------------------
+
 @bp_files.post("/upload")
 @require_auth
 def upload_files():
+    user_id, role_id = _auth_user()
+
     files = _get_upload_files()
     if not files:
         raise ConflictError("Nenhum arquivo enviado. Use multipart/form-data com 'files' ou 'file'.")
@@ -103,14 +118,33 @@ def upload_files():
             )
 
     except Exception:
-        # rollback best-effort do que já foi salvo nesta requisição
         for stored_name in saved_stored_names:
             storage.delete(stored_name=stored_name)
         raise
 
+    # ✅ Auditoria (evento de upload)
+    with db_session() as session:
+        audit = _build_audit(session)
+        # detalhes compactos e úteis (evita estourar texto)
+        # mantém no máximo 10 nomes/sha para não inflar logs
+        sample = out[:10]
+        sample_str = ",".join([f"{x.original_name}:{x.size_bytes}:{x.sha256}" for x in sample])
+
+        audit.log(
+            entity_name="tbMessageFiles",
+            entity_id=None,
+            action_name="CREATED",
+            user_id=int(user_id),
+            details=f"files_count={len(out)}; sample={sample_str}",
+        )
+
     payload = UploadFilesResponse(files=out).model_dump()
     return jsonify(payload), 201
 
+
+# -------------------------
+# Download (consulta) - sem auditoria
+# -------------------------
 
 @bp_files.get("/<int:file_id>/download")
 @require_auth
@@ -126,9 +160,8 @@ def download_file(file_id: int):
 
     storage = LocalFileStorage(config=LocalFileStorageConfig(base_path=settings.files_base_path))
 
-    # local_file_storage garante que stored_name resolve dentro da base (anti path traversal)
     try:
-        abs_path = storage._abs_path_from_stored(f.stored_name)  # noqa: SLF001 (uso interno controlado)
+        abs_path = storage._abs_path_from_stored(f.stored_name)  # noqa: SLF001
     except ValueError:
         raise NotFoundError("Arquivo não encontrado.")
 

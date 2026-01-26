@@ -1,5 +1,7 @@
 # app/api/routes/request_routes.py
 
+from __future__ import annotations
+
 from datetime import date
 from flask import Blueprint, jsonify, g, request
 
@@ -15,29 +17,39 @@ from app.api.schemas.request_schema import (
     RequestItemFieldResponse,
     RequestItemListResponse,
     RequestItemListRowResponse,
+    RequestTypeMiniResponse,
+    RequestStatusMiniResponse,
+    RequestMetaResponse,
 )
+
 from app.infrastructure.database.session import db_session
+
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.request_repository import RequestRepository
 from app.repositories.request_item_repository import RequestItemRepository
 from app.repositories.request_item_field_repository import RequestItemFieldRepository
-from app.services.request_service import RequestService
 from app.repositories.request_status_repository import RequestStatusRepository
 from app.repositories.request_type_repository import RequestTypeRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.product_field_repository import ProductFieldRepository
-from app.api.schemas.request_schema import (
-    RequestTypeMiniResponse,
-    RequestStatusMiniResponse,
-    RequestMetaResponse,
-)
+
+from app.services.request_service import RequestService
+
+from app.services.audit_service import AuditService
+from app.repositories.audit_log_repository import AuditLogRepository
+
 from app.infrastructure.realtime.socketio_request_notifier import SocketIORequestNotifier
+
 
 bp_req = Blueprint("requests", __name__, url_prefix="/api/requests")
 
 
-def _auth_user():
+# -------------------------
+# Helpers
+# -------------------------
+
+def _auth_user() -> tuple[int, int]:
     auth = getattr(g, "auth", None)
     return int(auth["sub"]), int(auth["role_id"])
 
@@ -55,6 +67,14 @@ def _build_service(session) -> RequestService:
         pfield_repo=ProductFieldRepository(session),
         notifier=SocketIORequestNotifier(),
     )
+
+
+def _build_audit(session) -> AuditService:
+    return AuditService(AuditLogRepository(session))
+
+
+def _keys_of(d: dict) -> list[str]:
+    return sorted([str(k) for k in d.keys()])
 
 
 def _pack_request(req, items, fields_map, type_map, status_map) -> dict:
@@ -108,7 +128,20 @@ def _pack_request(req, items, fields_map, type_map, status_map) -> dict:
     ).model_dump()
 
 
-# -------- Request CRUD --------
+def _parse_date_yyyy_mm_dd(s: str | None) -> date | None:
+    if not s:
+        return None
+    try:
+        y, m, d = s.split("-")
+        return date(int(y), int(m), int(d))
+    except Exception:
+        return None
+
+
+# -------------------------
+# Request CRUD
+# -------------------------
+
 @bp_req.post("")
 @require_auth
 def create_request():
@@ -117,14 +150,25 @@ def create_request():
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         req = svc.create_request(
             message_id=payload.message_id,
             created_by=user_id,
             role_id=role_id,
             items=[i.model_dump() for i in payload.items],
         )
+
         req2, items, fields_map, type_map, status_map = svc.get_request(
             request_id=req.id, user_id=user_id, role_id=role_id
+        )
+
+        audit.log(
+            entity_name="tbRequest",
+            entity_id=req.id,
+            action_name="CREATED",
+            user_id=user_id,
+            details=f"message_id={payload.message_id}; items_count={len(payload.items)}",
         )
 
     return jsonify(_pack_request(req2, items, fields_map, type_map, status_map)), 201
@@ -151,12 +195,25 @@ def delete_request(request_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         svc.delete_request(request_id=request_id, user_id=user_id, role_id=role_id)
+
+        audit.log(
+            entity_name="tbRequest",
+            entity_id=request_id,
+            action_name="DELETED",
+            user_id=user_id,
+            details="request deleted",
+        )
 
     return ("", 204)
 
 
-# -------- Items CRUD --------
+# -------------------------
+# Items CRUD
+# -------------------------
+
 @bp_req.post("/<int:request_id>/items")
 @require_auth
 def add_item(request_id: int):
@@ -165,12 +222,23 @@ def add_item(request_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         it = svc.add_item(
             request_id=request_id,
             user_id=user_id,
             role_id=role_id,
             payload=payload.model_dump(),
         )
+
+        audit.log(
+            entity_name="tbRequestItem",
+            entity_id=it.id,  # ✅ correto: item recém criado
+            action_name="CREATED",
+            user_id=user_id,
+            details=f"request_id={request_id}; keys={_keys_of(payload.model_dump())}",
+        )
+
     return jsonify({"id": it.id}), 201
 
 
@@ -184,7 +252,17 @@ def update_item(item_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         svc.update_item(item_id=item_id, user_id=user_id, role_id=role_id, values=values)
+
+        audit.log(
+            entity_name="tbRequestItem",
+            entity_id=item_id,
+            action_name="UPDATED",
+            user_id=user_id,
+            details=f"changed_keys={_keys_of(values)}",
+        )
 
     return ("", 204)
 
@@ -196,12 +274,25 @@ def delete_item(item_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         svc.delete_item(item_id=item_id, user_id=user_id, role_id=role_id)
+
+        audit.log(
+            entity_name="tbRequestItem",
+            entity_id=item_id,
+            action_name="DELETED",
+            user_id=user_id,
+            details="item deleted",
+        )
 
     return ("", 204)
 
 
-# -------- NEW: Resubmit (explicit) --------
+# -------------------------
+# Resubmit (explicit)
+# -------------------------
+
 @bp_req.patch("/items/<int:item_id>/resubmit")
 @require_auth
 def resubmit_item(item_id: int):
@@ -213,12 +304,25 @@ def resubmit_item(item_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         svc.resubmit_returned_item(item_id=item_id, user_id=user_id, role_id=role_id)
+
+        audit.log(
+            entity_name="tbRequestItem",
+            entity_id=item_id,
+            action_name="STATUS_CHANGED",
+            user_id=user_id,
+            details="resubmit (RETURNED -> CREATED)",
+        )
 
     return ("", 204)
 
 
-# -------- Fields CRUD --------
+# -------------------------
+# Fields CRUD
+# -------------------------
+
 @bp_req.post("/items/<int:item_id>/fields")
 @require_auth
 def add_field(item_id: int):
@@ -227,7 +331,22 @@ def add_field(item_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
-        f = svc.add_field(item_id=item_id, user_id=user_id, role_id=role_id, payload=payload.model_dump())
+        audit = _build_audit(session)
+
+        f = svc.add_field(
+            item_id=item_id,
+            user_id=user_id,
+            role_id=role_id,
+            payload=payload.model_dump(),
+        )
+
+        audit.log(
+            entity_name="tbRequestItemFields",
+            entity_id=f.id,  # ✅ correto: field recém criado
+            action_name="CREATED",
+            user_id=user_id,
+            details=f"item_id={item_id}; field_tag={payload.field_tag}",
+        )
 
     return jsonify({"id": f.id}), 201
 
@@ -242,9 +361,20 @@ def update_field(field_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         svc.update_field(field_id=field_id, user_id=user_id, role_id=role_id, values=values)
 
+        audit.log(
+            entity_name="tbRequestItemFields",
+            entity_id=field_id,
+            action_name="UPDATED",
+            user_id=user_id,
+            details=f"changed_keys={_keys_of(values)}",
+        )
+
     return ("", 204)
+
 
 @bp_req.patch("/fields/<int:field_id>/flag")
 @require_auth
@@ -252,16 +382,26 @@ def set_field_flag(field_id: int):
     user_id, role_id = _auth_user()
     body = request.get_json(force=True) or {}
 
-    # aceita string ou null para remover
     flag = body.get("field_flag")
     if flag is not None:
         flag = str(flag).strip() or None
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         svc.set_field_flag(field_id=int(field_id), user_id=user_id, role_id=role_id, field_flag=flag)
 
+        audit.log(
+            entity_name="tbRequestItemFields",
+            entity_id=field_id,
+            action_name="FLAG_UPDATED",
+            user_id=user_id,
+            details=f"field_flag={flag}",
+        )
+
     return ("", 204)
+
 
 @bp_req.delete("/fields/<int:field_id>")
 @require_auth
@@ -270,22 +410,25 @@ def delete_field(field_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         svc.delete_field(field_id=field_id, user_id=user_id, role_id=role_id)
+
+        audit.log(
+            entity_name="tbRequestItemFields",
+            entity_id=field_id,
+            action_name="DELETED",
+            user_id=user_id,
+            details="field deleted",
+        )
 
     return ("", 204)
 
 
-def _parse_date_yyyy_mm_dd(s: str | None) -> date | None:
-    if not s:
-        return None
-    try:
-        y, m, d = s.split("-")
-        return date(int(y), int(m), int(d))
-    except Exception:
-        return None
+# -------------------------
+# Listagem (tela)
+# -------------------------
 
-
-# -------- Listagem (tela) --------
 @bp_req.get("/items")
 @require_auth
 def list_request_items():
@@ -345,17 +488,24 @@ def list_request_items():
     return jsonify(payload), 200
 
 
+# -------------------------
+# Status change
+# -------------------------
+
 @bp_req.patch("/items/<int:item_id>/status")
 @require_auth
 def change_item_status(item_id: int):
     user_id, role_id = _auth_user()
     body = request.get_json(force=True) or {}
     new_status_id = body.get("request_status_id")
+
     if new_status_id is None:
         return jsonify({"error": "Campo obrigatório: request_status_id"}), 400
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         svc.change_item_status(
             item_id=item_id,
             new_status_id=int(new_status_id),
@@ -363,8 +513,20 @@ def change_item_status(item_id: int):
             role_id=role_id,
         )
 
+        audit.log(
+            entity_name="tbRequestItem",
+            entity_id=item_id,
+            action_name="STATUS_CHANGED",
+            user_id=user_id,
+            details=f"new_status_id={int(new_status_id)}",
+        )
+
     return ("", 204)
 
+
+# -------------------------
+# Meta
+# -------------------------
 
 @bp_req.get("/meta")
 @require_auth

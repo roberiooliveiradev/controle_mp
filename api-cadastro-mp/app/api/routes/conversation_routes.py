@@ -1,4 +1,7 @@
 # app/api/routes/conversation_routes.py
+
+from __future__ import annotations
+
 from flask import Blueprint, jsonify, g, request
 
 from app.api.middlewares.auth_middleware import require_auth
@@ -17,17 +20,29 @@ from app.infrastructure.realtime.socketio_conversation_notifier import (
     SocketIOConversationNotifier,
 )
 
+from app.services.audit_service import AuditService
+from app.repositories.audit_log_repository import AuditLogRepository
+
+
 bp_conv = Blueprint("conversations", __name__, url_prefix="/conversations")
 
+
+# -------------------------
+# Helpers
+# -------------------------
+
 def _build_service(session) -> ConversationService:
-    """Centraliza a criação do ConversationService."""
     return ConversationService(
         ConversationRepository(session),
         notifier=SocketIOConversationNotifier(),
     )
 
 
-def _auth_user():
+def _build_audit(session) -> AuditService:
+    return AuditService(AuditLogRepository(session))
+
+
+def _auth_user() -> tuple[int, int]:
     auth = getattr(g, "auth", None)
     user_id = int(auth["sub"])
     role_id = int(auth["role_id"])
@@ -51,6 +66,10 @@ def _row_to_response(row) -> dict:
     ).model_dump()
 
 
+# -------------------------
+# Rotas (consulta)
+# -------------------------
+
 @bp_conv.get("")
 @require_auth
 def list_conversations():
@@ -68,36 +87,8 @@ def list_conversations():
             offset=offset,
         )
 
-    payload = []
-    for row in rows:
-        payload.append(
-            ConversationListItemResponse(**_row_to_response(row)).model_dump()
-        )
-
+    payload = [ConversationListItemResponse(**_row_to_response(row)).model_dump() for row in rows]
     return jsonify(payload), 200
-
-
-@bp_conv.post("")
-@require_auth
-def create_conversation():
-    user_id, role_id = _auth_user()
-    payload = CreateConversationRequest.model_validate(request.get_json(force=True))
-
-    with db_session() as session:
-        service = ConversationService(
-            ConversationRepository(session),
-            notifier=SocketIOConversationNotifier(),
-        )
-        conv = service.create_conversation(
-            title=payload.title,
-            created_by=user_id,
-            assigned_to=payload.assigned_to_id,
-            has_flag=payload.has_flag,
-        )
-        # refaz fetch com join pra devolver UserMiniResponse
-        row = service.get_conversation(conversation_id=conv.id, user_id=user_id, role_id=role_id)
-
-    return jsonify(_row_to_response(row)), 201
 
 
 @bp_conv.get("/<int:conversation_id>")
@@ -116,6 +107,40 @@ def get_conversation(conversation_id: int):
     return jsonify(_row_to_response(row)), 200
 
 
+# -------------------------
+# Rotas (mutação) + Auditoria
+# -------------------------
+
+@bp_conv.post("")
+@require_auth
+def create_conversation():
+    user_id, role_id = _auth_user()
+    payload = CreateConversationRequest.model_validate(request.get_json(force=True))
+
+    with db_session() as session:
+        service = _build_service(session)
+        audit = _build_audit(session)
+
+        conv = service.create_conversation(
+            title=payload.title,
+            created_by=user_id,
+            assigned_to=payload.assigned_to_id,
+            has_flag=payload.has_flag,
+        )
+
+        audit.log(
+            entity_name="tbConversations",
+            entity_id=int(conv.id),
+            action_name="CREATED",
+            user_id=int(user_id),
+            details=f"assigned_to={payload.assigned_to_id}; has_flag={bool(payload.has_flag)}",
+        )
+
+        row = service.get_conversation(conversation_id=conv.id, user_id=user_id, role_id=role_id)
+
+    return jsonify(_row_to_response(row)), 201
+
+
 @bp_conv.patch("/<int:conversation_id>")
 @require_auth
 def update_conversation(conversation_id: int):
@@ -124,6 +149,8 @@ def update_conversation(conversation_id: int):
 
     with db_session() as session:
         service = _build_service(session)
+        audit = _build_audit(session)
+
         service.update_conversation(
             conversation_id=conversation_id,
             user_id=user_id,
@@ -132,6 +159,15 @@ def update_conversation(conversation_id: int):
             has_flag=payload.has_flag,
             assigned_to=payload.assigned_to_id,
         )
+
+        audit.log(
+            entity_name="tbConversations",
+            entity_id=int(conversation_id),
+            action_name="UPDATED",
+            user_id=int(user_id),
+            details=f"changed=title,has_flag,assigned_to; assigned_to={payload.assigned_to_id}; has_flag={bool(payload.has_flag)}",
+        )
+
         row = service.get_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
     return jsonify(_row_to_response(row)), 200
@@ -144,6 +180,16 @@ def delete_conversation(conversation_id: int):
 
     with db_session() as session:
         service = _build_service(session)
+        audit = _build_audit(session)
+
         service.delete_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+
+        audit.log(
+            entity_name="tbConversations",
+            entity_id=int(conversation_id),
+            action_name="DELETED",
+            user_id=int(user_id),
+            details="conversation deleted",
+        )
 
     return ("", 204)

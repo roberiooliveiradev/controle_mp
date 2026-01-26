@@ -1,5 +1,7 @@
 # app/api/routes/message_routes.py
 
+from __future__ import annotations
+
 from flask import Blueprint, jsonify, g, request
 
 from app.api.middlewares.auth_middleware import require_auth
@@ -11,6 +13,12 @@ from app.api.schemas.message_schema import (
     RequestMiniResponse,
     UserMiniResponse,
 )
+from app.api.schemas.request_schema import (
+    RequestResponse,
+    RequestItemResponse,
+    RequestItemFieldResponse,
+)
+
 from app.infrastructure.database.session import db_session
 
 from app.repositories.conversation_repository import ConversationRepository
@@ -19,9 +27,12 @@ from app.repositories.message_repository import MessageRepository
 from app.repositories.message_file_repository import MessageFileRepository
 from app.repositories.request_repository import RequestRepository
 from app.repositories.message_type_repository import MessageTypeRepository
-
 from app.repositories.request_item_repository import RequestItemRepository
 from app.repositories.request_item_field_repository import RequestItemFieldRepository
+from app.repositories.product_repository import ProductRepository
+from app.repositories.product_field_repository import ProductFieldRepository
+from app.repositories.request_status_repository import RequestStatusRepository
+from app.repositories.request_type_repository import RequestTypeRepository
 
 from app.services.request_service import RequestService
 from app.services.message_service import MessageService
@@ -29,17 +40,9 @@ from app.services.message_service import MessageService
 from app.infrastructure.realtime.socketio_message_notifier import SocketIOMessageNotifier
 from app.infrastructure.realtime.socketio_request_notifier import SocketIORequestNotifier
 
-from app.api.schemas.request_schema import (
-    RequestResponse,
-    RequestItemResponse,
-    RequestItemFieldResponse,
-)
+from app.services.audit_service import AuditService
+from app.repositories.audit_log_repository import AuditLogRepository
 
-from app.repositories.product_repository import ProductRepository
-from app.repositories.product_field_repository import ProductFieldRepository
-
-from app.repositories.request_status_repository import RequestStatusRepository
-from app.repositories.request_type_repository import RequestTypeRepository
 
 bp_msg = Blueprint(
     "messages",
@@ -47,12 +50,21 @@ bp_msg = Blueprint(
     url_prefix="/conversations/<int:conversation_id>/messages",
 )
 
-def _auth_user():
+
+# -------------------------
+# Helpers
+# -------------------------
+
+def _auth_user() -> tuple[int, int]:
     auth = getattr(g, "auth", None)
     return int(auth["sub"]), int(auth["role_id"])
 
-def _pack_request_full(req, items, fields_map, type_map, status_map) -> dict:
 
+def _build_audit(session) -> AuditService:
+    return AuditService(AuditLogRepository(session))
+
+
+def _pack_request_full(req, items, fields_map, type_map, status_map) -> dict:
     return RequestResponse(
         id=req.id,
         message_id=req.message_id,
@@ -102,6 +114,7 @@ def _pack_request_full(req, items, fields_map, type_map, status_map) -> dict:
         ],
     ).model_dump()
 
+
 def _pack_response(item: dict) -> dict:
     msg = item["msg"]
     sender = item["sender"]
@@ -148,6 +161,7 @@ def _pack_response(item: dict) -> dict:
         is_read=is_read,
     ).model_dump()
 
+
 def _build_service(session) -> MessageService:
     req_service = RequestService(
         conv_repo=ConversationRepository(session),
@@ -174,6 +188,9 @@ def _build_service(session) -> MessageService:
     )
 
 
+# -------------------------
+# Rotas (consulta)
+# -------------------------
 
 @bp_msg.get("")
 @require_auth
@@ -193,39 +210,6 @@ def list_messages(conversation_id: int):
         )
 
     return jsonify([_pack_response(x) for x in items]), 200
-
-
-@bp_msg.post("")
-@require_auth
-def create_message(conversation_id: int):
-    user_id, role_id = _auth_user()
-    payload = CreateMessageRequestInput.model_validate(request.get_json(force=True))
-
-    files_payload = [f.model_dump() for f in (payload.files or [])] if payload.files else None
-    request_items_payload = [i.model_dump() for i in (payload.request_items or [])] if payload.request_items else None
-
-    with db_session() as session:
-        svc = _build_service(session)
-
-        msg = svc.create_message(
-            conversation_id=conversation_id,
-            user_id=user_id,
-            role_id=role_id,
-            message_type_id=payload.message_type_id,
-            body=payload.body,
-            files=files_payload,
-            create_request=payload.create_request,
-            request_items=request_items_payload,
-        )
-
-        item = svc.get_message(
-            conversation_id=conversation_id,
-            message_id=msg.id,
-            user_id=user_id,
-            role_id=role_id,
-        )
-
-    return jsonify(_pack_response(item)), 201
 
 
 @bp_msg.get("/<int:message_id>")
@@ -263,6 +247,58 @@ def mark_read(conversation_id: int):
     return jsonify({"updated": bool(changed)}), 200
 
 
+# -------------------------
+# Rotas (mutação) + Auditoria
+# -------------------------
+
+@bp_msg.post("")
+@require_auth
+def create_message(conversation_id: int):
+    user_id, role_id = _auth_user()
+    payload = CreateMessageRequestInput.model_validate(request.get_json(force=True))
+
+    files_payload = [f.model_dump() for f in (payload.files or [])] if payload.files else None
+    request_items_payload = [i.model_dump() for i in (payload.request_items or [])] if payload.request_items else None
+
+    with db_session() as session:
+        svc = _build_service(session)
+        audit = _build_audit(session)
+
+        msg = svc.create_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role_id=role_id,
+            message_type_id=payload.message_type_id,
+            body=payload.body,
+            files=files_payload,
+            create_request=payload.create_request,
+            request_items=request_items_payload,
+        )
+
+        audit.log(
+            entity_name="tbMessages",
+            entity_id=int(msg.id),
+            action_name="CREATED",
+            user_id=int(user_id),
+            details=(
+                f"conversation_id={conversation_id}; "
+                f"message_type_id={payload.message_type_id}; "
+                f"has_body={bool(payload.body)}; "
+                f"files_count={(len(files_payload) if files_payload else 0)}; "
+                f"create_request={bool(payload.create_request)}"
+            ),
+        )
+
+        item = svc.get_message(
+            conversation_id=conversation_id,
+            message_id=msg.id,
+            user_id=user_id,
+            role_id=role_id,
+        )
+
+    return jsonify(_pack_response(item)), 201
+
+
 @bp_msg.delete("/<int:message_id>")
 @require_auth
 def delete_message(conversation_id: int, message_id: int):
@@ -270,11 +306,21 @@ def delete_message(conversation_id: int, message_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         svc.delete_message(
             conversation_id=conversation_id,
             message_id=message_id,
             user_id=user_id,
             role_id=role_id,
+        )
+
+        audit.log(
+            entity_name="tbMessages",
+            entity_id=int(message_id),
+            action_name="DELETED",
+            user_id=int(user_id),
+            details=f"conversation_id={conversation_id}",
         )
 
     return ("", 204)

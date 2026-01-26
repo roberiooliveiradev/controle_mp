@@ -1,14 +1,18 @@
 # app/api/routes/product_routes.py
 
+from __future__ import annotations
+
 from flask import Blueprint, jsonify, request, g
+
+from app.api.middlewares.auth_middleware import require_auth
+from app.infrastructure.database.session import db_session
 
 from app.repositories.product_repository import ProductRepository
 from app.repositories.product_field_repository import ProductFieldRepository
 from app.repositories.request_item_repository import RequestItemRepository
-from app.services.product_service import ProductService
 
-from app.api.middlewares.auth_middleware import require_auth
-from app.infrastructure.database.session import db_session
+from app.services.product_service import ProductService
+from app.services.product_query_service import ProductQueryService
 
 from app.api.schemas.product_schema import (
     ProductListResponse,
@@ -17,15 +21,20 @@ from app.api.schemas.product_schema import (
     ProductFieldResponse,
 )
 
-from app.services.product_query_service import ProductQueryService
-
 from app.infrastructure.realtime.socketio_product_notifier import SocketIOProductNotifier
+
+from app.services.audit_service import AuditService
+from app.repositories.audit_log_repository import AuditLogRepository
 
 
 bp_prod = Blueprint("products", __name__, url_prefix="/api/products")
 
 
-def _auth_user():
+# -------------------------
+# Helpers
+# -------------------------
+
+def _auth_user() -> tuple[int, int]:
     auth = getattr(g, "auth", None)
     return int(auth["sub"]), int(auth["role_id"])
 
@@ -39,6 +48,13 @@ def _build_service(session) -> ProductService:
     )
 
 
+def _build_audit(session) -> AuditService:
+    return AuditService(AuditLogRepository(session))
+
+
+# -------------------------
+# Rotas (consulta)
+# -------------------------
 
 @bp_prod.get("")
 @require_auth
@@ -108,9 +124,17 @@ def get_product(product_id: int):
     return jsonify(payload), 200
 
 
+# -------------------------
+# Rotas (mutação) + Auditoria
+# -------------------------
+
 @bp_prod.patch("/fields/<int:field_id>/flag")
 @require_auth
 def set_product_field_flag(field_id: int):
+    """
+    Atualiza o flag do campo do produto.
+    Auditoria: registra FLAG_UPDATED em tbProductFields.
+    """
     user_id, role_id = _auth_user()
     body = request.get_json(force=True) or {}
 
@@ -120,6 +144,8 @@ def set_product_field_flag(field_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
+        audit = _build_audit(session)
+
         svc.set_product_field_flag(
             field_id=int(field_id),
             role_id=role_id,
@@ -127,5 +153,12 @@ def set_product_field_flag(field_id: int):
             field_flag=flag,
         )
 
-    return ("", 204)
+        audit.log(
+            entity_name="tbProductFields",
+            entity_id=int(field_id),
+            action_name="FLAG_UPDATED",
+            user_id=int(user_id),
+            details=f"field_flag={flag}",
+        )
 
+    return ("", 204)
