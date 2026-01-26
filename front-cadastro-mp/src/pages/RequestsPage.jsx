@@ -942,7 +942,7 @@ export default function RequestsPage() {
           <table style={{ width: "100%", borderCollapse: "collapse"}}>
             <thead>
               <tr style={{ background: "var(--surface-2)" }}>
-                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Item</th>
+                <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>ID</th>
                 <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Tipo</th>
                 <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Status</th>
                 <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Criado por</th>
@@ -982,7 +982,7 @@ export default function RequestsPage() {
                     <tr key={r.item_id}>
                       <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
                         <div style={{ display: "grid" }}>
-                          <span style={{ fontWeight: 700 }}>#{r.item_id}</span>
+                          <span style={{ fontWeight: 700 }}>{r.item_id}</span>
                         </div>
                       </td>
 
