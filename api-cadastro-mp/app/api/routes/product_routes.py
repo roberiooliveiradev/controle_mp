@@ -19,6 +19,8 @@ from app.api.schemas.product_schema import (
 
 from app.services.product_query_service import ProductQueryService
 
+from app.infrastructure.realtime.socketio_product_notifier import SocketIOProductNotifier
+
 
 bp_prod = Blueprint("products", __name__, url_prefix="/api/products")
 
@@ -33,6 +35,7 @@ def _build_service(session) -> ProductService:
         product_repo=ProductRepository(session),
         pfield_repo=ProductFieldRepository(session),
         item_repo=RequestItemRepository(session),
+        product_notifier=SocketIOProductNotifier(),
     )
 
 
@@ -48,9 +51,18 @@ def list_products():
 
     q = (request.args.get("q") or "").strip() or None
 
+    flag_mode = (request.args.get("flag") or "all").strip().lower()
+    if flag_mode not in ("all", "with", "without"):
+        return jsonify({"error": "Parâmetro flag inválido. Use: all | with | without"}), 400
+
     with db_session() as session:
         svc = ProductQueryService(session)
-        rows, total = svc.list_products(limit=limit, offset=offset, q=q)
+        rows, total = svc.list_products(
+            limit=limit,
+            offset=offset,
+            q=q,
+            flag=flag_mode,  # ✅ agora passa o filtro
+        )
 
     payload = ProductListResponse(
         items=[ProductListRowResponse(**r) for r in rows],
@@ -94,7 +106,7 @@ def get_product(product_id: int):
 @bp_prod.patch("/fields/<int:field_id>/flag")
 @require_auth
 def set_product_field_flag(field_id: int):
-    _user_id, role_id = _auth_user()
+    user_id, role_id = _auth_user()
     body = request.get_json(force=True) or {}
 
     flag = body.get("field_flag")
@@ -103,6 +115,12 @@ def set_product_field_flag(field_id: int):
 
     with db_session() as session:
         svc = _build_service(session)
-        svc.set_product_field_flag(field_id=int(field_id), role_id=role_id, field_flag=flag)
+        svc.set_product_field_flag(
+            field_id=int(field_id),
+            role_id=role_id,
+            changed_by=int(user_id),
+            field_flag=flag,
+        )
 
     return ("", 204)
+

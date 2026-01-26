@@ -1,8 +1,7 @@
 # app/services/product_service.py
-
 from sqlalchemy.orm import Session
 from enum import IntEnum
-
+from datetime import datetime, timezone
 
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.infrastructure.database.models.product_model import ProductModel
@@ -14,11 +13,19 @@ from app.repositories.product_repository import ProductRepository
 from app.repositories.product_field_repository import ProductFieldRepository
 from app.repositories.request_item_repository import RequestItemRepository
 
+from app.core.interfaces.product_notifier import (
+    ProductNotifier,
+    ProductCreatedEvent,
+    ProductUpdatedEvent,
+    ProductFlagChangedEvent,
+)
+
 
 class Role(IntEnum):
     ADMIN = 1
     ANALYST = 2
     USER = 3
+
 
 class ProductService:
     def __init__(
@@ -27,10 +34,15 @@ class ProductService:
         product_repo: ProductRepository,
         pfield_repo: ProductFieldRepository,
         item_repo: RequestItemRepository,
+        product_notifier: ProductNotifier | None = None,
     ) -> None:
         self._product_repo = product_repo
         self._pfield_repo = pfield_repo
         self._item_repo = item_repo
+        self._product_notifier = product_notifier
+
+    def _now_iso(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
 
     def _get_field_value(self, fields: list[RequestItemFieldModel], tag: str) -> str:
         for f in fields:
@@ -72,9 +84,10 @@ class ProductService:
         *,
         item: RequestItemModel,
         item_fields: list[RequestItemFieldModel],
+        applied_by: int,
     ) -> int:
         """
-        Aplica o snapshot de RequestItemFields no Produto, criando/atualizando tbProduct e tbProductFields.
+        Aplica o snapshot de RequestItemFields no Produto.
         Retorna product_id.
         """
 
@@ -83,62 +96,47 @@ class ProductService:
         codigo_atual = self._get_field_value(item_fields, "codigo_atual")
         novo_codigo = self._get_field_value(item_fields, "novo_codigo")
 
-        # --- validação de finalização (mantém suas regras atuais) ---
         if request_type_id == 1:  # CREATE
             if not novo_codigo:
                 raise ConflictError("Para finalizar CREATE, o campo 'novo_codigo' é obrigatório.")
             effective_code = novo_codigo
-
-            # ✅ CREATE: procurar existente por codigo_atual == novo_codigo (porque produto só tem codigo_atual)
             lookup_code = novo_codigo
 
         elif request_type_id == 2:  # UPDATE
-            # ✅ UPDATE: usa codigo_atual como chave do produto (é o código atual do produto)
             if not codigo_atual:
                 raise ConflictError("Para finalizar UPDATE, informe 'codigo_atual'.")
             lookup_code = codigo_atual
-
-            # ✅ se veio novo_codigo, ele sobrescreve o codigo_atual do produto
             effective_code = novo_codigo if novo_codigo else codigo_atual
 
         else:
             raise ConflictError("Tipo de solicitação inválido.")
 
-        # --- encontra produto existente SOMENTE por codigo_atual ---
-        existing_product_id = self._pfield_repo.find_product_id_by_codigo_atual(
-            codigo_atual=lookup_code
-        )
+        existing_product_id = self._pfield_repo.find_product_id_by_codigo_atual(codigo_atual=lookup_code)
 
-        # --- cria produto se não existe ---
-        if existing_product_id is None:
+        created = existing_product_id is None
+        if created:
             p = self._product_repo.add(ProductModel())
             product_id = int(p.id)
         else:
             product_id = int(existing_product_id)
-        
-        # --- aplica campos do item no produto (upsert por tag) ---
+
         codigo_field_type_id: int | None = None
         codigo_field_flag: str | None = None
 
         for f in item_fields:
             tag = str(f.field_tag)
 
-            # capturar metadados do campo de código (pra usar no upsert garantido)
             if tag == "codigo_atual":
                 codigo_field_type_id = int(f.field_type_id)
                 codigo_field_flag = f.field_flag
-                # não faz upsert aqui — vamos garantir no final
                 continue
 
             if tag == "novo_codigo":
-                # no CREATE geralmente só existe este; vamos usar seus metadados
                 if codigo_field_type_id is None:
                     codigo_field_type_id = int(f.field_type_id)
                     codigo_field_flag = f.field_flag
-                # ✅ NÃO grava novo_codigo no produto
                 continue
 
-            # demais campos: upsert 1:1
             self._upsert_product_field(
                 product_id=product_id,
                 field_type_id=int(f.field_type_id),
@@ -147,9 +145,7 @@ class ProductService:
                 flag=f.field_flag,
             )
 
-        # ✅ GARANTIA: produto sempre recebe codigo_atual (mesmo quando só veio novo_codigo no CREATE)
         if codigo_field_type_id is None:
-            # fallback defensivo (caso item_fields venha sem os campos)
             raise ConflictError("Não foi possível determinar o tipo do campo para 'codigo_atual'.")
 
         self._upsert_product_field(
@@ -160,20 +156,42 @@ class ProductService:
             flag=codigo_field_flag,
         )
 
-
         self._product_repo.touch_updated_at(product_id)
-
-        # seta item.product_id (amarração da request finalizada ao produto)
         self._item_repo.update_fields(int(item.id), {"product_id": product_id})
 
+        # 🔔 Notificação realtime (criado/atualizado)
+        if self._product_notifier:
+            descricao = self._get_field_value(item_fields, "descricao") or None
+            now_iso = self._now_iso()
+            if created:
+                self._product_notifier.notify_product_created(
+                    ProductCreatedEvent(
+                        product_id=product_id,
+                        created_by=int(applied_by),
+                        created_at_iso=now_iso,
+                        codigo_atual=effective_code or None,
+                        descricao=descricao,
+                    )
+                )
+            else:
+                self._product_notifier.notify_product_updated(
+                    ProductUpdatedEvent(
+                        product_id=product_id,
+                        updated_by=int(applied_by),
+                        updated_at_iso=now_iso,
+                        codigo_atual=effective_code or None,
+                        descricao=descricao,
+                    )
+                )
+
         return product_id
-    
 
     def set_product_field_flag(
         self,
         *,
         field_id: int,
         role_id: int,
+        changed_by: int,
         field_flag: str | None,
     ) -> None:
         if role_id not in (Role.ADMIN, Role.ANALYST):
@@ -188,3 +206,16 @@ class ProductService:
             raise NotFoundError("Campo do produto não encontrado.")
 
         self._product_repo.touch_updated_at(int(pf.product_id))
+
+        # 🔔 Notificação realtime (flag)
+        if self._product_notifier:
+            self._product_notifier.notify_product_flag_changed(
+                ProductFlagChangedEvent(
+                    product_id=int(pf.product_id),
+                    field_id=int(pf.id),
+                    field_tag=str(pf.field_tag),
+                    field_flag=field_flag,
+                    changed_by=int(changed_by),
+                    changed_at_iso=self._now_iso(),
+                )
+            )

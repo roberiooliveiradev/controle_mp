@@ -1,30 +1,60 @@
 # app/services/product_query_service.py
-
-from sqlalchemy import select, func
+from sqlalchemy import select, func, exists, and_
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError
 from app.infrastructure.database.models.product_model import ProductModel
 from app.infrastructure.database.models.product_field_model import ProductFieldModel
 
+
 class ProductQueryService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def list_products(self, *, limit: int, offset: int, q: str | None) -> tuple[list[dict], int]:
+    def list_products(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        q: str | None,
+        flag: str = "all",  # all | with | without
+    ) -> tuple[list[dict], int]:
+
         base = select(ProductModel).where(ProductModel.is_deleted.is_(False))
+
+        # ✅ filtro por flag no SQL (antes de paginar)
+        flag_predicate = exists(
+            select(1).where(
+                and_(
+                    ProductFieldModel.product_id == ProductModel.id,
+                    ProductFieldModel.is_deleted.is_(False),
+                    ProductFieldModel.field_flag.is_not(None),
+                    ProductFieldModel.field_flag != "",
+                )
+            )
+        )
+
+        if flag == "with":
+            base = base.where(flag_predicate)
+        elif flag == "without":
+            base = base.where(~flag_predicate)
+
         total_stmt = select(func.count()).select_from(base.subquery())
         total = int(self._session.execute(total_stmt).scalar_one())
 
         page = (
-            base.order_by(func.coalesce(ProductModel.updated_at, ProductModel.created_at).desc(), ProductModel.id.desc())
+            base.order_by(
+                func.coalesce(ProductModel.updated_at, ProductModel.created_at).desc(),
+                ProductModel.id.desc(),
+            )
             .limit(int(limit))
             .offset(int(offset))
         )
-        products = list(self._session.execute(page).scalars().all())
 
-        # busca fields apenas para preencher codigo_atual/descricao na listagem (simples)
+        products = list(self._session.execute(page).scalars().all())
         pids = [int(p.id) for p in products]
+
+        # campos básicos
         fields = []
         if pids:
             stmtf = (
@@ -41,6 +71,26 @@ class ProductQueryService:
         for f in fields:
             by_pid.setdefault(int(f.product_id), {})[f.field_tag] = f.field_value
 
+        # contagem de flags por produto (para exibir na listagem)
+        flags_by_pid: dict[int, int] = {}
+        if pids:
+            flags_stmt = (
+                select(
+                    ProductFieldModel.product_id,
+                    func.count(ProductFieldModel.id),
+                )
+                .where(
+                    ProductFieldModel.product_id.in_(pids),
+                    ProductFieldModel.is_deleted.is_(False),
+                    ProductFieldModel.field_flag.is_not(None),
+                    ProductFieldModel.field_flag != "",
+                )
+                .group_by(ProductFieldModel.product_id)
+            )
+
+            for product_id, total_flags in self._session.execute(flags_stmt).all():
+                flags_by_pid[int(product_id)] = int(total_flags)
+
         rows = []
         for p in products:
             d = by_pid.get(int(p.id), {})
@@ -51,13 +101,19 @@ class ProductQueryService:
                     "updated_at": p.updated_at,
                     "codigo_atual": d.get("codigo_atual"),
                     "descricao": d.get("descricao"),
+                    "flags_count": flags_by_pid.get(int(p.id), 0),
                 }
             )
 
-        # filtro q (client-side simples). Se quiser server-side, dá pra evoluir depois.
+        # filtro client-side por q (mantido)
         if q and q.strip():
             qq = q.strip().lower()
-            rows = [r for r in rows if (r.get("codigo_atual") or "").lower().find(qq) >= 0 or (r.get("descricao") or "").lower().find(qq) >= 0]
+            rows = [
+                r
+                for r in rows
+                if (r.get("codigo_atual") or "").lower().find(qq) >= 0
+                or (r.get("descricao") or "").lower().find(qq) >= 0
+            ]
 
         return rows, total
 

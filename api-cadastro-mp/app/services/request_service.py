@@ -455,7 +455,7 @@ class RequestService:
                 pfield_repo=self._pfield_repo,
                 item_repo=self._item_repo,
             )
-            prod_svc.apply_request_item_finalized(item=item, item_fields=item_fields)
+            prod_svc.apply_request_item_finalized(item=item, item_fields=item_fields, applied_by=user_id)
 
         ok = self._item_repo.update_fields(item_id, {"request_status_id": int(new_status_id)})
         if not ok:

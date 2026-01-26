@@ -1,14 +1,14 @@
 // src/pages/ProductsPage.jsx
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { listProductsApi, getProductApi, setProductFieldFlagApi } from "../app/api/productsApi";
 import { RequestItemFields } from "../app/ui/requests/RequestItemFields";
 
 import { useAuth } from "../app/auth/AuthContext";
 import { isModerator } from "../app/constants";
+import { socket } from "../app/realtime/socket";
 
-
-import { fieldsToFormState, TAGS, REQUEST_TYPE_ID_UPDATE } from "../app/ui/requests/requestItemFields.logic";
+import { fieldsToFormState, TAGS } from "../app/ui/requests/requestItemFields.logic";
 
 function fmt(iso) {
   if (!iso) return "-";
@@ -93,14 +93,13 @@ function ProductDetailsModal({ open, productId, onClose }) {
   const [error, setError] = useState("");
   const [product, setProduct] = useState(null);
 
-  // adapter para RequestItemFields (fieldsToFormState espera array com field_tag/field_value)
   const [valuesByTag, setValuesByTag] = useState({});
   const [fornecedoresRows, setFornecedoresRows] = useState([]);
-  
   const [byTag, setByTag] = useState({});
 
   async function handleSetProductFieldFlag(fieldId, nextFlag) {
     await setProductFieldFlagApi(fieldId, nextFlag);
+
     // recarrega o produto pra refletir (simples e consistente)
     const p = await getProductApi(productId);
     setProduct(p);
@@ -109,7 +108,6 @@ function ProductDetailsModal({ open, productId, onClose }) {
     setFornecedoresRows(st.fornecedoresRows);
     setByTag(st.byTag);
   }
-
 
   useEffect(() => {
     let alive = true;
@@ -189,7 +187,6 @@ function ProductDetailsModal({ open, productId, onClose }) {
             onChangeFornecedores={() => {}}
             errors={{ fields: {}, suppliers: {} }}
           />
-
         </div>
       )}
     </ModalShell>
@@ -207,8 +204,13 @@ export default function ProductsPage() {
   const [offset, setOffset] = useState(0);
   const [q, setQ] = useState("");
 
+  const [flagFilter, setFlagFilter] = useState("all"); // all | with | without
+
+
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+
+  const reloadTimerRef = useRef(null);
 
   async function load({ resetOffset = false } = {}) {
     try {
@@ -221,6 +223,7 @@ export default function ProductsPage() {
         limit,
         offset: nextOffset,
         q: q?.trim() || null,
+        flag: flagFilter,
       });
 
       const items = Array.isArray(data?.items) ? data.items : [];
@@ -234,10 +237,42 @@ export default function ProductsPage() {
     }
   }
 
+  // Carregamento normal por paginação
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [limit, offset]);
+  }, [limit, offset, flagFilter]);
+
+  // ✅ Recarregar listagem quando chegar evento realtime de produto
+  useEffect(() => {
+    function scheduleReload() {
+      // debounce simples (evita vários reloads em sequência)
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = setTimeout(() => {
+        load({ resetOffset: false });
+      }, 250);
+    }
+
+    const onCreated = () => scheduleReload();
+    const onUpdated = () => scheduleReload();
+    const onFlagChanged = () => scheduleReload();
+
+    socket.on("product:created", onCreated);
+    socket.on("product:updated", onUpdated);
+    socket.on("product:flag_changed", onFlagChanged);
+
+    return () => {
+      socket.off("product:created", onCreated);
+      socket.off("product:updated", onUpdated);
+      socket.off("product:flag_changed", onFlagChanged);
+
+      if (reloadTimerRef.current) {
+        clearTimeout(reloadTimerRef.current);
+        reloadTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [limit, offset, q]);
 
   const pageInfo = useMemo(() => {
     const start = total === 0 ? 0 : offset + 1;
@@ -260,7 +295,12 @@ export default function ProductsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0 }}>Produtos</h2>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <select value={flagFilter} onChange={(e) => setFlagFilter(e.target.value)}>
+            <option value="all">Filtro flag todos</option>
+            <option value="with">Com flag</option>
+            <option value="without">Sem flag</option>
+          </select>
           <input
             placeholder="Buscar (código/descrição)"
             value={q}
@@ -280,13 +320,14 @@ export default function ProductsPage() {
       ) : null}
 
       <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
           <thead>
             <tr style={{ background: "var(--surface-2)" }}>
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>ID</th>
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Código</th>
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Descrição</th>
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Atualizado</th>
+              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Flags</th>
               <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Abrir</th>
             </tr>
           </thead>
@@ -294,13 +335,13 @@ export default function ProductsPage() {
           <tbody>
             {busy ? (
               <tr>
-                <td colSpan={5} style={{ padding: 12 }}>
+                <td colSpan={6} style={{ padding: 12 }}>
                   Carregando...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={5} style={{ padding: 12 }}>
+                <td colSpan={6} style={{ padding: 12 }}>
                   Nenhum produto encontrado.
                 </td>
               </tr>
@@ -313,6 +354,9 @@ export default function ProductsPage() {
                   <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.codigo_atual ?? "—"}</td>
                   <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.descricao ?? "—"}</td>
                   <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{fmt(r.updated_at || r.created_at)}</td>
+                  <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                    {Number(r.flags_count ?? 0) > 0 ? <b>🚩{Number(r.flags_count)}</b> : "—"}
+                  </td>
                   <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
                     <button onClick={() => openDetails(r.id)}>Abrir</button>
                   </td>

@@ -29,7 +29,11 @@ function isTabFocused() {
   return !document.hidden && (document.hasFocus?.() ?? true);
 }
 
-// --- mantém os helpers acima ---
+function productIdOf(payload) {
+  const pid = payload?.product_id ?? payload?.productId ?? payload?.id;
+  const n = Number(pid);
+  return Number.isFinite(n) ? n : 0;
+}
 
 function canUseBrowserNotifications() {
   return typeof window !== "undefined" && "Notification" in window;
@@ -481,7 +485,6 @@ export function RealtimeProvider({ children }) {
       });
     };
 
-    // dentro do onRequestItemChanged
     const onRequestItemChanged = (payload) => {
       const itemId = requestItemIdOf(payload);
       const statusId = Number(payload?.request_status_id ?? payload?.status_id);
@@ -519,10 +522,69 @@ export function RealtimeProvider({ children }) {
       });
     };
 
+    const onProductCreated = (payload) => {
+      const pid = productIdOf(payload);
+      if (!pid) return;
+
+      const fp = `product:created|fp:${pid}|${stableText(payload?.created_at)}`;
+      const keys = [`product:created|pid:${pid}`, fp];
+      if (markSeenAny(keys)) return;
+
+      const code = stableText(payload?.codigo_atual);
+      const desc = stableText(payload?.descricao);
+
+      toastSuccess(`Produto criado: #${pid}${code ? ` • ${code}` : ""}`);
+      showBrowserNotification({
+        title: "Produto criado",
+        body: desc ? `#${pid} • ${desc}` : `Produto #${pid} criado.`,
+      });
+    };
+
+    const onProductUpdated = (payload) => {
+      const pid = productIdOf(payload);
+      if (!pid) return;
+
+      const fp = `product:updated|fp:${pid}|${stableText(payload?.updated_at)}`;
+      const keys = [`product:updated|pid:${pid}`, fp];
+      if (markSeenAny(keys)) return;
+
+      const code = stableText(payload?.codigo_atual);
+      const desc = stableText(payload?.descricao);
+
+      toastWarning(`Produto atualizado: #${pid}${code ? ` • ${code}` : ""}`);
+      showBrowserNotification({
+        title: "Produto atualizado",
+        body: desc ? `#${pid} • ${desc}` : `Produto #${pid} atualizado.`,
+      });
+    };
+
+    const onProductFlagChanged = (payload) => {
+      const pid = productIdOf(payload);
+      const fid = Number(payload?.field_id);
+      if (!pid || !fid) return;
+
+      const flag = stableText(payload?.field_flag);
+      const tag = stableText(payload?.field_tag);
+
+      const fp = `product:flag_changed|fp:${pid}|${fid}|${tag}|${flag}`;
+      const keys = [`product:flag_changed|pid:${pid}|fid:${fid}|flag:${flag}`, fp];
+      if (markSeenAny(keys)) return;
+
+      // toastWarning(`Flag alterada no produto #${pid}${tag ? ` • ${tag}` : ""}`);
+      // showBrowserNotification({
+      //   title: "Flag alterada",
+      //   body: `Produto #${pid}${tag ? ` • ${tag}` : ""}${flag ? ` • 🚩 ${flag}` : " • flag removida"}`,
+      // });
+    };
+
     socket.on("message:new", onMessageNew);
     socket.on("conversation:new", onConversationNew);
     socket.on("request:created", onRequestCreated);
     socket.on("request:item_changed", onRequestItemChanged);
+
+    socket.on("product:created", onProductCreated);
+    socket.on("product:updated", onProductUpdated);
+    socket.on("product:flag_changed", onProductFlagChanged);
 
     return () => {
       cancelled = true;
@@ -530,6 +592,9 @@ export function RealtimeProvider({ children }) {
       socket.off("conversation:new", onConversationNew);
       socket.off("request:created", onRequestCreated);
       socket.off("request:item_changed", onRequestItemChanged);
+      socket.off("product:created", onProductCreated);
+      socket.off("product:updated", onProductUpdated);
+      socket.off("product:flag_changed", onProductFlagChanged);
     };
   }, [activeUserId, isPrivileged, isUserOnly]);
 

@@ -27,6 +27,7 @@ class ProductListRowResponse(BaseModel):
     # campos “derivados” para tabela (opcional)
     codigo_atual: Optional[str] = None
     descricao: Optional[str] = None
+    flags_count: Optional[int] = None
 
 class ProductListResponse(BaseModel):
     items: list[ProductListRowResponse]
