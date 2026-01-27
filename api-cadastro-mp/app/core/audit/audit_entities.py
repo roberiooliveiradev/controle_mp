@@ -4,6 +4,7 @@ class AuditEntity:
     REQUEST = "request"
     REQUEST_ITEM = "request_item"
     REQUEST_ITEM_FIELD = "request_item_field"
+    PRODUCT = "product"
     PRODUCT_FIELD = "product_field"
     MESSAGE = "message"
     MESSAGE_FILE = "message_file"

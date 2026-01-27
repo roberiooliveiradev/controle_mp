@@ -88,16 +88,20 @@ class RequestService:
         item_ids = [int(i.id) for i in items]
         fields_map = self._field_repo.list_by_item_ids(item_ids)
 
-        type_ids = list({int(i.request_type_id) for i in items if i.request_type_id is not None})
-        status_ids = list({int(i.request_status_id) for i in items if i.request_status_id is not None})
+        type_ids = list({int(i.request_type_id)
+                        for i in items if i.request_type_id is not None})
+        status_ids = list({int(i.request_status_id)
+                          for i in items if i.request_status_id is not None})
 
         type_map = self._type_repo.get_map_by_ids(type_ids)
         status_map = self._status_repo.get_map_by_ids(status_ids)
 
         payload_items: list[dict[str, Any]] = []
         for it in items:
-            t = type_map.get(int(it.request_type_id)) if it.request_type_id is not None else None
-            s = status_map.get(int(it.request_status_id)) if it.request_status_id is not None else None
+            t = type_map.get(int(it.request_type_id)
+                             ) if it.request_type_id is not None else None
+            s = status_map.get(int(it.request_status_id)
+                               ) if it.request_status_id is not None else None
             f_list = fields_map.get(int(it.id), []) or []
 
             payload_items.append(
@@ -107,12 +111,14 @@ class RequestService:
                     "request_type_id": int(it.request_type_id) if it.request_type_id is not None else None,
                     "request_status_id": int(it.request_status_id) if it.request_status_id is not None else None,
                     "request_type": (
-                        {"id": int(t.id), "type_name": str(getattr(t, "type_name", None))}
+                        {"id": int(t.id), "type_name": str(
+                            getattr(t, "type_name", None))}
                         if t is not None
                         else None
                     ),
                     "request_status": (
-                        {"id": int(s.id), "status_name": str(getattr(s, "status_name", None))}
+                        {"id": int(s.id), "status_name": str(
+                            getattr(s, "status_name", None))}
                         if s is not None
                         else None
                     ),
@@ -149,12 +155,16 @@ class RequestService:
         """
         Monta o payload do item + fields + labels type/status.
         """
-        type_map = self._type_repo.get_map_by_ids([int(item.request_type_id)] if item.request_type_id is not None else [])
-        status_map = self._status_repo.get_map_by_ids([int(item.request_status_id)] if item.request_status_id is not None else [])
+        type_map = self._type_repo.get_map_by_ids(
+            [int(item.request_type_id)] if item.request_type_id is not None else [])
+        status_map = self._status_repo.get_map_by_ids(
+            [int(item.request_status_id)] if item.request_status_id is not None else [])
         fields_map = self._field_repo.list_by_item_ids([int(item.id)])
 
-        t = type_map.get(int(item.request_type_id)) if item.request_type_id is not None else None
-        s = status_map.get(int(item.request_status_id)) if item.request_status_id is not None else None
+        t = type_map.get(int(item.request_type_id)
+                         ) if item.request_type_id is not None else None
+        s = status_map.get(int(item.request_status_id)
+                           ) if item.request_status_id is not None else None
         f_list = fields_map.get(int(item.id), []) or []
 
         return {
@@ -163,12 +173,14 @@ class RequestService:
             "request_type_id": int(item.request_type_id) if item.request_type_id is not None else None,
             "request_status_id": int(item.request_status_id) if item.request_status_id is not None else None,
             "request_type": (
-                {"id": int(t.id), "type_name": str(getattr(t, "type_name", None))}
+                {"id": int(t.id), "type_name": str(
+                    getattr(t, "type_name", None))}
                 if t is not None
                 else None
             ),
             "request_status": (
-                {"id": int(s.id), "status_name": str(getattr(s, "status_name", None))}
+                {"id": int(s.id), "status_name": str(
+                    getattr(s, "status_name", None))}
                 if s is not None
                 else None
             ),
@@ -236,7 +248,8 @@ class RequestService:
             conversation_id=int(conversation_id),
             changed_by=int(changed_by),
             change_kind=change_kind,
-            request_status_id=int(item.request_status_id) if item.request_status_id is not None else None,
+            request_status_id=int(
+                item.request_status_id) if item.request_status_id is not None else None,
             updated_at_iso=iso,
             # ✅ novos campos
             request=request_payload,
@@ -265,11 +278,13 @@ class RequestService:
     # ---------------- Global locks ----------------
     def _ensure_not_locked(self, *, item: RequestItemModel) -> None:
         if int(item.request_status_id) in (int(RequestStatus.FINALIZED), int(RequestStatus.REJECTED)):
-            raise ConflictError("Item FINALIZED/REJECTED não pode ser alterado.")
+            raise ConflictError(
+                "Item FINALIZED/REJECTED não pode ser alterado.")
 
     def _ensure_can_change_status(self, *, role_id: int) -> None:
         if role_id not in (Role.ADMIN, Role.ANALYST):
-            raise ForbiddenError("Apenas ANALYST/ADMIN podem alterar o status.")
+            raise ForbiddenError(
+                "Apenas ANALYST/ADMIN podem alterar o status.")
 
     # ---------------- Type helpers ----------------
     def _is_create_item(self, item: RequestItemModel) -> bool:
@@ -277,10 +292,11 @@ class RequestService:
 
     def _is_update_item(self, item: RequestItemModel) -> bool:
         return int(item.request_type_id or 0) == int(RequestType.UPDATE)
-    
-    def _ensure_can_change_field_flag(self, role_id: int)->None:
+
+    def _ensure_can_change_field_flag(self, role_id: int) -> None:
         if role_id not in (Role.ADMIN, Role.ANALYST):
-            raise ForbiddenError("Apenas ANALYST/ADMIN podem adicionar/remover flag em campos.")
+            raise ForbiddenError(
+                "Apenas ANALYST/ADMIN podem adicionar/remover flag em campos.")
 
     # ---------------- Permissions ----------------
     def _ensure_user_can_edit_item(self, *, req: RequestModel, item: RequestItemModel, user_id: int, role_id: int) -> None:
@@ -290,7 +306,8 @@ class RequestService:
             raise ForbiddenError("Acesso negado.")
 
         if int(item.request_status_id) != int(RequestStatus.RETURNED):
-            raise ForbiddenError("Você só pode alterar quando a solicitação foi devolvida (RETURNED).")
+            raise ForbiddenError(
+                "Você só pode alterar quando a solicitação foi devolvida (RETURNED).")
 
     def _ensure_user_can_edit_field(
         self,
@@ -304,7 +321,8 @@ class RequestService:
         self._ensure_not_locked(item=item)
 
         if int(item.request_status_id) in (int(RequestStatus.FINALIZED), int(RequestStatus.REJECTED)):
-            raise ConflictError("Item FINALIZED/REJECTED não pode ser alterado.")
+            raise ConflictError(
+                "Item FINALIZED/REJECTED não pode ser alterado.")
 
         if self._is_create_item(item):
             if role_id in (Role.ADMIN, Role.ANALYST):
@@ -312,7 +330,8 @@ class RequestService:
                     return
                 if (req.created_by == user_id and int(item.request_status_id) == int(RequestStatus.RETURNED)):
                     return
-                raise ForbiddenError("Em CREATE, ADMIN/ANALYST podem editar apenas 'novo_codigo'.")
+                raise ForbiddenError(
+                    "Em CREATE, ADMIN/ANALYST podem editar apenas 'novo_codigo'.")
 
             if (
                 role_id == Role.USER
@@ -320,10 +339,12 @@ class RequestService:
                 and int(item.request_status_id) == int(RequestStatus.RETURNED)
             ):
                 if field_tag == "novo_codigo":
-                    raise ForbiddenError("Em CREATE devolvido (RETURNED), o criador não pode editar 'novo_codigo'.")
+                    raise ForbiddenError(
+                        "Em CREATE devolvido (RETURNED), o criador não pode editar 'novo_codigo'.")
                 return
 
-            raise ForbiddenError("Você não tem permissão para editar este campo em CREATE.")
+            raise ForbiddenError(
+                "Você não tem permissão para editar este campo em CREATE.")
 
         if self._is_update_item(item):
             if (
@@ -332,7 +353,8 @@ class RequestService:
                 and field_tag in ("novo_codigo", "codigo_atual")
             ):
                 return
-            raise ForbiddenError("Você só pode editar quando o status for RETURNED.")
+            raise ForbiddenError(
+                "Você só pode editar quando o status for RETURNED.")
 
         raise ForbiddenError("Você não tem permissão para editar este campo.")
 
@@ -358,14 +380,16 @@ class RequestService:
 
         if self._is_create_item(item):
             if not novo_codigo:
-                raise ConflictError("Para finalizar CREATE, 'novo_codigo' é obrigatório.")
+                raise ConflictError(
+                    "Para finalizar CREATE, 'novo_codigo' é obrigatório.")
             return
 
         if self._is_update_item(item):
             if novo_codigo:
                 return
             if not codigo_atual:
-                raise ConflictError("Para finalizar UPDATE, informe 'codigo_atual' ou preencha 'novo_codigo'.")
+                raise ConflictError(
+                    "Para finalizar UPDATE, informe 'codigo_atual' ou preencha 'novo_codigo'.")
 
     # ---------------- Listagem ----------------
     def list_request_items(
@@ -403,8 +427,10 @@ class RequestService:
             date_mode=date_mode,
         )
 
-        type_ids = list({int(r["request_type_id"]) for r in rows if r.get("request_type_id") is not None})
-        status_ids = list({int(r["request_status_id"]) for r in rows if r.get("request_status_id") is not None})
+        type_ids = list({int(r["request_type_id"])
+                        for r in rows if r.get("request_type_id") is not None})
+        status_ids = list({int(r["request_status_id"])
+                          for r in rows if r.get("request_status_id") is not None})
 
         type_map = self._type_repo.get_map_by_ids(type_ids)
         status_map = self._status_repo.get_map_by_ids(status_ids)
@@ -414,13 +440,15 @@ class RequestService:
             sid = int(r["request_status_id"])
             t = type_map.get(tid)
             s = status_map.get(sid)
-            r["request_type"] = {"id": t.id, "type_name": t.type_name} if t is not None else None
-            r["request_status"] = {"id": s.id, "status_name": s.status_name} if s is not None else None
+            r["request_type"] = {
+                "id": t.id, "type_name": t.type_name} if t is not None else None
+            r["request_status"] = {
+                "id": s.id, "status_name": s.status_name} if s is not None else None
 
         return rows, int(total)
 
     # ---------------- Status ----------------
-    def change_item_status(self, *, item_id: int, new_status_id: int, user_id: int, role_id: int) -> None:
+    def change_item_status(self, *, item_id: int, new_status_id: int, user_id: int, role_id: int) -> dict | None:
         self._ensure_can_change_status(role_id=role_id)
 
         item = self._item_repo.get_by_id(item_id)
@@ -434,7 +462,8 @@ class RequestService:
             raise NotFoundError("Requisição não encontrada.")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         allowed = {
             int(RequestStatus.IN_PROGRESS),
@@ -444,6 +473,8 @@ class RequestService:
         }
         if int(new_status_id) not in allowed:
             raise ConflictError("Status inválido para esta operação.")
+
+        product_event = None
 
         if int(new_status_id) == int(RequestStatus.FINALIZED):
             fields_map = self._field_repo.list_by_item_ids([int(item.id)])
@@ -455,9 +486,16 @@ class RequestService:
                 pfield_repo=self._pfield_repo,
                 item_repo=self._item_repo,
             )
-            prod_svc.apply_request_item_finalized(item=item, item_fields=item_fields, applied_by=user_id)
 
-        ok = self._item_repo.update_fields(item_id, {"request_status_id": int(new_status_id)})
+            # ✅ agora recebe dict (created/updated)
+            product_event = prod_svc.apply_request_item_finalized(
+                item=item,
+                item_fields=item_fields,
+                applied_by=user_id,
+            )
+
+        ok = self._item_repo.update_fields(
+            item_id, {"request_status_id": int(new_status_id)})
         if not ok:
             raise NotFoundError("Item não encontrado.")
 
@@ -470,7 +508,10 @@ class RequestService:
             change_kind="STATUS",
         )
 
+        return product_event
+
     # ---------------- NEW: Resubmit (explicit) ----------------
+
     def resubmit_returned_item(self, *, item_id: int, user_id: int, role_id: int) -> None:
         item = self._item_repo.get_by_id(item_id)
         if item is None:
@@ -484,12 +525,15 @@ class RequestService:
             raise ForbiddenError("Apenas o criador pode resubmeter este item.")
 
         if int(item.request_status_id) != int(RequestStatus.RETURNED):
-            raise ConflictError("Só é possível resubmeter quando o status for RETURNED.")
+            raise ConflictError(
+                "Só é possível resubmeter quando o status for RETURNED.")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        ok = self._item_repo.update_fields(item_id, {"request_status_id": int(RequestStatus.CREATED)})
+        ok = self._item_repo.update_fields(
+            item_id, {"request_status_id": int(RequestStatus.CREATED)})
         if not ok:
             raise NotFoundError("Item não encontrado.")
 
@@ -512,7 +556,8 @@ class RequestService:
         items: list[dict],
     ) -> RequestModel:
         conversation_id = self._conversation_id_from_message(message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=created_by, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=created_by, role_id=role_id)
 
         existing = self._req_repo.get_by_message_id(message_id)
         if existing is not None:
@@ -549,7 +594,8 @@ class RequestService:
                 ]
                 self._field_repo.add_many(field_models)
 
-        self._emit_request_created(req=req, conversation_id=conversation_id, created_by=created_by)
+        self._emit_request_created(
+            req=req, conversation_id=conversation_id, created_by=created_by)
         if created_first_item is not None:
             self._emit_item_changed(
                 req=req,
@@ -573,14 +619,17 @@ class RequestService:
             raise NotFoundError("Requisição não encontrada.")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         items = self._item_repo.list_by_request_id(req.id)
         item_ids = [int(i.id) for i in items]
         fields_map = self._field_repo.list_by_item_ids(item_ids)
 
-        type_ids = list({int(i.request_type_id) for i in items if i.request_type_id is not None})
-        status_ids = list({int(i.request_status_id) for i in items if i.request_status_id is not None})
+        type_ids = list({int(i.request_type_id)
+                        for i in items if i.request_type_id is not None})
+        status_ids = list({int(i.request_status_id)
+                          for i in items if i.request_status_id is not None})
 
         type_map = self._type_repo.get_map_by_ids(type_ids)
         status_map = self._status_repo.get_map_by_ids(status_ids)
@@ -593,7 +642,8 @@ class RequestService:
             raise NotFoundError("Requisição não encontrada.")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         self._field_repo.soft_delete_by_request_id(req.id)
         self._item_repo.soft_delete_by_request_id(req.id)
@@ -609,7 +659,8 @@ class RequestService:
             raise NotFoundError("Requisição não encontrada.")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         it = RequestItemModel(
             request_id=req.id,
@@ -645,9 +696,11 @@ class RequestService:
             raise NotFoundError("Requisição não encontrada.")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        self._ensure_user_can_edit_item(req=req, item=item, user_id=user_id, role_id=role_id)
+        self._ensure_user_can_edit_item(
+            req=req, item=item, user_id=user_id, role_id=role_id)
 
         ok = self._item_repo.update_fields(item_id, values)
         if not ok:
@@ -679,10 +732,13 @@ class RequestService:
         if req is None:
             raise NotFoundError("Requisição não encontrada.")
 
-        conversation_id = self._conversation_id_from_message(int(req.message_id))
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        conversation_id = self._conversation_id_from_message(
+            int(req.message_id))
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
-        ok = self._field_repo.update_fields(int(field_id), {"field_flag": field_flag})
+        ok = self._field_repo.update_fields(
+            int(field_id), {"field_flag": field_flag})
         if not ok:
             raise NotFoundError("Campo não encontrado.")
 
@@ -707,7 +763,8 @@ class RequestService:
             raise NotFoundError("Requisição não encontrada.")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         ok = self._item_repo.soft_delete(item_id)
         if not ok:
@@ -724,7 +781,8 @@ class RequestService:
             raise NotFoundError("Requisição não encontrada.")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         self._ensure_user_can_edit_field(
             req=req,
@@ -760,7 +818,8 @@ class RequestService:
             raise NotFoundError("Requisição não encontrada.")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         self._ensure_user_can_edit_field(
             req=req,
@@ -802,7 +861,8 @@ class RequestService:
             raise NotFoundError("Requisição não encontrada.")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
-        self._ensure_access_by_conversation(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
+        self._ensure_access_by_conversation(
+            conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         self._ensure_user_can_edit_field(
             req=req,

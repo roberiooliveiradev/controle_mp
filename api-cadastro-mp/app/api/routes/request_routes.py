@@ -519,7 +519,7 @@ def change_item_status(item_id: int):
         svc = _build_service(session)
         audit = _build_audit(session)
 
-        svc.change_item_status(
+        product_event = svc.change_item_status(
             item_id=item_id,
             new_status_id=int(new_status_id),
             user_id=user_id,
@@ -533,6 +533,22 @@ def change_item_status(item_id: int):
             user_id=user_id,
             details=f"new_status_id={int(new_status_id)}",
         )
+
+        if product_event:
+            product_id = int(product_event["product_id"])
+            created = bool(product_event["created"])
+
+            audit.log(
+                entity_name=AuditEntity.PRODUCT,
+                entity_id=product_id,
+                action_name=AuditAction.CREATED if created else AuditAction.UPDATED,
+                user_id=user_id,
+                details=(
+                    f"via=RequestItemFinalized; item_id={item_id}; "
+                    f"codigo_atual={product_event.get('codigo_atual')}; "
+                    f"descricao={product_event.get('descricao')}"
+                ),
+            )
 
     return ("", 204)
 

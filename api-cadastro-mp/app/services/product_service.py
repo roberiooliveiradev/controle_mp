@@ -76,7 +76,8 @@ class ProductService:
 
         self._pfield_repo.update_field(
             int(existing.id),
-            {"field_type_id": int(field_type_id), "field_value": value, "field_flag": flag},
+            {"field_type_id": int(field_type_id),
+             "field_value": value, "field_flag": flag},
         )
 
     def apply_request_item_finalized(
@@ -98,20 +99,23 @@ class ProductService:
 
         if request_type_id == 1:  # CREATE
             if not novo_codigo:
-                raise ConflictError("Para finalizar CREATE, o campo 'novo_codigo' é obrigatório.")
+                raise ConflictError(
+                    "Para finalizar CREATE, o campo 'novo_codigo' é obrigatório.")
             effective_code = novo_codigo
             lookup_code = novo_codigo
 
         elif request_type_id == 2:  # UPDATE
             if not codigo_atual:
-                raise ConflictError("Para finalizar UPDATE, informe 'codigo_atual'.")
+                raise ConflictError(
+                    "Para finalizar UPDATE, informe 'codigo_atual'.")
             lookup_code = codigo_atual
             effective_code = novo_codigo if novo_codigo else codigo_atual
 
         else:
             raise ConflictError("Tipo de solicitação inválido.")
 
-        existing_product_id = self._pfield_repo.find_product_id_by_codigo_atual(codigo_atual=lookup_code)
+        existing_product_id = self._pfield_repo.find_product_id_by_codigo_atual(
+            codigo_atual=lookup_code)
 
         created = existing_product_id is None
         if created:
@@ -146,7 +150,8 @@ class ProductService:
             )
 
         if codigo_field_type_id is None:
-            raise ConflictError("Não foi possível determinar o tipo do campo para 'codigo_atual'.")
+            raise ConflictError(
+                "Não foi possível determinar o tipo do campo para 'codigo_atual'.")
 
         self._upsert_product_field(
             product_id=product_id,
@@ -159,9 +164,10 @@ class ProductService:
         self._product_repo.touch_updated_at(product_id)
         self._item_repo.update_fields(int(item.id), {"product_id": product_id})
 
+        descricao = self._get_field_value(item_fields, "descricao") or None
+
         # 🔔 Notificação realtime (criado/atualizado)
         if self._product_notifier:
-            descricao = self._get_field_value(item_fields, "descricao") or None
             now_iso = self._now_iso()
             if created:
                 self._product_notifier.notify_product_created(
@@ -184,7 +190,14 @@ class ProductService:
                     )
                 )
 
-        return product_id
+        # ✅ agora retorna um “evento” p/ auditoria na rota
+        return {
+            "product_id": int(product_id),
+            "created": bool(created),
+            "codigo_atual": effective_code or None,
+            "descricao": descricao,
+            "lookup_code": lookup_code or None,
+        }
 
     def set_product_field_flag(
         self,
@@ -195,13 +208,15 @@ class ProductService:
         field_flag: str | None,
     ) -> None:
         if role_id not in (Role.ADMIN, Role.ANALYST):
-            raise ForbiddenError("Apenas ANALYST/ADMIN podem adicionar/remover flag em produtos.")
+            raise ForbiddenError(
+                "Apenas ANALYST/ADMIN podem adicionar/remover flag em produtos.")
 
         pf = self._pfield_repo.get_by_id(int(field_id))
         if pf is None:
             raise NotFoundError("Campo do produto não encontrado.")
 
-        ok = self._pfield_repo.update_field(int(field_id), {"field_flag": field_flag})
+        ok = self._pfield_repo.update_field(
+            int(field_id), {"field_flag": field_flag})
         if not ok:
             raise NotFoundError("Campo do produto não encontrado.")
 
