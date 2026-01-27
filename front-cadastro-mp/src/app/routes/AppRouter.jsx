@@ -12,6 +12,7 @@ import RegisterPage from "../../pages/RegisterPage";
 import ProductsPage from "../../pages/ProductsPage";
 import AccountPage from "../../pages/AccountPage";
 import AdminUsersPage from "../../pages/AdminUsersPage";
+import AuditPage from "../../pages/AuditPage";
 
 export function AppRouter() {
   return (
@@ -42,6 +43,7 @@ export function AppRouter() {
 
           {/* ✅ admin */}
           <Route path="admin/users" element={<AdminUsersPage />} />
+          <Route path="audit" element={<AuditPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -41,6 +41,8 @@ from app.repositories.audit_log_repository import AuditLogRepository
 
 from app.infrastructure.realtime.socketio_request_notifier import SocketIORequestNotifier
 
+from app.core.audit.audit_entities import AuditEntity
+from app.core.audit.audit_actions import AuditAction
 
 bp_req = Blueprint("requests", __name__, url_prefix="/api/requests")
 
@@ -164,9 +166,9 @@ def create_request():
         )
 
         audit.log(
-            entity_name="tbRequest",
+            entity_name=AuditEntity.REQUEST,
             entity_id=req.id,
-            action_name="CREATED",
+            action_name=AuditAction.CREATED,
             user_id=user_id,
             details=f"message_id={payload.message_id}; items_count={len(payload.items)}",
         )
@@ -197,12 +199,13 @@ def delete_request(request_id: int):
         svc = _build_service(session)
         audit = _build_audit(session)
 
-        svc.delete_request(request_id=request_id, user_id=user_id, role_id=role_id)
+        svc.delete_request(request_id=request_id,
+                           user_id=user_id, role_id=role_id)
 
         audit.log(
-            entity_name="tbRequest",
+            entity_name=AuditEntity.REQUEST,
             entity_id=request_id,
-            action_name="DELETED",
+            action_name=AuditAction.DELETED,
             user_id=user_id,
             details="request deleted",
         )
@@ -218,7 +221,8 @@ def delete_request(request_id: int):
 @require_auth
 def add_item(request_id: int):
     user_id, role_id = _auth_user()
-    payload = CreateRequestItemInput.model_validate(request.get_json(force=True))
+    payload = CreateRequestItemInput.model_validate(
+        request.get_json(force=True))
 
     with db_session() as session:
         svc = _build_service(session)
@@ -232,9 +236,9 @@ def add_item(request_id: int):
         )
 
         audit.log(
-            entity_name="tbRequestItem",
-            entity_id=it.id,  # ✅ correto: item recém criado
-            action_name="CREATED",
+            entity_name=AuditEntity.REQUEST_ITEM,
+            entity_id=it.id,
+            action_name=AuditAction.CREATED,
             user_id=user_id,
             details=f"request_id={request_id}; keys={_keys_of(payload.model_dump())}",
         )
@@ -246,7 +250,8 @@ def add_item(request_id: int):
 @require_auth
 def update_item(item_id: int):
     user_id, role_id = _auth_user()
-    payload = UpdateRequestItemInput.model_validate(request.get_json(force=True))
+    payload = UpdateRequestItemInput.model_validate(
+        request.get_json(force=True))
 
     values = {k: v for k, v in payload.model_dump().items() if v is not None}
 
@@ -254,12 +259,13 @@ def update_item(item_id: int):
         svc = _build_service(session)
         audit = _build_audit(session)
 
-        svc.update_item(item_id=item_id, user_id=user_id, role_id=role_id, values=values)
+        svc.update_item(item_id=item_id, user_id=user_id,
+                        role_id=role_id, values=values)
 
         audit.log(
-            entity_name="tbRequestItem",
+            entity_name=AuditEntity.REQUEST_ITEM,
             entity_id=item_id,
-            action_name="UPDATED",
+            action_name=AuditAction.UPDATED,
             user_id=user_id,
             details=f"changed_keys={_keys_of(values)}",
         )
@@ -279,9 +285,9 @@ def delete_item(item_id: int):
         svc.delete_item(item_id=item_id, user_id=user_id, role_id=role_id)
 
         audit.log(
-            entity_name="tbRequestItem",
+            entity_name=AuditEntity.REQUEST_ITEM,
             entity_id=item_id,
-            action_name="DELETED",
+            action_name=AuditAction.DELETED,
             user_id=user_id,
             details="item deleted",
         )
@@ -306,12 +312,13 @@ def resubmit_item(item_id: int):
         svc = _build_service(session)
         audit = _build_audit(session)
 
-        svc.resubmit_returned_item(item_id=item_id, user_id=user_id, role_id=role_id)
+        svc.resubmit_returned_item(
+            item_id=item_id, user_id=user_id, role_id=role_id)
 
         audit.log(
-            entity_name="tbRequestItem",
+            entity_name=AuditEntity.REQUEST_ITEM,
             entity_id=item_id,
-            action_name="STATUS_CHANGED",
+            action_name=AuditAction.STATUS_CHANGED,
             user_id=user_id,
             details="resubmit (RETURNED -> CREATED)",
         )
@@ -327,7 +334,8 @@ def resubmit_item(item_id: int):
 @require_auth
 def add_field(item_id: int):
     user_id, role_id = _auth_user()
-    payload = CreateRequestItemFieldInput.model_validate(request.get_json(force=True))
+    payload = CreateRequestItemFieldInput.model_validate(
+        request.get_json(force=True))
 
     with db_session() as session:
         svc = _build_service(session)
@@ -341,9 +349,9 @@ def add_field(item_id: int):
         )
 
         audit.log(
-            entity_name="tbRequestItemFields",
-            entity_id=f.id,  # ✅ correto: field recém criado
-            action_name="CREATED",
+            entity_name=AuditEntity.REQUEST_ITEM_FIELD,
+            entity_id=f.id,
+            action_name=AuditAction.CREATED,
             user_id=user_id,
             details=f"item_id={item_id}; field_tag={payload.field_tag}",
         )
@@ -355,7 +363,8 @@ def add_field(item_id: int):
 @require_auth
 def update_field(field_id: int):
     user_id, role_id = _auth_user()
-    payload = UpdateRequestItemFieldInput.model_validate(request.get_json(force=True))
+    payload = UpdateRequestItemFieldInput.model_validate(
+        request.get_json(force=True))
 
     values = {k: v for k, v in payload.model_dump().items() if v is not None}
 
@@ -363,12 +372,13 @@ def update_field(field_id: int):
         svc = _build_service(session)
         audit = _build_audit(session)
 
-        svc.update_field(field_id=field_id, user_id=user_id, role_id=role_id, values=values)
+        svc.update_field(field_id=field_id, user_id=user_id,
+                         role_id=role_id, values=values)
 
         audit.log(
-            entity_name="tbRequestItemFields",
+            entity_name=AuditEntity.REQUEST_ITEM_FIELD,
             entity_id=field_id,
-            action_name="UPDATED",
+            action_name=AuditAction.UPDATED,
             user_id=user_id,
             details=f"changed_keys={_keys_of(values)}",
         )
@@ -390,12 +400,13 @@ def set_field_flag(field_id: int):
         svc = _build_service(session)
         audit = _build_audit(session)
 
-        svc.set_field_flag(field_id=int(field_id), user_id=user_id, role_id=role_id, field_flag=flag)
+        svc.set_field_flag(field_id=int(field_id),
+                           user_id=user_id, role_id=role_id, field_flag=flag)
 
         audit.log(
-            entity_name="tbRequestItemFields",
+            entity_name=AuditEntity.REQUEST_ITEM_FIELD,
             entity_id=field_id,
-            action_name="FLAG_UPDATED",
+            action_name=AuditAction.UPDATED,
             user_id=user_id,
             details=f"field_flag={flag}",
         )
@@ -415,9 +426,9 @@ def delete_field(field_id: int):
         svc.delete_field(field_id=field_id, user_id=user_id, role_id=role_id)
 
         audit.log(
-            entity_name="tbRequestItemFields",
+            entity_name=AuditEntity.REQUEST_ITEM_FIELD,
             entity_id=field_id,
-            action_name="DELETED",
+            action_name=AuditAction.DELETED,
             user_id=user_id,
             details="field deleted",
         )
@@ -441,9 +452,11 @@ def list_request_items():
         return jsonify({"error": "Parâmetros limit/offset inválidos."}), 400
 
     status_id = request.args.get("status_id")
-    status_id = int(status_id) if status_id is not None and status_id != "" else None
+    status_id = int(
+        status_id) if status_id is not None and status_id != "" else None
 
-    created_by_name = (request.args.get("created_by_name") or "").strip() or None
+    created_by_name = (request.args.get(
+        "created_by_name") or "").strip() or None
 
     type_id = request.args.get("type_id")
     type_id = int(type_id) if type_id is not None and type_id != "" else None
@@ -514,9 +527,9 @@ def change_item_status(item_id: int):
         )
 
         audit.log(
-            entity_name="tbRequestItem",
+            entity_name=AuditEntity.REQUEST_ITEM,
             entity_id=item_id,
-            action_name="STATUS_CHANGED",
+            action_name=AuditAction.STATUS_CHANGED,
             user_id=user_id,
             details=f"new_status_id={int(new_status_id)}",
         )
@@ -540,7 +553,8 @@ def get_requests_meta():
 
     payload = RequestMetaResponse(
         types=[{"id": int(t.id), "type_name": t.type_name} for t in types],
-        statuses=[{"id": int(s.id), "status_name": s.status_name} for s in statuses],
+        statuses=[{"id": int(s.id), "status_name": s.status_name}
+                  for s in statuses],
     ).model_dump()
 
     return jsonify(payload), 200

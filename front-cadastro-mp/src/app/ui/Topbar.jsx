@@ -80,7 +80,11 @@ export function Topbar() {
         <Link to="/products" className={linkClass("/products")}>
           Produtos
         </Link>
-
+        {isAdmin && (
+          <Link to="/audit" className={isActive("/audit") ? "select" : ""}>
+            Auditoria
+          </Link>
+         )}
         {isAdmin && (
           <Link to="/admin/users" className={linkClass("/admin/users")}>
             Admin · Usuários

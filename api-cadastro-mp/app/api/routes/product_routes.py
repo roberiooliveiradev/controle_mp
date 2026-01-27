@@ -26,6 +26,8 @@ from app.infrastructure.realtime.socketio_product_notifier import SocketIOProduc
 from app.services.audit_service import AuditService
 from app.repositories.audit_log_repository import AuditLogRepository
 
+from app.core.audit.audit_entities import AuditEntity
+from app.core.audit.audit_actions import AuditAction
 
 bp_prod = Blueprint("products", __name__, url_prefix="/api/products")
 
@@ -154,9 +156,9 @@ def set_product_field_flag(field_id: int):
         )
 
         audit.log(
-            entity_name="tbProductFields",
+            entity_name=AuditEntity.PRODUCT_FIELD,
             entity_id=int(field_id),
-            action_name="FLAG_UPDATED",
+            action_name=AuditAction.UPDATED,
             user_id=int(user_id),
             details=f"field_flag={flag}",
         )

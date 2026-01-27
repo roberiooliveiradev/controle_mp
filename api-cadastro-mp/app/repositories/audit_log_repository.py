@@ -1,9 +1,14 @@
 # app/repositories/audit_log_repository.py
 
+from __future__ import annotations
+
+from datetime import datetime
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.base_repository import BaseRepository
 from app.infrastructure.database.models.audit_log_model import AuditLogModel
+from app.infrastructure.database.models.user_model import UserModel
 
 
 class AuditLogRepository(BaseRepository[AuditLogModel]):
@@ -14,3 +19,141 @@ class AuditLogRepository(BaseRepository[AuditLogModel]):
         self._session.add(model)
         self._session.flush()
         return model
+
+    def list_logs(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        entity_name: str | None = None,
+        action_name: str | None = None,
+        user_id: int | None = None,
+        entity_id: int | None = None,
+        q: str | None = None,
+        occurred_from: datetime | None = None,
+        occurred_to: datetime | None = None,
+    ) -> tuple[list[AuditLogModel], int]:
+        query = self._session.query(AuditLogModel)
+
+        if entity_name:
+            query = query.filter(AuditLogModel.entity_name == entity_name)
+
+        if action_name:
+            query = query.filter(AuditLogModel.action_name == action_name)
+
+        if user_id is not None:
+            query = query.filter(AuditLogModel.user_id == user_id)
+
+        if entity_id is not None:
+            query = query.filter(AuditLogModel.entity_id == entity_id)
+
+        if occurred_from is not None:
+            query = query.filter(AuditLogModel.occurred_at >= occurred_from)
+
+        if occurred_to is not None:
+            query = query.filter(AuditLogModel.occurred_at <= occurred_to)
+
+        if q:
+            like = f"%{q}%"
+            query = query.filter(
+                or_(
+                    AuditLogModel.details.ilike(like),
+                    AuditLogModel.entity_name.ilike(like),
+                    AuditLogModel.action_name.ilike(like),
+                )
+            )
+
+        total = query.count()
+
+        rows = (
+            query.order_by(AuditLogModel.occurred_at.desc(),
+                           AuditLogModel.id.desc())
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
+
+        return rows, total
+
+    def report_counts_by_day(
+        self,
+        *,
+        occurred_from: datetime | None,
+        occurred_to: datetime | None,
+        entity_name: str | None = None,
+        action_name: str | None = None,
+        user_id: int | None = None,
+    ) -> list[dict]:
+        q = self._session.query(
+            func.date_trunc("day", AuditLogModel.occurred_at).label("day"),
+            func.count(AuditLogModel.id).label("count"),
+        )
+
+        if occurred_from is not None:
+            q = q.filter(AuditLogModel.occurred_at >= occurred_from)
+        if occurred_to is not None:
+            q = q.filter(AuditLogModel.occurred_at <= occurred_to)
+        if entity_name:
+            q = q.filter(AuditLogModel.entity_name == entity_name)
+        if action_name:
+            q = q.filter(AuditLogModel.action_name == action_name)
+        if user_id is not None:
+            q = q.filter(AuditLogModel.user_id == user_id)
+
+        rows = (
+            q.group_by("day")
+            .order_by(func.date_trunc("day", AuditLogModel.occurred_at).asc())
+            .all()
+        )
+
+        return [{"day": r.day, "count": int(r.count)} for r in rows]
+
+    def report_counts_by_entity_action(
+        self,
+        *,
+        occurred_from: datetime | None,
+        occurred_to: datetime | None,
+    ) -> list[dict]:
+        q = self._session.query(
+            AuditLogModel.entity_name.label("entity_name"),
+            AuditLogModel.action_name.label("action_name"),
+            func.count(AuditLogModel.id).label("count"),
+        )
+
+        if occurred_from is not None:
+            q = q.filter(AuditLogModel.occurred_at >= occurred_from)
+        if occurred_to is not None:
+            q = q.filter(AuditLogModel.occurred_at <= occurred_to)
+
+        rows = (
+            q.group_by(AuditLogModel.entity_name, AuditLogModel.action_name)
+            .order_by(func.count(AuditLogModel.id).desc())
+            .all()
+        )
+
+        return [
+            {"entity_name": r.entity_name,
+                "action_name": r.action_name, "count": int(r.count)}
+            for r in rows
+        ]
+
+    def report_top_users(
+        self,
+        *,
+        occurred_from: datetime | None,
+        occurred_to: datetime | None,
+        limit: int = 10,
+    ) -> list[dict]:
+        q = self._session.query(
+            AuditLogModel.user_id.label("user_id"),
+            func.count(AuditLogModel.id).label("count"),
+        ).filter(AuditLogModel.user_id.isnot(None))
+
+        if occurred_from is not None:
+            q = q.filter(AuditLogModel.occurred_at >= occurred_from)
+        if occurred_to is not None:
+            q = q.filter(AuditLogModel.occurred_at <= occurred_to)
+
+        rows = q.group_by(AuditLogModel.user_id).order_by(
+            func.count(AuditLogModel.id).desc()).limit(limit).all()
+        return [{"user_id": int(r.user_id), "count": int(r.count)} for r in rows]

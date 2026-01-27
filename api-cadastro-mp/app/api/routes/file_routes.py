@@ -19,6 +19,8 @@ from app.services.file_service import FileService
 from app.services.audit_service import AuditService
 from app.repositories.audit_log_repository import AuditLogRepository
 
+from app.core.audit.audit_entities import AuditEntity
+from app.core.audit.audit_actions import AuditAction
 
 bp_files = Blueprint("files", __name__)
 
@@ -58,7 +60,8 @@ def _validate_mime(mimetype: str | None) -> None:
         return  # whitelist desativada
 
     if not mimetype:
-        raise ConflictError("Tipo do arquivo (MIME) ausente. Upload bloqueado pela whitelist.")
+        raise ConflictError(
+            "Tipo do arquivo (MIME) ausente. Upload bloqueado pela whitelist.")
 
     if mimetype not in allowed:
         raise ConflictError(f"Tipo de arquivo não permitido: '{mimetype}'.")
@@ -75,10 +78,12 @@ def upload_files():
 
     files = _get_upload_files()
     if not files:
-        raise ConflictError("Nenhum arquivo enviado. Use multipart/form-data com 'files' ou 'file'.")
+        raise ConflictError(
+            "Nenhum arquivo enviado. Use multipart/form-data com 'files' ou 'file'.")
 
     max_bytes = max(1, settings.max_file_size_mb) * 1024 * 1024
-    storage = LocalFileStorage(config=LocalFileStorageConfig(base_path=settings.files_base_path))
+    storage = LocalFileStorage(config=LocalFileStorageConfig(
+        base_path=settings.files_base_path))
 
     out: list[UploadFileResponse] = []
     saved_stored_names: list[str] = []
@@ -128,12 +133,13 @@ def upload_files():
         # detalhes compactos e úteis (evita estourar texto)
         # mantém no máximo 10 nomes/sha para não inflar logs
         sample = out[:10]
-        sample_str = ",".join([f"{x.original_name}:{x.size_bytes}:{x.sha256}" for x in sample])
+        sample_str = ",".join(
+            [f"{x.original_name}:{x.size_bytes}:{x.sha256}" for x in sample])
 
         audit.log(
-            entity_name="tbMessageFiles",
+            entity_name=AuditEntity.MESSAGE_FILE,
             entity_id=None,
-            action_name="CREATED",
+            action_name=AuditAction.UPDATED,
             user_id=int(user_id),
             details=f"files_count={len(out)}; sample={sample_str}",
         )
@@ -156,9 +162,11 @@ def download_file(file_id: int):
             conv_repo=ConversationRepository(session),
             file_repo=MessageFileRepository(session),
         )
-        f = svc.get_file_for_download(file_id=file_id, user_id=user_id, role_id=role_id)
+        f = svc.get_file_for_download(
+            file_id=file_id, user_id=user_id, role_id=role_id)
 
-    storage = LocalFileStorage(config=LocalFileStorageConfig(base_path=settings.files_base_path))
+    storage = LocalFileStorage(config=LocalFileStorageConfig(
+        base_path=settings.files_base_path))
 
     try:
         abs_path = storage._abs_path_from_stored(f.stored_name)  # noqa: SLF001

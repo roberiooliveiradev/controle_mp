@@ -13,6 +13,9 @@ from app.services.auth_service import AuthService
 from app.services.refresh_token_service import RefreshTokenService
 from app.services.user_service import UserService
 
+from app.core.audit.audit_entities import AuditEntity
+from app.core.audit.audit_actions import AuditAction
+
 bp_auth = Blueprint("auth", __name__, url_prefix="/auth")
 
 
@@ -25,23 +28,29 @@ def login():
 
         user_service = UserService(UserRepository(session))
         try:
-            user = user_service.authenticate(email=payload.email, password=payload.password)
+            user = user_service.authenticate(
+                email=payload.email, password=payload.password)
         except Exception:
-            audit.log(entity_name="auth", action_name="LOGIN_FAILED", user_id=None, details=f"email={payload.email}")
+            audit.log(entity_name=AuditEntity.AUTH, action_name=AuditAction.LOGIN_FAILED,
+                      user_id=None, details=f"email={payload.email}")
             raise
 
         jwt_provider = JwtProvider()
         access = jwt_provider.issue_access_token(
             subject=str(user.id),
-            payload={"email": user.email, "role_id": user.role_id, "full_name": user.full_name},
+            payload={"email": user.email, "role_id": user.role_id,
+                     "full_name": user.full_name},
             minutes=60,
         )
-        refresh = jwt_provider.issue_refresh_token(subject=str(user.id), minutes=60 * 24 * 7)
+        refresh = jwt_provider.issue_refresh_token(
+            subject=str(user.id), minutes=60 * 24 * 7)
 
-        refresh_svc = RefreshTokenService(jwt_provider=jwt_provider, repo=RefreshTokenRepository(session))
+        refresh_svc = RefreshTokenService(
+            jwt_provider=jwt_provider, repo=RefreshTokenRepository(session))
         refresh_svc.store_refresh_token(user_id=user.id, refresh_token=refresh)
 
-        audit.log(entity_name="auth", action_name="LOGIN_SUCCESS", user_id=user.id)
+        audit.log(entity_name=AuditEntity.AUTH,
+                  action_name=AuditAction.LOGIN, user_id=user.id)
 
     return jsonify(TokenPairResponse(access_token=access, refresh_token=refresh).model_dump()), 200
 
@@ -54,23 +63,28 @@ def refresh():
         jwt_provider = JwtProvider()
         audit = AuditService(AuditLogRepository(session))
 
-        refresh_svc = RefreshTokenService(jwt_provider=jwt_provider, repo=RefreshTokenRepository(session))
-        user_id, new_refresh = refresh_svc.rotate(refresh_token=payload.refresh_token)
+        refresh_svc = RefreshTokenService(
+            jwt_provider=jwt_provider, repo=RefreshTokenRepository(session))
+        user_id, new_refresh = refresh_svc.rotate(
+            refresh_token=payload.refresh_token)
 
         # novo access
         user_repo = UserRepository(session)
         user = user_repo.get_by_id(user_id)
         if user is None:
-            audit.log(entity_name="auth", action_name="REFRESH_FAILED", user_id=user_id, details="user_not_found")
+            audit.log(entity_name=AuditEntity.AUTH, action_name=AuditAction.REFRESH_FAILED,
+                      user_id=user_id, details="user_not_found")
             return ("", 401)
 
         new_access = jwt_provider.issue_access_token(
             subject=str(user.id),
-            payload={"email": user.email, "role_id": user.role_id, "full_name": user.full_name},
+            payload={"email": user.email, "role_id": user.role_id,
+                     "full_name": user.full_name},
             minutes=60,
         )
 
-        audit.log(entity_name="auth", action_name="REFRESH_SUCCESS", user_id=user.id)
+        audit.log(entity_name=AuditEntity.AUTH,
+                  action_name=AuditAction.REFRESH_SUCCESS, user_id=user.id)
 
     return jsonify(TokenPairResponse(access_token=new_access, refresh_token=new_refresh).model_dump()), 200
 
@@ -90,15 +104,19 @@ def logout():
         audit = AuditService(AuditLogRepository(session))
 
         # revoga access token
-        auth_service = AuthService(jwt_provider=jwt_provider, revoked_repo=RevokedTokenRepository(session))
+        auth_service = AuthService(
+            jwt_provider=jwt_provider, revoked_repo=RevokedTokenRepository(session))
         auth_service.revoke_access_token(token=token, reason="logout")
 
         # revoga refresh token (opcional)
         if payload.refresh_token:
-            refresh_svc = RefreshTokenService(jwt_provider=jwt_provider, repo=RefreshTokenRepository(session))
-            refresh_svc.revoke(refresh_token=payload.refresh_token, reason="logout")
+            refresh_svc = RefreshTokenService(
+                jwt_provider=jwt_provider, repo=RefreshTokenRepository(session))
+            refresh_svc.revoke(
+                refresh_token=payload.refresh_token, reason="logout")
 
         user_id = int(g.auth.get("sub"))
-        audit.log(entity_name="auth", action_name="LOGOUT", user_id=user_id)
+        audit.log(entity_name=AuditEntity.AUTH,
+                  action_name=AuditAction.LOGOUT, user_id=user_id)
 
     return ("", 204)

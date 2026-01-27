@@ -43,6 +43,8 @@ from app.infrastructure.realtime.socketio_request_notifier import SocketIOReques
 from app.services.audit_service import AuditService
 from app.repositories.audit_log_repository import AuditLogRepository
 
+from app.core.audit.audit_entities import AuditEntity
+from app.core.audit.audit_actions import AuditAction
 
 bp_msg = Blueprint(
     "messages",
@@ -125,7 +127,8 @@ def _pack_response(item: dict) -> dict:
     request_full = None
     if item.get("request_full") is not None:
         req2, items2, fields_map, type_map, status_map = item["request_full"]
-        request_full = _pack_request_full(req2, items2, fields_map, type_map, status_map)
+        request_full = _pack_request_full(
+            req2, items2, fields_map, type_map, status_map)
 
     return MessageResponse(
         id=msg.id,
@@ -134,7 +137,8 @@ def _pack_response(item: dict) -> dict:
         message_type_id=msg.message_type_id,
         created_at=msg.created_at,
         updated_at=msg.updated_at,
-        sender=UserMiniResponse(id=sender.id, full_name=sender.full_name, email=sender.email),
+        sender=UserMiniResponse(
+            id=sender.id, full_name=sender.full_name, email=sender.email),
         files=[
             MessageFileResponse(
                 id=f.id,
@@ -255,10 +259,13 @@ def mark_read(conversation_id: int):
 @require_auth
 def create_message(conversation_id: int):
     user_id, role_id = _auth_user()
-    payload = CreateMessageRequestInput.model_validate(request.get_json(force=True))
+    payload = CreateMessageRequestInput.model_validate(
+        request.get_json(force=True))
 
-    files_payload = [f.model_dump() for f in (payload.files or [])] if payload.files else None
-    request_items_payload = [i.model_dump() for i in (payload.request_items or [])] if payload.request_items else None
+    files_payload = [f.model_dump()
+                     for f in (payload.files or [])] if payload.files else None
+    request_items_payload = [i.model_dump() for i in (
+        payload.request_items or [])] if payload.request_items else None
 
     with db_session() as session:
         svc = _build_service(session)
@@ -276,9 +283,9 @@ def create_message(conversation_id: int):
         )
 
         audit.log(
-            entity_name="tbMessages",
+            entity_name=AuditEntity.MESSAGE,
             entity_id=int(msg.id),
-            action_name="CREATED",
+            action_name=AuditAction.CREATED,
             user_id=int(user_id),
             details=(
                 f"conversation_id={conversation_id}; "
@@ -316,9 +323,9 @@ def delete_message(conversation_id: int, message_id: int):
         )
 
         audit.log(
-            entity_name="tbMessages",
+            entity_name=AuditEntity.MESSAGE,
             entity_id=int(message_id),
-            action_name="DELETED",
+            action_name=AuditAction.DELETED,
             user_id=int(user_id),
             details=f"conversation_id={conversation_id}",
         )

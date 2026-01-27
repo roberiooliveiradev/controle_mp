@@ -22,6 +22,8 @@ from app.api.middlewares.auth_middleware import require_auth, require_roles
 from app.services.audit_service import AuditService
 from app.repositories.audit_log_repository import AuditLogRepository
 
+from app.core.audit.audit_entities import AuditEntity
+from app.core.audit.audit_actions import AuditAction
 
 bp_users = Blueprint("users", __name__, url_prefix="/users")
 
@@ -58,10 +60,10 @@ def create_user():
         created = service.create_user(**payload.model_dump())
 
         audit.log(
-            entity_name="tbUsers",
+            entity_name=AuditEntity.USER,
             entity_id=int(created.id),
-            action_name="CREATED",
-            user_id=None,  # criação pública (sem auth)
+            action_name=AuditAction.CREATED,
+            user_id=None,
             details=f"email={created.email}; role_id={created.role_id}",
         )
 
@@ -125,9 +127,9 @@ def update_user(user_id: int):
         )
 
         audit.log(
-            entity_name="tbUsers",
+            entity_name=AuditEntity.USER,
             entity_id=int(user_id),
-            action_name="UPDATED",
+            action_name=AuditAction.UPDATED,
             user_id=int(auth_user_id),
             details=f"self_update; changed_keys={list(data.keys())}",
         )
@@ -154,9 +156,9 @@ def delete_user(user_id: int):
         service.delete_user(user_id=user_id)
 
         audit.log(
-            entity_name="tbUsers",
+            entity_name=AuditEntity.USER,
             entity_id=int(user_id),
-            action_name="DELETED",
+            action_name=AuditAction.DELETED,
             user_id=int(auth_user_id),
             details="user deleted (self or admin)",
         )
@@ -174,7 +176,8 @@ def delete_user(user_id: int):
 def admin_list_users():
     limit = int(request.args.get("limit", 50))
     offset = int(request.args.get("offset", 0))
-    include_deleted = request.args.get("include_deleted", "1") in ("1", "true", "True")
+    include_deleted = request.args.get(
+        "include_deleted", "1") in ("1", "true", "True")
 
     with db_session() as session:
         service = _build_service(session)
@@ -214,7 +217,8 @@ def admin_list_users():
 def admin_update_user(user_id: int):
     admin_user_id, _ = _auth_user()
 
-    payload = AdminUpdateUserRequest.model_validate(request.get_json(force=True))
+    payload = AdminUpdateUserRequest.model_validate(
+        request.get_json(force=True))
     data = payload.model_dump(exclude_none=True)
 
     with db_session() as session:
@@ -224,9 +228,9 @@ def admin_update_user(user_id: int):
         updated = service.admin_update_user(user_id=user_id, **data)
 
         audit.log(
-            entity_name="tbUsers",
+            entity_name=AuditEntity.USER,
             entity_id=int(user_id),
-            action_name="UPDATED",
+            action_name=AuditAction.UPDATED,
             user_id=int(admin_user_id),
             details=f"admin_update; changed_keys={list(data.keys())}",
         )
