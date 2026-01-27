@@ -13,7 +13,7 @@ class AuditLogRowResponse(BaseModel):
     action_name: str
     details: str | None
     occurred_at: datetime
-    user_id: int | None
+    user_name: str | None  # ✅ trocado
 
 
 class AuditLogsListResponse(BaseModel):
@@ -35,7 +35,7 @@ class AuditCountByEntityActionRow(BaseModel):
 
 
 class AuditTopUserRow(BaseModel):
-    user_id: int
+    user_name: str | None  # ✅ trocado (pode ser None p/ logs antigos sem user)
     count: int
 
 

@@ -27,20 +27,31 @@ class AuditLogRepository(BaseRepository[AuditLogModel]):
         offset: int,
         entity_name: str | None = None,
         action_name: str | None = None,
-        user_id: int | None = None,
+        user_name: str | None = None,   # ✅ NOVO
+        user_id: int | None = None,     # (opcional compat)
         entity_id: int | None = None,
         q: str | None = None,
-        occurred_from: datetime | None = None,
-        occurred_to: datetime | None = None,
-    ) -> tuple[list[AuditLogModel], int]:
-        query = self._session.query(AuditLogModel)
+        occurred_from=None,
+        occurred_to=None,
+    ):
+        query = (
+            self._session.query(AuditLogModel, UserModel)
+            .outerjoin(UserModel, UserModel.id == AuditLogModel.user_id)
+        )
 
         if entity_name:
-            query = query.filter(AuditLogModel.entity_name == entity_name)
+            query = query.filter(
+                AuditLogModel.entity_name.ilike(f"%{entity_name}%"))
 
         if action_name:
-            query = query.filter(AuditLogModel.action_name == action_name)
+            query = query.filter(
+                AuditLogModel.action_name.ilike(f"%{action_name}%"))
 
+        # ✅ filtro por nome (match parcial)
+        if user_name:
+            query = query.filter(UserModel.full_name.ilike(f"%{user_name}%"))
+
+        # (opcional compat)
         if user_id is not None:
             query = query.filter(AuditLogModel.user_id == user_id)
 
@@ -60,10 +71,12 @@ class AuditLogRepository(BaseRepository[AuditLogModel]):
                     AuditLogModel.details.ilike(like),
                     AuditLogModel.entity_name.ilike(like),
                     AuditLogModel.action_name.ilike(like),
+                    # ✅ busca livre também no nome
+                    UserModel.full_name.ilike(like),
                 )
             )
 
-        total = query.count()
+        total = query.with_entities(func.count()).scalar() or 0
 
         rows = (
             query.order_by(AuditLogModel.occurred_at.desc(),
@@ -73,7 +86,21 @@ class AuditLogRepository(BaseRepository[AuditLogModel]):
             .all()
         )
 
-        return rows, total
+        items = []
+        for log, user in rows:
+            items.append(
+                {
+                    "id": int(log.id),
+                    "entity_name": log.entity_name,
+                    "entity_id": (int(log.entity_id) if log.entity_id is not None else None),
+                    "action_name": log.action_name,
+                    "details": log.details,
+                    "occurred_at": log.occurred_at,
+                    "user_name": (user.full_name if user else None),
+                }
+            )
+
+        return items, int(total)
 
     def report_counts_by_day(
         self,
@@ -144,16 +171,25 @@ class AuditLogRepository(BaseRepository[AuditLogModel]):
         occurred_to: datetime | None,
         limit: int = 10,
     ) -> list[dict]:
-        q = self._session.query(
-            AuditLogModel.user_id.label("user_id"),
-            func.count(AuditLogModel.id).label("count"),
-        ).filter(AuditLogModel.user_id.isnot(None))
+        q = (
+            self._session.query(
+                UserModel.full_name.label("user_name"),
+                func.count(AuditLogModel.id).label("count"),
+            )
+            .outerjoin(UserModel, UserModel.id == AuditLogModel.user_id)
+            .filter(AuditLogModel.user_id.isnot(None))
+        )
 
         if occurred_from is not None:
             q = q.filter(AuditLogModel.occurred_at >= occurred_from)
         if occurred_to is not None:
             q = q.filter(AuditLogModel.occurred_at <= occurred_to)
 
-        rows = q.group_by(AuditLogModel.user_id).order_by(
-            func.count(AuditLogModel.id).desc()).limit(limit).all()
-        return [{"user_id": int(r.user_id), "count": int(r.count)} for r in rows]
+        rows = (
+            q.group_by(UserModel.full_name)
+            .order_by(func.count(AuditLogModel.id).desc())
+            .limit(limit)
+            .all()
+        )
+
+        return [{"user_name": r.user_name, "count": int(r.count)} for r in rows]

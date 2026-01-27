@@ -85,7 +85,7 @@ export default function AuditPage() {
   // filtros (logs + reports)
   const [entityName, setEntityName] = useState("");
   const [actionName, setActionName] = useState("");
-  const [userId, setUserId] = useState("");
+  const [userName, setUserName] = useState("");
   const [entityId, setEntityId] = useState("");
   const [q, setQ] = useState("");
   const [dateFrom, setDateFrom] = useState(""); // YYYY-MM-DD
@@ -113,7 +113,7 @@ export default function AuditPage() {
         offset: nextOffset,
         entity_name: entityName.trim() || null,
         action_name: actionName.trim() || null,
-        user_id: userId.trim() ? Number(userId.trim()) : null,
+        user_name: userName.trim() || null,
         entity_id: entityId.trim() ? Number(entityId.trim()) : null,
         q: q.trim() || null,
         from: fromIso,
@@ -139,7 +139,7 @@ export default function AuditPage() {
       const data = await getAuditSummaryApi({
         entity_name: entityName.trim() || null,
         action_name: actionName.trim() || null,
-        user_id: userId.trim() ? Number(userId.trim()) : null,
+        user_name: userName.trim() || null,
         from: fromIso,
         to: toIso,
         top_users_limit: 10,
@@ -152,6 +152,7 @@ export default function AuditPage() {
       setRepBusy(false);
     }
   }
+
 
   // guard: admin-only
   useEffect(() => {
@@ -183,7 +184,7 @@ export default function AuditPage() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityName, actionName, userId, entityId, q, dateFrom, dateTo, tab, isAdmin]);
+  }, [entityName, actionName, userName, entityId, q, dateFrom, dateTo, tab, isAdmin]);
 
   // reports: carrega quando troca para aba
   useEffect(() => {
@@ -196,7 +197,7 @@ export default function AuditPage() {
   function clearFilters() {
     setEntityName("");
     setActionName("");
-    setUserId("");
+    setUserName("");
     setEntityId("");
     setQ("");
     setDateFrom("");
@@ -236,7 +237,7 @@ export default function AuditPage() {
           onChange={(e) => setActionName(e.target.value)}
           style={{ width: 190 }}
         />
-        <input placeholder="user_id" value={userId} onChange={(e) => setUserId(e.target.value)} style={{ width: 100 }} />
+        <input placeholder="usuário (nome)" value={userName} onChange={(e) => setUserName(e.target.value)} style={{ width: 180 }} />
         <input
           placeholder="entity_id"
           value={entityId}
@@ -286,7 +287,7 @@ export default function AuditPage() {
                   <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Entidade</th>
                   <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Ação</th>
                   <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>entity_id</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>user_id</th>
+                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Usuário</th>
                   <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Detalhes</th>
                 </tr>
               </thead>
@@ -314,7 +315,7 @@ export default function AuditPage() {
                         <Chip>{r.action_name}</Chip>
                       </td>
                       <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.entity_id ?? "—"}</td>
-                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.user_id ?? "—"}</td>
+                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.user_name ?? "—"}</td>
                       <td style={{ padding: 10, borderBottom: "1px solid var(--border)", maxWidth: 520 }}>
                         <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{r.details || "—"}</div>
                       </td>
@@ -416,14 +417,14 @@ export default function AuditPage() {
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
                       <tr style={{ background: "var(--surface-2)" }}>
-                        <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>user_id</th>
+                        <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Usuário</th>
                         <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Qtd</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(summary.top_users || []).map((r, idx) => (
                         <tr key={idx}>
-                          <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.user_id}</td>
+                          <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.user_name}</td>
                           <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.count}</td>
                         </tr>
                       ))}

@@ -22,9 +22,6 @@ bp_audit = Blueprint("audit", __name__, url_prefix="/api/audit")
 def _parse_dt(s: str | None) -> datetime | None:
     if not s:
         return None
-    # Aceita:
-    # - 2026-01-26T10:30:00
-    # - 2026-01-26 10:30:00
     try:
         return datetime.fromisoformat(s.replace("Z", "+00:00"))
     except Exception:
@@ -45,6 +42,10 @@ def admin_list_audit_logs():
     action_name = (request.args.get("action_name") or "").strip() or None
     q = (request.args.get("q") or "").strip() or None
 
+    # ✅ novo filtro
+    user_name = (request.args.get("user_name") or "").strip() or None
+
+    # (compat opcional)
     user_id_raw = (request.args.get("user_id") or "").strip()
     user_id = int(user_id_raw) if user_id_raw else None
 
@@ -64,24 +65,26 @@ def admin_list_audit_logs():
             offset=offset,
             entity_name=entity_name,
             action_name=action_name,
-            user_id=user_id,
+            user_name=user_name,   # ✅
+            user_id=user_id,       # compat
             entity_id=entity_id,
             q=q,
             occurred_from=occurred_from,
             occurred_to=occurred_to,
         )
 
+    # ✅ agora rows é lista de dicts
     payload = AuditLogsListResponse(
         items=[
             AuditLogRowResponse(
-                id=int(r.id),
-                entity_name=r.entity_name,
-                entity_id=(int(r.entity_id)
-                           if r.entity_id is not None else None),
-                action_name=r.action_name,
-                details=r.details,
-                occurred_at=r.occurred_at,
-                user_id=(int(r.user_id) if r.user_id is not None else None),
+                id=int(r["id"]),
+                entity_name=r["entity_name"],
+                entity_id=(int(r["entity_id"]) if r.get(
+                    "entity_id") is not None else None),
+                action_name=r["action_name"],
+                details=r.get("details"),
+                occurred_at=r["occurred_at"],
+                user_name=r.get("user_name"),
             )
             for r in rows
         ],
@@ -100,6 +103,7 @@ def admin_audit_summary():
     entity_name = (request.args.get("entity_name") or "").strip() or None
     action_name = (request.args.get("action_name") or "").strip() or None
 
+    # (mantém compat por enquanto)
     user_id_raw = (request.args.get("user_id") or "").strip()
     user_id = int(user_id_raw) if user_id_raw else None
 
@@ -125,13 +129,3 @@ def admin_audit_summary():
         )
 
     return jsonify(AuditSummaryResponse(**summary).model_dump()), 200
-
-
-@bp_audit.route("/logs", methods=["OPTIONS"])
-def audit_logs_options():
-    return ("", 204)
-
-
-@bp_audit.route("/summary", methods=["OPTIONS"])
-def audit_summary_options():
-    return ("", 204)
