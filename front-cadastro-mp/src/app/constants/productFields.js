@@ -14,6 +14,7 @@ export const PRODUCT_GROUP_OPTIONS = Object.freeze([
 	{ value: "1050", text: "1050 - Termoencolhível e tubos cortados" },
 	{ value: "1015", text: "1015 - Prensa-cabos" },
 	{ value: "1016", text: "1016 - Resistores" },
+	{ value: "1021", text: "1021 - Diversos" },
 	{ value: "1025", text: "1025 - Termistores e sensores térmicos" },
 ]);
 
