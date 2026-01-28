@@ -9,6 +9,7 @@ import {
   listConversationsApi,
   getConversationApi,
   createConversationApi,
+  updateConversationApi,
 } from "../app/api/conversationsApi";
 import { listMessagesApi, createMessageApi, markReadApi } from "../app/api/messagesApi";
 import { uploadFilesApi } from "../app/api/filesApi";
@@ -202,6 +203,56 @@ export default function ConversationsPage() {
 
   const messagesContainerRef = useRef(null);
   const bottomRef = useRef(null);
+
+  // -------------------------
+  // Editar título (inline)
+  // -------------------------
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+
+  // sempre que trocar a conversa, fecha o modo edição
+  useEffect(() => {
+    setEditingTitle(false);
+  }, [selectedId]);
+
+  // mantém o draft sincronizado com o título carregado
+  useEffect(() => {
+    if (conv?.title) setTitleDraft(conv.title);
+  }, [conv?.title]);
+
+  async function saveTitle() {
+    if (!conv?.id) {
+      setEditingTitle(false);
+      return;
+    }
+
+    const value = (titleDraft ?? "").trim();
+    if (!value || value === (conv?.title ?? "")) {
+      setEditingTitle(false);
+      setTitleDraft(conv?.title ?? "");
+      return;
+    }
+
+    try {
+      const updated = await updateConversationApi(conv.id, {
+        title: value,
+      });
+
+      // atualiza conversa aberta
+      setConv(updated);
+
+      // atualiza lista da esquerda
+      setConversations((prev) =>
+        (prev ?? []).map((c) => (Number(c.id) === Number(updated.id) ? { ...c, title: updated.title } : c))
+      );
+    } catch (err) {
+      alert(err?.response?.data?.error ?? "Erro ao atualizar título");
+      setTitleDraft(conv?.title ?? "");
+    } finally {
+      setEditingTitle(false);
+    }
+  }
+
 
   function isUnreadFromOthers(m) {
     return !m.is_read && m.sender?.id !== myUserIdRef.current;
@@ -709,7 +760,37 @@ export default function ConversationsPage() {
         ) : (
           <>
             <div style={{ padding: 12, borderBottom: "1px solid var(--border)" }}>
-              <strong>{conv?.title ?? selectedConversation?.title ?? `Conversa #${selectedId}`}</strong>
+              {editingTitle ? (
+                <input
+                  autoFocus
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onBlur={saveTitle}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveTitle();
+                    if (e.key === "Escape") {
+                      setTitleDraft(conv?.title ?? "");
+                      setEditingTitle(false);
+                    }
+                  }}
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 700,
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    padding: "4px 8px",
+                    width: "100%",
+                  }}
+                />
+              ) : (
+                <strong
+                  style={{ cursor: "pointer" }}
+                  title="Clique para editar"
+                  onClick={() => setEditingTitle(true)}
+                >
+                  {conv?.title ?? `Conversa #${selectedId}`}
+                </strong>
+              )}
               <div style={{ fontSize: 12, opacity: "var(--text-muted)", marginTop: 4 }}>
                 {conv?.created_by?.full_name ?? conv?.created_by?.email ?? ""}
               </div>
