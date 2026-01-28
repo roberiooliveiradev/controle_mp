@@ -10,6 +10,7 @@ from app.infrastructure.database.session import db_session
 from app.repositories.product_repository import ProductRepository
 from app.repositories.product_field_repository import ProductFieldRepository
 from app.repositories.request_item_repository import RequestItemRepository
+from app.repositories.totvs_product_repository import TotvsProductRepository
 
 from app.services.product_service import ProductService
 from app.services.product_query_service import ProductQueryService
@@ -49,6 +50,12 @@ def _build_service(session) -> ProductService:
         product_notifier=SocketIOProductNotifier(),
     )
 
+def _build_query_service(session) -> ProductQueryService:
+    return ProductQueryService(
+        session,
+        totvs_prod_repo=TotvsProductRepository(),
+    )
+
 
 def _build_audit(session) -> AuditService:
     return AuditService(AuditLogRepository(session))
@@ -77,7 +84,7 @@ def list_products():
     date_to = (request.args.get("date_to") or "").strip() or None
 
     with db_session() as session:
-        svc = ProductQueryService(session)
+        svc = _build_query_service(session)
         rows, total = svc.list_products(
             limit=limit,
             offset=offset,
@@ -101,7 +108,7 @@ def list_products():
 @require_auth
 def get_product(product_id: int):
     with db_session() as session:
-        svc = ProductQueryService(session)
+        svc = _build_query_service(session)
         p, fields = svc.get_product(product_id=product_id)
 
     payload = ProductResponse(
@@ -164,3 +171,37 @@ def set_product_field_flag(field_id: int):
         )
 
     return ("", 204)
+
+@bp_prod.get("/<int:product_id>/totvs")
+@require_auth
+def get_product_totvs(product_id: int):
+    with db_session() as session:
+        svc = _build_query_service(session)
+        p, fields = svc.get_product(product_id=product_id)
+
+        codigo_atual = None
+        for f in fields:
+            if f.field_tag == "codigo_atual":
+                codigo_atual = (f.field_value or "").strip()
+                break
+
+        if not codigo_atual:
+            return jsonify({"error": "Produto não possui campo 'codigo_atual' preenchido."}), 409
+
+        totvs = svc.get_product_totvs(product_code=codigo_atual)
+
+    return jsonify({"product_id": int(p.id), "codigo_atual": codigo_atual, "totvs": totvs}), 200
+
+@bp_prod.get("/totvs/<product_code>")
+@require_auth
+def get_product_by_code_totvs(product_code: str):
+    with db_session() as session:
+        svc = _build_query_service(session)
+
+        totvs = svc.get_product_totvs(product_code=product_code)
+
+        if not totvs:
+            return jsonify({"error": "Produto não encontrado."}), 409
+
+    return jsonify({"totvs": totvs}), 200
+

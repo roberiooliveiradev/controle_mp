@@ -3,14 +3,18 @@ from datetime import datetime, timedelta
 from sqlalchemy import select, func, exists, and_
 from sqlalchemy.orm import Session
 
+import json
+
 from app.core.exceptions import NotFoundError, ConflictError
 from app.infrastructure.database.models.product_model import ProductModel
 from app.infrastructure.database.models.product_field_model import ProductFieldModel
 
+from app.repositories.totvs_product_repository import TotvsProductRepository
 
 class ProductQueryService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, totvs_prod_repo: TotvsProductRepository) -> None:
         self._session = session
+        self._totvs_prod_repo = totvs_prod_repo
 
     def _parse_date(self, s: str) -> datetime:
         # aceita YYYY-MM-DD
@@ -153,20 +157,27 @@ class ProductQueryService:
             .all()
         )
         return p, fields
+    
+    def get_product_totvs(self, *, product_code: str) -> dict:
+        code = (product_code or "").strip()
+        if not code:
+            raise NotFoundError("Código do produto não informado.")
 
+        rows = self._totvs_prod_repo.list_products(code=code)
+        if not rows:
+            raise NotFoundError("Produto não encontrado no TOTVS.")
 
-    def get_product(self, *, product_id: int) -> tuple[ProductModel, list[ProductFieldModel]]:
-        p = self._session.execute(
-            select(ProductModel).where(ProductModel.id == int(product_id), ProductModel.is_deleted.is_(False))
-        ).scalars().first()
-        if p is None:
-            raise NotFoundError("Produto não encontrado.")
+        item = rows[0]
 
-        fields = list(
-            self._session.execute(
-                select(ProductFieldModel)
-                .where(ProductFieldModel.product_id == int(product_id), ProductFieldModel.is_deleted.is_(False))
-                .order_by(ProductFieldModel.id.asc())
-            ).scalars().all()
-        )
-        return p, fields
+        # 'fornecedores' vem como JSON string (FOR JSON PATH). Vamos normalizar.
+        fornecedores_raw = item.get("fornecedores")
+        if isinstance(fornecedores_raw, str) and fornecedores_raw.strip():
+            try:
+                item["fornecedores"] = json.loads(fornecedores_raw)
+            except Exception:
+                # se vier inválido, mantém como string para não estourar 500
+                pass
+        elif fornecedores_raw in (None, "", "null"):
+            item["fornecedores"] = []
+
+        return item

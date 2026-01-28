@@ -6,6 +6,7 @@ from pydantic import field_validator
 
 
 class Settings(BaseSettings):
+    # 🔵 Banco principal (PostgreSQL)
     db_host: str
     db_port: int
     db_name: str
@@ -15,6 +16,13 @@ class Settings(BaseSettings):
 
     environment: str = "development"
     debug: bool = True
+
+    # 🟢 Banco externo TOTVS (SQL Server)
+    totvs_db_host: str | None = None
+    totvs_db_port: int = 1433
+    totvs_db_name: str | None = None
+    totvs_db_user: str | None = None
+    totvs_db_password: str | None = None
 
     jwt_secret: str = os.getenv("JWT_SECRET", "dev-secret-change-me")
     jwt_access_minutes: int = int(os.getenv("JWT_ACCESS_MINUTES", "60"))
@@ -83,5 +91,20 @@ class Settings(BaseSettings):
 
         return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}"
 
+    @property
+    def totvs_database_url(self) -> str | None:
+        if not self.totvs_db_host:
+            return None
+
+        user = quote_plus(self.totvs_db_user)
+        password = quote_plus(self.totvs_db_password)
+
+        return (
+            "mssql+pyodbc://"
+            f"{user}:{password}"
+            f"@{self.totvs_db_host}:{self.totvs_db_port}"
+            f"/{self.totvs_db_name}"
+            "?driver=ODBC+Driver+17+for+SQL+Server"
+        )
 
 settings = Settings()
