@@ -33,6 +33,7 @@ from app.repositories.product_repository import ProductRepository
 from app.repositories.product_field_repository import ProductFieldRepository
 from app.repositories.request_status_repository import RequestStatusRepository
 from app.repositories.request_type_repository import RequestTypeRepository
+from app.repositories.totvs_product_repository import TotvsProductRepository
 
 from app.services.request_service import RequestService
 from app.services.message_service import MessageService
@@ -177,6 +178,7 @@ def _build_service(session) -> MessageService:
         type_repo=RequestTypeRepository(session),
         product_repo=ProductRepository(session),
         pfield_repo=ProductFieldRepository(session),
+        totvs_repo=TotvsProductRepository(),
         notifier=SocketIORequestNotifier(),
     )
 

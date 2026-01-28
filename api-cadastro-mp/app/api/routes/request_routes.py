@@ -38,6 +38,7 @@ from app.services.request_service import RequestService
 
 from app.services.audit_service import AuditService
 from app.repositories.audit_log_repository import AuditLogRepository
+from app.repositories.totvs_product_repository import TotvsProductRepository
 
 from app.infrastructure.realtime.socketio_request_notifier import SocketIORequestNotifier
 
@@ -67,6 +68,7 @@ def _build_service(session) -> RequestService:
         type_repo=RequestTypeRepository(session),
         product_repo=ProductRepository(session),
         pfield_repo=ProductFieldRepository(session),
+        totvs_repo=TotvsProductRepository(),
         notifier=SocketIORequestNotifier(),
     )
 

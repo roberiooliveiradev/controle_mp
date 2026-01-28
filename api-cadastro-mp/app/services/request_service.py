@@ -20,6 +20,8 @@ from app.repositories.request_type_repository import RequestTypeRepository
 from app.repositories.product_repository import ProductRepository
 from app.repositories.product_field_repository import ProductFieldRepository
 from app.services.product_service import ProductService
+from app.repositories.totvs_product_repository import TotvsProductRepository
+
 from app.core.interfaces.request_notifier import (
     RequestNotifier,
     RequestCreatedEvent,
@@ -60,6 +62,7 @@ class RequestService:
         type_repo: RequestTypeRepository,
         product_repo: ProductRepository,
         pfield_repo: ProductFieldRepository,
+        totvs_repo: TotvsProductRepository,
         notifier: RequestNotifier | None = None,
     ) -> None:
         self._conv_repo = conv_repo
@@ -71,6 +74,7 @@ class RequestService:
         self._type_repo = type_repo
         self._product_repo = product_repo
         self._pfield_repo = pfield_repo
+        self._totvs_repo = totvs_repo
         self._notifier = notifier
 
     # ---------------- Realtime payload builder ----------------
@@ -485,6 +489,7 @@ class RequestService:
                 product_repo=self._product_repo,
                 pfield_repo=self._pfield_repo,
                 item_repo=self._item_repo,
+                totvs_repo=self._totvs_repo,
             )
 
             # ✅ agora recebe dict (created/updated)
