@@ -217,7 +217,7 @@ export default function AuditPage() {
   }, [offset, limit, total]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 10  }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0 }}>Auditoria</h2>
         <Tabs tab={tab} setTab={setTab} />
@@ -279,7 +279,7 @@ export default function AuditPage() {
             Mostrando {pageInfo.start}-{pageInfo.end} de {total} • <Chip>limit={limit}</Chip>
           </div>
 
-          <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto" }}>
+          <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto"}}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "var(--surface-2)" }}>
@@ -348,7 +348,7 @@ export default function AuditPage() {
           ) : !summary ? (
             <div style={{ opacity: 0.8 }}>Sem dados (ajuste filtros e clique “Atualizar relatórios”).</div>
           ) : (
-            <div style={{ display: "grid", gap: 12 }}>
+            <div style={{ display: "grid", gap: 12}}>
               <div style={{ display: "grid", gap: 6 }}>
                 <div style={{ fontWeight: 800 }}>Eventos por dia</div>
                 <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto" }}>
