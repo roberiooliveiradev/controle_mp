@@ -438,10 +438,6 @@ export default function AuditPage() {
                     </tbody>
                   </table>
                 </div>
-
-                <div style={{ fontSize: 12, opacity: 0.75 }}>
-                  Dica: se você quiser mostrar nome/e-mail em vez de só user_id, eu ajusto o backend para dar join em tbUsers.
-                </div>
               </div>
             </div>
           )}
