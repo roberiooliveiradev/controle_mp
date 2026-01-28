@@ -43,13 +43,13 @@ export const WAREHOUSE_OPTIONS = Object.freeze([
 ]);
 
 export const YES_NO_OPTIONS = Object.freeze([
-	{ value: "NAO", text: "NÃO" },
-	{ value: "SIM", text: "SIM" },
+	{ value: "1", text: "NÃO" },
+	{ value: "2", text: "SIM" },
 ]);
 
 export const DEFAULT_VALUES = Object.freeze({
 	TIPO: "MP",
 	CTA_CONTABIL: "11401002",
 	ARMAZEM_PADRAO: "01",
-	PRODUTO_TERCEIRO: "NAO",
+	PRODUTO_TERCEIRO: "1",
 });
