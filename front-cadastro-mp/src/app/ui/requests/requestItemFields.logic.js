@@ -154,7 +154,7 @@ export function validateStructuredItem(it) {
 	if (isBlank(it.produto_terceiro))
 		fields.produto_terceiro = "Campo obrigatório.";
 	if (isBlank(it.cta_contabil)) fields.cta_contabil = "Campo obrigatório.";
-	if (isBlank(it.ref_cliente)) fields.ref_cliente = "Campo obrigatório.";
+	// if (isBlank(it.ref_cliente)) fields.ref_cliente = "Campo obrigatório.";
 
 	const rows = Array.isArray(it.fornecedores) ? it.fornecedores : [];
 	rows.forEach((r, idx) => {

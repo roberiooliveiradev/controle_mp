@@ -15,6 +15,7 @@ class TotvsProductRepository:
                     LTRIM(RTRIM(B1_LOCPAD))    AS armazem_padrao,
                     LTRIM(RTRIM(B1_UM))        AS unidade,
                     LTRIM(RTRIM(B1_TPMAT))     AS produto_terceiro,
+                    LTRIM(RTRIM(B1_CONTA))     AS cta_contabil,
                     LTRIM(RTRIM(B1_REFEREN))   AS ref_cliente,
 
                     (

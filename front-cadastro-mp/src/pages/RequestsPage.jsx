@@ -161,7 +161,9 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
 
   const statusIdEffective = statusIdNow != null ? Number(statusIdNow) : Number(row?.request_status_id);
   const isReturned = statusIdEffective === REQUEST_STATUS.RETURNED;
-
+  
+  const isFinalized = Number(statusIdEffective) === REQUEST_STATUS.FINALIZED;
+  
   const lockAfterDone = LOCKED_STATUSES.has(Number(statusIdEffective))
   const isOwner = Number(row?.request_created_by) === Number(user?.id);
 
@@ -564,7 +566,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
             onSetFieldFlag={(fieldId, nextFlag) => handleSetFieldFlag(fieldId, nextFlag)}
 
             valuesByTag={
-              canResubmit
+              canResubmit && !(isCreate && isFinalized)
                 ? Object.fromEntries(Object.entries(valuesByTag || {}).filter(([k]) => k !== TAGS.novo_codigo))
                 : valuesByTag
             }

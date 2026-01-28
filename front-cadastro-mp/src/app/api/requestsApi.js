@@ -94,3 +94,11 @@ export async function getRequestsMetaApi() {
 	const { data } = await httpClient.get(`/requests/meta`);
 	return data; // { types: [...], statuses: [...] }
 }
+
+// INFORMAÇÕES ATUAIS DO PRODUTO TOTVS
+export async function getTotvsByProductCodeApi(productCode) {
+  const code = String(productCode || "").trim();
+  if (!code) return null;
+  const { data } = await httpClient.get(`/products/totvs/${encodeURIComponent(code)}`);
+  return data?.totvs ?? null;
+}

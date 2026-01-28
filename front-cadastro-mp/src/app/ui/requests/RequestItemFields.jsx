@@ -1,9 +1,13 @@
 // src/app/ui/requests/RequestItemFields.jsx
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
+
+import { getTotvsByProductCodeApi } from "../../api/requestsApi";
+
 import {
   TAGS,
   newSupplierRow,
+  newStructuredItem,
   REQUEST_TYPE_ID_UPDATE,
   REQUEST_TYPE_ID_CREATE,
 } from "./requestItemFields.logic";
@@ -123,6 +127,23 @@ const [flagModal, setFlagModal] = useState({
   // furo de readOnly SOMENTE pro novo_codigo quando CREATE (details)
   const canEditNovoCodigoField = !isProduct && !!canEditNovoCodigo && !isStructured && isCreate;
 
+  // Dados do TOTVS
+  const [autoFillBusy, setAutoFillBusy] = useState(false);
+  const [autoFillError, setAutoFillError] = useState("");
+  const lastFetchedCodeRef = useRef("");
+  
+  const TOTVS_DEPENDENT_TAGS = [
+    TAGS.grupo,
+    TAGS.tipo,
+    TAGS.descricao,
+    TAGS.armazem_padrao,
+    TAGS.unidade,
+    TAGS.produto_terceiro,
+    TAGS.ref_cliente,
+    TAGS.cta_contabil,
+    TAGS.fornecedores,
+  ];
+
   const fornecedores = useMemo(() => {
     if (isStructured) {
       return Array.isArray(item?.fornecedores) && item.fornecedores.length
@@ -139,6 +160,26 @@ const [flagModal, setFlagModal] = useState({
     return valuesByTag?.[tag] ?? fallback;
   }
 
+  function normalizeValue(value) {
+    if (typeof value === "string") {
+      return value.trim();
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((v) => normalizeValue(v));
+    }
+
+    if (value && typeof value === "object") {
+      const out = {};
+      Object.keys(value).forEach((k) => {
+        out[k] = normalizeValue(value[k]);
+      });
+      return out;
+    }
+
+    return value;
+  }
+
   function setVal(tag, v) {
     const isSpecialNovoCodigo = tag === TAGS.novo_codigo && canEditNovoCodigoField;
 
@@ -148,8 +189,13 @@ const [flagModal, setFlagModal] = useState({
     if (!canEditNormal && !isSpecialNovoCodigo) return;
 
     // ✅ REGRA: alguns campos sempre em UPPERCASE
-    const mustUppercase = tag === TAGS.descricao || tag === TAGS.ref_cliente || true;
-    const nextValue = mustUppercase && typeof v === "string" ? v.toUpperCase() : v;
+    const mustUppercase = true;
+
+    let nextValue = normalizeValue(v);
+
+    if (mustUppercase && typeof nextValue === "string") {
+      nextValue = nextValue.toUpperCase();
+    }
 
     if (isStructured) {
       onItemChange?.(tag, nextValue);
@@ -160,7 +206,96 @@ const [flagModal, setFlagModal] = useState({
     onChangeTagValue?.(tag, nextValue);
     onClearFieldError?.(tag);
   }
+  
+  function setFornecedores(nextRows) {
+    // respeita readOnly
+    if (!canEditNormal) return;
 
+    const safe = Array.isArray(nextRows) && nextRows.length ? nextRows : [newSupplierRow()];
+
+    if (isStructured) onItemChange?.(TAGS.fornecedores, safe);
+    else onChangeFornecedores?.(safe);
+
+    // ✅ limpa erro do campo fornecedores
+    onClearFieldError?.(TAGS.fornecedores);
+
+    // ✅ limpa erros por célula (supplier_code/store/supplier_name/part_number)
+    safe.forEach((_, idx) => {
+      SUPPLIER_COLUMNS.forEach((c) => {
+        onClearSupplierError?.(idx, c.key);
+      });
+    });
+  }
+
+  useEffect(() => {
+    // só UPDATE (solicitação)
+    if (!isUpdate) return;
+    if (!canEditNormal) return;
+
+    const code = String(getVal(TAGS.codigo_atual, "") || "").trim();
+    setAutoFillError("");
+
+    // evita chamadas vazias / repetidas
+    if (!code) return;
+    if (code === lastFetchedCodeRef.current) return;
+
+    const handle = setTimeout(async () => {
+      try {
+        setAutoFillBusy(true);
+        setAutoFillError("");
+
+        // ✅ 1) LIMPA CAMPOS DEPENDENTES DO PRODUTO
+        TOTVS_DEPENDENT_TAGS.forEach((tag) => {
+          if (tag === TAGS.fornecedores) {
+            setFornecedores([newSupplierRow()]);
+          } else {
+            setVal(tag, "");
+          }
+        });
+
+        const totvs = await getTotvsByProductCodeApi(code);
+        if (!totvs) {
+          setAutoFillError("Produto não encontrado no TOTVS.");
+          return;
+        }
+        
+
+        // marca que já buscou esse código
+        lastFetchedCodeRef.current = code;
+
+        // ✅ preenche campos (somente se vier valor)
+        const applyIfPresent = (tag, value) => {
+          const v = value == null ? "" : String(value);
+          if (!v.trim()) return;
+          setVal(tag, v);
+        };
+
+        applyIfPresent(TAGS.grupo, totvs.grupo);
+        applyIfPresent(TAGS.tipo, totvs.tipo);
+        applyIfPresent(TAGS.descricao, totvs.descricao);
+        applyIfPresent(TAGS.armazem_padrao, totvs.armazem_padrao);
+        applyIfPresent(TAGS.unidade, totvs.unidade);
+        applyIfPresent(TAGS.produto_terceiro, totvs.produto_terceiro);
+        applyIfPresent(TAGS.cta_contabil, totvs.cta_contabil);
+        applyIfPresent(TAGS.ref_cliente, totvs.ref_cliente);
+
+        // fornecedores: lista
+        if (Array.isArray(totvs.fornecedores) && totvs.fornecedores.length) {
+          setFornecedores(totvs.fornecedores);
+        } else {
+          // se não vier fornecedores do TOTVS, mantém vazio/padrão e sem erro “sobrando”
+          setFornecedores([newSupplierRow()]);
+        }
+      } catch (err) {
+        setAutoFillError(err?.response?.data?.error ?? "Falha ao buscar dados do TOTVS.");
+      } finally {
+        setAutoFillBusy(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUpdate, canEditNormal, isStructured, valuesByTag?.[TAGS.codigo_atual], item?.codigo_atual]);
 
   function setRequestType(code) {
     // somente no structured + edit normal
@@ -168,11 +303,35 @@ const [flagModal, setFlagModal] = useState({
     if (!isStructured) return;
 
     if (code === "CREATE") {
+      const defaults = newStructuredItem();
+
       onItemChange?.("request_type_code", "CREATE");
+
+      // ✅ limpar campos de UPDATE
       onItemChange?.(TAGS.codigo_atual, "");
       onItemChange?.(TAGS.novo_codigo, "");
+
+      // ✅ restaurar padrões do CREATE
+      onItemChange?.(TAGS.grupo, defaults.grupo ?? "");
+      onItemChange?.(TAGS.descricao, defaults.descricao ?? "");
+      onItemChange?.(TAGS.tipo, defaults.tipo ?? "");
+      onItemChange?.(TAGS.armazem_padrao, defaults.armazem_padrao ?? "");
+      onItemChange?.(TAGS.unidade, defaults.unidade ?? "");
+      onItemChange?.(TAGS.produto_terceiro, defaults.produto_terceiro ?? "");
+      onItemChange?.(TAGS.cta_contabil, defaults.cta_contabil ?? "");
+      onItemChange?.(TAGS.ref_cliente, defaults.ref_cliente ?? "");
+
+      // ✅ fornecedores sempre volta ao padrão
+      onItemChange?.(TAGS.fornecedores, Array.isArray(defaults.fornecedores) ? defaults.fornecedores : [newSupplierRow()]);
+
+      // ✅ evita “cache” do último código TOTVS
+      lastFetchedCodeRef.current = "";
+      setAutoFillError("");
     } else {
       onItemChange?.("request_type_code", "UPDATE");
+      // opcional: não mexe em nada, usuário vai preencher codigo_atual e disparar o TOTVS
+      lastFetchedCodeRef.current = "";
+      setAutoFillError("");
     }
 
     onClearFieldError?.(TAGS.codigo_atual);
@@ -587,7 +746,7 @@ const [flagModal, setFlagModal] = useState({
           </label>
         ) : null}
         {/* CREATE (details): só mostra novo_codigo quando estiver liberado para editar (ADMIN/ANALYST) */}
-        {!isStructured && isCreate && canEditNovoCodigoField ? (
+        {!isStructured && isCreate ? (
           <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
             <span>Novo código (obrigatório para finalizar CRIAR)</span>
             <input
@@ -600,10 +759,13 @@ const [flagModal, setFlagModal] = useState({
               <span style={styles.errorText}>{fieldErr[TAGS.novo_codigo]}</span>
             ) : null}
             <div style={styles.subtle}>
-              Em CREATE, este campo é preenchido por ADMIN/ANALYST antes de rejeitar/finalizar.
+              {canEditNovoCodigoField
+                ? "Em CREATE, este campo é preenchido por ADMIN/ANALYST antes de rejeitar/finalizar."
+                : "Campo exibido para referência (somente leitura)."}
             </div>
           </label>
         ) : null}
+
 
         {/* UPDATE: codigo_atual/novo_codigo */}
         {isUpdate ? (
@@ -612,6 +774,13 @@ const [flagModal, setFlagModal] = useState({
               <LabelRow tag={TAGS.codigo_atual}>
                 <span>Código atual</span>
               </LabelRow>
+              {autoFillBusy ? (
+                <div style={styles.subtle}>Buscando dados do TOTVS...</div>
+              ) : null}
+
+              {autoFillError ? (
+                <div style={styles.errorText}>{autoFillError}</div>
+              ) : null}
               <input
                 value={getVal(TAGS.codigo_atual)}
                 onChange={(e) => setVal(TAGS.codigo_atual, e.target.value)}
