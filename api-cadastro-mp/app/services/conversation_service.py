@@ -35,6 +35,10 @@ class ConversationService:
         if role_id in (Role.ADMIN, Role.ANALYST):
             return True
         return created_by == user_id
+    
+    def _can_chage_title(self,*,user_id, created_by):
+        return created_by == user_id
+        
 
     def _pack_user_mini(self, u) -> dict[str, Any] | None:
         if u is None:
@@ -92,10 +96,8 @@ class ConversationService:
 
         conv = self._repo.add(model)
 
-        # ✅ puxa o row completo (conv + creator + assignee) para emitir tudo
         row = self._repo.get_row_by_id(conv.id)
         if row is None:
-            # extremamente improvável, mas mantém consistência
             raise NotFoundError("Conversa não encontrada após criação.")
         conv2, creator, assignee = row
 
@@ -107,7 +109,6 @@ class ConversationService:
             created_by=int(conv2.created_by),
             assigned_to=int(conv2.assigned_to) if conv2.assigned_to is not None else None,
             created_at_iso=conv2.created_at.astimezone(timezone.utc).isoformat(),
-            # ✅ novos campos (payload completo + minis)
             conversation=conversation_payload,
             creator=conversation_payload.get("creator"),
             assignee=conversation_payload.get("assignee"),
@@ -133,6 +134,9 @@ class ConversationService:
         if not self._can_access(role_id=role_id, user_id=user_id, created_by=conv.created_by):
             raise ForbiddenError("Acesso negado.")
 
+        if not self._can_chage_title(user_id=user_id, created_by=conv.created_by):
+            raise ForbiddenError("Somente o criador da conversa pode alterar o título.")
+
         ok = self._repo.update_fields(
             conversation_id=conversation_id,
             title=title,
@@ -142,7 +146,6 @@ class ConversationService:
         if not ok:
             raise NotFoundError("Conversa não encontrada.")
 
-        # (opcional) aqui você pode criar um ConversationUpdatedEvent depois
 
     def delete_conversation(self, *, conversation_id: int, user_id: int, role_id: int) -> None:
         row = self._repo.get_row_by_id(conversation_id)
