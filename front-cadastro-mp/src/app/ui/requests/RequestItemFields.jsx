@@ -74,6 +74,7 @@ export function RequestItemFields({
 
   // ---------- structured ----------
   item,
+  itemKey, 
   onItemChange,
   errors,
   onClearFieldError,
@@ -180,6 +181,62 @@ const [flagModal, setFlagModal] = useState({
     return value;
   }
 
+  function normalizeValueForTyping(value) {
+    if (typeof value === "string") return value; // ✅ não trim aqui
+    if (Array.isArray(value)) return value.map(normalizeValueForTyping);
+    if (value && typeof value === "object") {
+      const out = {};
+      Object.keys(value).forEach((k) => (out[k] = normalizeValueForTyping(value[k])));
+      return out;
+    }
+    return value;
+  }
+
+
+
+
+  const key = String(itemKey ?? "default");
+
+  const lastFetchedByKeyRef = useRef(new Map()); // key -> code
+  const prevCodeByKeyRef = useRef(new Map());    // key -> code
+  const dirtyByKeyRef = useRef(new Map());       // key -> Set(tags)
+  const isApplyingTotvsRef = useRef(false);
+
+  // ✅ marca que o usuário realmente digitou/colou o código (por item)
+  const codeUserIntentByKeyRef = useRef(new Map()); // key -> boolean
+
+
+  function getDirtySet() {
+    if (!dirtyByKeyRef.current.has(key)) dirtyByKeyRef.current.set(key, new Set());
+    return dirtyByKeyRef.current.get(key);
+  }
+
+  function markDirty(tag) {
+    if (isApplyingTotvsRef.current) return; // não marcar dirty no auto-fill
+    getDirtySet().add(tag);
+  }
+
+  function isDirty(tag) {
+    return getDirtySet().has(tag);
+  }
+
+  function resetTotvsContextForThisItem(nextCode = "") {
+    const dirtySet = getDirtySet();
+
+    // ✅ limpa dirty de tudo que o TOTVS controla
+    TOTVS_DEPENDENT_TAGS.forEach((tag) => dirtySet.delete(tag));
+
+    // ✅ também limpa dirty do próprio código atual (pra não “travar”)
+    dirtySet.delete(TAGS.codigo_atual);
+
+    // ✅ reseta cache por item (permite nova busca)
+    lastFetchedByKeyRef.current.delete(key);
+
+    // ✅ atualiza o prevCode pra refletir o que o usuário acabou de digitar
+    prevCodeByKeyRef.current.set(key, String(nextCode || "").trim());
+  }
+
+
   function setVal(tag, v) {
     const isSpecialNovoCodigo = tag === TAGS.novo_codigo && canEditNovoCodigoField;
 
@@ -191,11 +248,13 @@ const [flagModal, setFlagModal] = useState({
     // ✅ REGRA: alguns campos sempre em UPPERCASE
     const mustUppercase = true;
 
-    let nextValue = normalizeValue(v);
+    let nextValue = normalizeValueForTyping(v);
 
     if (mustUppercase && typeof nextValue === "string") {
       nextValue = nextValue.toUpperCase();
     }
+
+    markDirty(tag);
 
     if (isStructured) {
       onItemChange?.(tag, nextValue);
@@ -210,6 +269,9 @@ const [flagModal, setFlagModal] = useState({
   function setFornecedores(nextRows) {
     // respeita readOnly
     if (!canEditNormal) return;
+
+    // fornecedores também contam como "dirty"
+    markDirty(TAGS.fornecedores);
 
     const safe = Array.isArray(nextRows) && nextRows.length ? nextRows : [newSupplierRow()];
 
@@ -228,63 +290,102 @@ const [flagModal, setFlagModal] = useState({
   }
 
   useEffect(() => {
-    // só UPDATE (solicitação)
     if (!isUpdate) return;
     if (!canEditNormal) return;
 
     const code = String(getVal(TAGS.codigo_atual, "") || "").trim();
     setAutoFillError("");
 
-    // evita chamadas vazias / repetidas
+    const userIntent = codeUserIntentByKeyRef.current.get(key) === true;
+    if (!userIntent) return;
+    codeUserIntentByKeyRef.current.set(key, false);
+
     if (!code) return;
-    if (code === lastFetchedCodeRef.current) return;
+
+    const lastFetched = lastFetchedByKeyRef.current.get(key) || "";
+
+    // se já buscou esse mesmo código para este item, não repete
+    if (code === lastFetched) return;
 
     const handle = setTimeout(async () => {
       try {
         setAutoFillBusy(true);
         setAutoFillError("");
 
-        // ✅ 1) LIMPA CAMPOS DEPENDENTES DO PRODUTO
-        TOTVS_DEPENDENT_TAGS.forEach((tag) => {
-          if (tag === TAGS.fornecedores) {
-            setFornecedores([newSupplierRow()]);
-          } else {
-            setVal(tag, "");
-          }
-        });
+        // 1) LIMPA SOMENTE CAMPOS NÃO-EDITADOS (dirty = preserva)
+        isApplyingTotvsRef.current = true;
+        try {
+          TOTVS_DEPENDENT_TAGS.forEach((tag) => {
+            if (isDirty(tag)) return;
+
+            if (tag === TAGS.fornecedores) setFornecedores([newSupplierRow()]);
+            else setVal(tag, "");
+          });
+        } finally {
+          isApplyingTotvsRef.current = false;
+        }
 
         const totvs = await getTotvsByProductCodeApi(code);
         if (!totvs) {
           setAutoFillError("Produto não encontrado no TOTVS.");
           return;
         }
-        
 
-        // marca que já buscou esse código
-        lastFetchedCodeRef.current = code;
+        // marca que já buscou esse código (por item)
+        lastFetchedByKeyRef.current.set(key, code);
 
-        // ✅ preenche campos (somente se vier valor)
-        const applyIfPresent = (tag, value) => {
+        // ✅ 2) PREENCHE SOMENTE SE:
+        // - campo NÃO estiver dirty, OU
+        // - campo estiver vazio (evita “sobrar” dado de outro produto)
+        const applyIfAllowed = (tag, value) => {
           const v = value == null ? "" : String(value);
           if (!v.trim()) return;
-          setVal(tag, v);
+
+          const current = String(getVal(tag, "") ?? "").trim();
+          const canOverwrite = !isDirty(tag) || !current;
+
+          if (!canOverwrite) return;
+
+          isApplyingTotvsRef.current = true;
+          try {
+            setVal(tag, v);
+          } finally {
+            isApplyingTotvsRef.current = false;
+          }
         };
 
-        applyIfPresent(TAGS.grupo, totvs.grupo);
-        applyIfPresent(TAGS.tipo, totvs.tipo);
-        applyIfPresent(TAGS.descricao, totvs.descricao);
-        applyIfPresent(TAGS.armazem_padrao, totvs.armazem_padrao);
-        applyIfPresent(TAGS.unidade, totvs.unidade);
-        applyIfPresent(TAGS.produto_terceiro, totvs.produto_terceiro);
-        applyIfPresent(TAGS.cta_contabil, totvs.cta_contabil);
-        applyIfPresent(TAGS.ref_cliente, totvs.ref_cliente);
+        applyIfAllowed(TAGS.grupo, totvs.grupo);
+        applyIfAllowed(TAGS.tipo, totvs.tipo);
+        applyIfAllowed(TAGS.descricao, totvs.descricao);
+        applyIfAllowed(TAGS.armazem_padrao, totvs.armazem_padrao);
+        applyIfAllowed(TAGS.unidade, totvs.unidade);
+        applyIfAllowed(TAGS.produto_terceiro, totvs.produto_terceiro);
+        applyIfAllowed(TAGS.cta_contabil, totvs.cta_contabil);
+        applyIfAllowed(TAGS.ref_cliente, totvs.ref_cliente);
 
-        // fornecedores: lista
-        if (Array.isArray(totvs.fornecedores) && totvs.fornecedores.length) {
-          setFornecedores(totvs.fornecedores);
-        } else {
-          // se não vier fornecedores do TOTVS, mantém vazio/padrão e sem erro “sobrando”
-          setFornecedores([newSupplierRow()]);
+        // fornecedores: só sobrescreve se não estiver dirty ou se estiver “vazio”
+        const fornecedoresCur = Array.isArray(fornecedores) ? fornecedores : [];
+        const fornecedoresVazios =
+          fornecedoresCur.length === 0 ||
+          (fornecedoresCur.length === 1 &&
+            !String(fornecedoresCur[0]?.supplier_code ?? "").trim() &&
+            !String(fornecedoresCur[0]?.store ?? "").trim() &&
+            !String(fornecedoresCur[0]?.supplier_name ?? "").trim() &&
+            !String(fornecedoresCur[0]?.part_number ?? "").trim());
+
+        const canOverwriteSuppliers = !isDirty(TAGS.fornecedores) || fornecedoresVazios;
+
+        if (canOverwriteSuppliers) {
+          isApplyingTotvsRef.current = true;
+          try {
+            if (Array.isArray(totvs.fornecedores) && totvs.fornecedores.length) {
+              setFornecedores(totvs.fornecedores);
+            } else {
+              setFornecedores([newSupplierRow()]);
+            }
+          } finally {
+            isApplyingTotvsRef.current = false;
+          }
         }
       } catch (err) {
         setAutoFillError(err?.response?.data?.error ?? "Falha ao buscar dados do TOTVS.");
@@ -295,7 +396,7 @@ const [flagModal, setFlagModal] = useState({
 
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isUpdate, canEditNormal, isStructured, valuesByTag?.[TAGS.codigo_atual], item?.codigo_atual]);
+  }, [key, isUpdate, canEditNormal, isStructured, valuesByTag?.[TAGS.codigo_atual], item?.codigo_atual]);
 
   function setRequestType(code) {
     // somente no structured + edit normal
@@ -783,10 +884,19 @@ const [flagModal, setFlagModal] = useState({
               ) : null}
               <input
                 value={getVal(TAGS.codigo_atual)}
-                onChange={(e) => setVal(TAGS.codigo_atual, e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  codeUserIntentByKeyRef.current.set(key, true);
+                  resetTotvsContextForThisItem(next);
+                  setVal(TAGS.codigo_atual, next);
+                }}
+                onPaste={() => {
+                  codeUserIntentByKeyRef.current.set(key, true);
+                }}
                 disabled={!canEditNormal}
                 style={inputStyle(!!fieldErr[TAGS.codigo_atual])}
               />
+
               {fieldErr[TAGS.codigo_atual] ? (
                 <span style={styles.errorText}>{fieldErr[TAGS.codigo_atual]}</span>
               ) : null}

@@ -104,10 +104,15 @@ export function RequestComposerModal({ onClose, onSubmit }) {
       // clone profundo suficiente pro formato atual (inclui fornecedores)
       const cloned = {
         ...src,
+        _client_id: (crypto?.randomUUID?.() ?? `cid-${Date.now()}-${Math.random()}`), 
         fornecedores: Array.isArray(src.fornecedores)
           ? src.fornecedores.map((r) => ({ ...r }))
           : [],
       };
+      // ✅ se for UPDATE, evita disparar TOTVS automaticamente no duplicado
+      if (cloned.request_type_code === "UPDATE") {
+        cloned.codigo_atual = "";
+      }
 
       // insere logo após o item original
       list.splice(idx + 1, 0, cloned);
@@ -305,6 +310,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
             <RequestItemFields
               variant="structured"
               item={active}
+              itemKey={active?._client_id ?? activeIndex}
               readOnly={false}
               errors={activeErr}
               onItemChange={(key, value) => setActiveItemField(key, value)}

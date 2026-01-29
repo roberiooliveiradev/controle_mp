@@ -46,22 +46,28 @@ export function newSupplierRow() {
 }
 
 export function newStructuredItem() {
-	return {
-		request_type_code: "CREATE",
-		codigo_atual: "",
-		grupo: "",
-		novo_codigo: "",
+  const cid =
+    globalThis.crypto?.randomUUID?.() ??
+    `cid-${Date.now()}-${Math.random()}`;
 
-		descricao: "",
-		tipo: DEFAULT_VALUES.TIPO,
-		armazem_padrao: DEFAULT_VALUES.ARMAZEM_PADRAO,
-		unidade: "",
-		produto_terceiro: DEFAULT_VALUES.PRODUTO_TERCEIRO,
-		cta_contabil: DEFAULT_VALUES.CTA_CONTABIL,
-		ref_cliente: "",
-		fornecedores: [newSupplierRow()],
-	};
+  return {
+    _client_id: cid, // ✅ agora existe
+    request_type_code: "CREATE",
+    codigo_atual: "",
+    grupo: "",
+    novo_codigo: "",
+
+    descricao: "",
+    tipo: DEFAULT_VALUES.TIPO,
+    armazem_padrao: DEFAULT_VALUES.ARMAZEM_PADRAO,
+    unidade: "",
+    produto_terceiro: DEFAULT_VALUES.PRODUTO_TERCEIRO,
+    cta_contabil: DEFAULT_VALUES.CTA_CONTABIL,
+    ref_cliente: "",
+    fornecedores: [newSupplierRow()],
+  };
 }
+
 export function toRequestTypeId(code) {
 	return code === "UPDATE" ? REQUEST_TYPE_ID_UPDATE : REQUEST_TYPE_ID_CREATE;
 }
