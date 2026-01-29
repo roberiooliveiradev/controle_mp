@@ -67,6 +67,7 @@ export default function ConversationsPage() {
     unreadCounts,
     setUnreadCounts,
     activeConvRef,
+    updateConversationTitle, 
   } = useRealtime();
 
   // lê messageId para rolar
@@ -220,39 +221,26 @@ export default function ConversationsPage() {
     if (conv?.title) setTitleDraft(conv.title);
   }, [conv?.title]);
 
-  async function saveTitle() {
-    if (!conv?.id) {
-      setEditingTitle(false);
-      return;
-    }
+async function saveTitle() {
+  if (!conv?.id) return setEditingTitle(false);
 
-    const value = (titleDraft ?? "").trim();
-    if (!value || value === (conv?.title ?? "")) {
-      setEditingTitle(false);
-      setTitleDraft(conv?.title ?? "");
-      return;
-    }
-
-    try {
-      const updated = await updateConversationApi(conv.id, {
-        title: value,
-      });
-
-      // atualiza conversa aberta
-      setConv(updated);
-
-      // atualiza lista da esquerda
-      setConversations((prev) =>
-        (prev ?? []).map((c) => (Number(c.id) === Number(updated.id) ? { ...c, title: updated.title } : c))
-      );
-    } catch (err) {
-      alert(err?.response?.data?.error ?? "Erro ao atualizar título");
-      setTitleDraft(conv?.title ?? "");
-    } finally {
-      setEditingTitle(false);
-    }
+  const value = titleDraft.trim();
+  if (!value || value === conv.title) {
+    setEditingTitle(false);
+    return;
   }
 
+  try {
+    const updated = await updateConversationApi(conv.id, { title: value });
+
+    setConv(updated); // header do chat
+    updateConversationTitle(updated.id, updated.title); 
+  } catch (err) {
+    alert(err?.response?.data?.error ?? "Erro ao atualizar título");
+  } finally {
+    setEditingTitle(false);
+  }
+}
 
   function isUnreadFromOthers(m) {
     return !m.is_read && m.sender?.id !== myUserIdRef.current;

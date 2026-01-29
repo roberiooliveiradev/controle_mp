@@ -109,6 +109,25 @@ export function RealtimeProvider({ children }) {
 
   const [conversations, setConversations] = useState([]);
 
+  function updateConversationTitle(conversationId, title) {
+    const cid = Number(conversationId);
+    if (!cid) return;
+
+    setConversations((prev) => {
+      const list = Array.isArray(prev) ? [...prev] : [];
+      const idx = list.findIndex((c) => Number(c.id) === cid);
+      if (idx < 0) return list;
+
+      list[idx] = {
+        ...list[idx],
+        title,
+        updated_at: new Date().toISOString(),
+      };
+
+      return list;
+    });
+  }
+
   // ✅ Unread por perfil
   const unreadKey = useMemo(
     () => `cadmp_unread_counts:${activeUserId ?? "na"}`,
@@ -606,7 +625,7 @@ export function RealtimeProvider({ children }) {
         unreadCounts,
         setUnreadCounts,
         activeConvRef,
-
+        updateConversationTitle,
         requestBrowserNotificationsPermission,
         canShowBrowserNotificationNow,
         isSecureForNotifications,
@@ -622,3 +641,5 @@ export function useRealtime() {
   if (!ctx) throw new Error("useRealtime deve ser usado dentro de RealtimeProvider");
   return ctx;
 }
+
+
