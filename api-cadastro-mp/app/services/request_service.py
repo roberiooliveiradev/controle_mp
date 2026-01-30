@@ -450,6 +450,18 @@ class RequestService:
                 "id": s.id, "status_name": s.status_name} if s is not None else None
 
         return rows, int(total)
+    
+    def count_requests(self,*, user_id:int, role_id:int, type_id:Optional[int], status_id:Optional[int])->int:
+        created_by_user_id: int | None = None
+        if role_id == Role.USER:
+            created_by_user_id = user_id
+
+        total = self._item_repo.count_items(
+            created_by_id=created_by_user_id,
+            status_id=status_id,
+            type_id=type_id,
+        )
+        return total
 
     # ---------------- Status ----------------
     def change_item_status(self, *, item_id: int, new_status_id: int, user_id: int, role_id: int) -> dict | None:

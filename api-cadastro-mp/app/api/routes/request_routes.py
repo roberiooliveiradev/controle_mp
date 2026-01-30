@@ -439,6 +439,38 @@ def delete_field(field_id: int):
 
 
 # -------------------------
+# Contagem (tela / topbar)
+# -------------------------
+@bp_req.get("/count")
+@require_auth
+def count_requests():
+    """
+    Retorna a quantidade de itens de solicitação,
+    respeitando papel do usuário (USER vê só os seus).
+    """
+
+    user_id, role_id = _auth_user()
+
+    # filtros opcionais
+    status_id = request.args.get("status_id")
+    status_id = int(status_id) if status_id not in (None, "") else None
+
+    type_id = request.args.get("type_id")
+    type_id = int(type_id) if type_id not in (None, "") else None
+
+    with db_session() as session:
+        svc = _build_service(session)
+
+        total = svc.count_requests(
+            user_id=user_id,
+            role_id=role_id,
+            status_id=status_id,
+            type_id=type_id,
+        )
+
+    return jsonify({"total": int(total)}), 200
+
+# -------------------------
 # Listagem (tela)
 # -------------------------
 

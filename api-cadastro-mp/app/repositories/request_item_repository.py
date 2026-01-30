@@ -88,6 +88,39 @@ class RequestItemRepository(BaseRepository[RequestItemModel]):
         return func.coalesce(RequestItemModel.updated_at, RequestItemModel.created_at)
 
     # -------- Listagem para tela --------
+    def count_items(
+        self,
+        *,
+        created_by_id: int | None = None,
+        status_id: int | None = None,
+        type_id: int | None = None,
+    ) -> int:
+        """Conta itens de solicitações"""
+
+        stmt = (
+            select(func.count(RequestItemModel.id))
+            .select_from(RequestItemModel)
+            .join(
+                RequestModel,
+                RequestModel.id == RequestItemModel.request_id
+            )
+        )
+
+        # created_by (Request.owner)
+        if created_by_id is not None:
+            stmt = stmt.where(RequestModel.created_by == int(created_by_id))
+
+        # status
+        if status_id is not None:
+            stmt = stmt.where(RequestItemModel.request_status_id == int(status_id))
+
+        # tipo
+        if type_id is not None:
+            stmt = stmt.where(RequestItemModel.request_type_id == int(type_id))
+
+        total = self._session.execute(stmt).scalar_one()
+        return int(total)
+
     def list_items_for_page(
         self,
         *,
