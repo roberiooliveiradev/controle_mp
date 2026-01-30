@@ -202,8 +202,6 @@ def _build_service(session) -> MessageService:
 @require_auth
 def list_messages(conversation_id: int):
     user_id, role_id = _auth_user()
-    limit = max(1, min(int(request.args.get("limit", 100)), 500))
-    offset = max(0, int(request.args.get("offset", 0)))
 
     with db_session() as session:
         svc = _build_service(session)
@@ -211,8 +209,6 @@ def list_messages(conversation_id: int):
             conversation_id=conversation_id,
             user_id=user_id,
             role_id=role_id,
-            limit=limit,
-            offset=offset,
         )
 
     return jsonify([_pack_response(x) for x in items]), 200

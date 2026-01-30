@@ -35,15 +35,13 @@ class MessageRepository(BaseRepository[MessageModel]):
         )
         return self._session.execute(stmt).first()  # (msg, sender) | None
 
-    def list_rows_by_conversation(self, *, conversation_id: int, limit: int, offset: int):
+    def list_rows_by_conversation(self, *, conversation_id: int):
         sender = aliased(UserModel)
         stmt = (
             select(MessageModel, sender)
             .join(sender, sender.id == MessageModel.sender_id)
             .where(MessageModel.conversation_id == conversation_id, MessageModel.is_deleted.is_(False))
-            .order_by(MessageModel.created_at.asc())
-            .limit(limit)
-            .offset(offset)
+            .order_by(MessageModel.id.asc())
         )
         return list(self._session.execute(stmt).all())
 

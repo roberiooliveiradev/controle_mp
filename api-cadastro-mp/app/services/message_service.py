@@ -324,14 +324,14 @@ class MessageService:
         self._notifier.notify_message_created(event)
         return msg
 
-    def list_messages(self, *, conversation_id: int, user_id: int, role_id: int, limit: int, offset: int):
+    def list_messages(self, *, conversation_id: int, user_id: int, role_id: int):
         """
         ⚠️ Mantido igual (retorna models), para não quebrar as rotas atuais.
         """
         self._ensure_access(conversation_id=conversation_id, user_id=user_id, role_id=role_id)
 
         participant = self._part_repo.ensure(conversation_id=conversation_id, user_id=user_id)
-        rows = self._msg_repo.list_rows_by_conversation(conversation_id=conversation_id, limit=limit, offset=offset)
+        rows = self._msg_repo.list_rows_by_conversation(conversation_id=conversation_id)
 
         message_ids = [msg.id for (msg, _sender) in rows]
         files_map = self._file_repo.list_by_message_ids(message_ids)
