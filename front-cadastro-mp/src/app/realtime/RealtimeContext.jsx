@@ -115,7 +115,7 @@ export function RealtimeProvider({ children }) {
   const isPrivileged = roleId === ROLE_ADMIN || roleId === ROLE_ANALYST;
   const isUserOnly = roleId === ROLE_USER;
 
-  // refs anti-closure (evita handlers ficarem com user antigo após logout/login)
+  // ✅ refs anti-closure
   const activeUserIdRef = useRef(activeUserId ?? null);
   const isPrivilegedRef = useRef(isPrivileged);
   const isUserOnlyRef = useRef(isUserOnly);
@@ -144,7 +144,6 @@ export function RealtimeProvider({ children }) {
   });
 
   useEffect(() => {
-    // outra aba / alguns fluxos disparam storage
     function onStorage() {
       try {
         const t = String(authStorage?.getActiveAccessToken?.() ?? "").trim();
@@ -173,7 +172,7 @@ export function RealtimeProvider({ children }) {
   }, []);
 
   // -----------------------------
-  // ✅ Unread por perfil
+  // ✅ Unread por perfil (persistência local)
   // -----------------------------
   const unreadKey = useMemo(
     () => `cadmp_unread_counts:${activeUserId ?? "na"}`,
@@ -283,7 +282,9 @@ export function RealtimeProvider({ children }) {
     const assigneeId =
       payload?.conversation?.assigned_to ??
       payload?.conversation?.assignee?.id ??
-      payload?.assigned_to;
+      payload?.assigned_to ??
+      payload?.assignee_id ??
+      payload?.assigned_to_id;
     const n = Number(assigneeId);
     return Number.isFinite(n) && n > 0 && n === Number(activeUserIdRef.current);
   }
@@ -320,7 +321,13 @@ export function RealtimeProvider({ children }) {
   }
 
   function requestItemIdOf(payload) {
-    const rid = payload?.request_item_id ?? payload?.item_id ?? payload?.requestItemId;
+    const rid =
+      payload?.request_item_id ??
+      payload?.item_id ??
+      payload?.requestItemId ??
+      payload?.request_item?.id ??
+      payload?.requestItem?.id ??
+      payload?.item?.id;
     const n = Number(rid);
     return Number.isFinite(n) ? n : 0;
   }
@@ -454,29 +461,74 @@ export function RealtimeProvider({ children }) {
 
   async function loadCreatedRequestsCount() {
     try {
-      const total = await getRequestsCountApi({ status_id: 1 });
+      const total = await getRequestsCountApi({ status_id: 1 }); // CRIADO
       setCreatedRequestsCount(Number(total || 0));
     } catch {
       setCreatedRequestsCount(0);
     }
   }
 
-  // ✅ “refreshAll” central (login/refresh/reconnect/voltar pra aba)
+  // ✅ refresh central (login/refresh/reconnect/voltar pra aba)
   async function refreshAll() {
-    await Promise.allSettled([
-      loadConversations(),
-      loadUnreadSummary(),
-      loadCreatedRequestsCount(),
-    ]);
+    await Promise.allSettled([loadConversations(), loadUnreadSummary(), loadCreatedRequestsCount()]);
   }
 
-  // debounce de sync (pra não floodar a API quando chegam muitas msgs)
+  // debounce de sync (pra não floodar API)
   const syncTimerRef = useRef(null);
   function scheduleSyncAll(delayMs = 300) {
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(() => {
       refreshAll();
     }, delayMs);
+  }
+
+  // -----------------------------
+  // ✅ helpers: notify vs sync
+  // -----------------------------
+  function toastForRequestStatus(statusId) {
+    // Ajuste textos se quiser, mas mantém sem “notificar todo mundo”
+    if (statusId === 1) return { kind: "success", text: "Item (re)enviado." };
+    if (statusId === 2) return { kind: "success", text: "Item em processo." };
+    if (statusId === 3) return { kind: "success", text: "Item finalizado." };
+    if (statusId === 5) return { kind: "warning", text: "Item devolvido." };
+    if (statusId === 6) return { kind: "error", text: "Item rejeitado." };
+    if (statusId === 4) return { kind: "error", text: "Falha ao processar item." };
+    return { kind: "warning", text: "Solicitação atualizada." };
+  }
+
+  function shouldNotifyRequestChange(payload, { statusId, changedBy, requestOwnerId }) {
+    const currentUserId = Number(activeUserIdRef.current);
+
+    // 1) Sempre notifica quem fez a ação e o dono da solicitação
+    if (currentUserId && (currentUserId === Number(changedBy) || currentUserId === Number(requestOwnerId))) {
+      return true;
+    }
+
+    // 2) ADMIN / ANALYST
+    if (isPrivilegedRef.current) {
+      // criação ou reenvio (status 1) → sempre notifica
+      if (Number(statusId) === 1) return true;
+
+      // outros status → só se estiver atribuído
+      if (isConversationAssignedToMe(payload)) return true;
+    }
+
+    // 3) USER: nunca notifica se não for o dono (ou quem fez a ação)
+    if (isUserOnlyRef.current) return false;
+
+    // default: não notifica “todo mundo”
+    return false;
+  }
+
+  // ✅ pedido do usuário: extrair função
+  async function syncAfterRequestChange(statusId) {
+    // badge depende do total de status_id=1, então QUALQUER transição envolvendo item
+    // pode afetar o total (ex.: 5 -> 1, 1 -> 2, etc). Atualiza e depois sincroniza geral.
+    await loadCreatedRequestsCount();
+
+    // status 1 costuma ser mais “sensível” (reaparece na fila); sincroniza mais rápido
+    if (Number(statusId) === 1) scheduleSyncAll(120);
+    else scheduleSyncAll(250);
   }
 
   // -----------------------------
@@ -558,29 +610,28 @@ export function RealtimeProvider({ children }) {
       const currentUserId = Number(activeUserIdRef.current);
       const isMine = sid && currentUserId === sid;
 
-      // se estou dentro da conversa ou msg minha, não conta como unread aqui
+      // se estou dentro da conversa: não faz notify, mas faz sync leve (fonte da verdade)
       if (activeConvRef.current === cid) {
-        // mesmo assim: mantém o backend como fonte da verdade
         scheduleSyncAll(250);
         return;
       }
+
+      // mensagem minha: não notifica (mas pode sync se quiser; aqui não precisa)
       if (isMine) return;
 
       const who = senderNameOf(payload);
       const title = conversationTitleOf(payload);
       const prev = messagePreviewOf(payload);
 
-      toastSuccess(
-        title ? `Nova mensagem de ${who} • ${title}` : `Nova mensagem de ${who}`
-      );
+      toastSuccess(title ? `Nova mensagem de ${who} • ${title}` : `Nova mensagem de ${who}`);
 
-      // ✅ feedback instantâneo no badge
+      // feedback instantâneo no badge
       setUnreadCounts((prevCounts) => ({
         ...(prevCounts ?? {}),
         [cid]: Number((prevCounts ?? {})[cid] ?? 0) + 1,
       }));
 
-      // ✅ e sincroniza com o servidor (fonte da verdade)
+      // e sincroniza com o servidor (fonte da verdade)
       scheduleSyncAll(350);
 
       showBrowserNotification({
@@ -589,17 +640,16 @@ export function RealtimeProvider({ children }) {
       });
     };
 
-    const onConversationNew = async (payload) => {
+    const onConversationNew = (payload) => {
       const cid = conversationIdOf(payload);
       const t = stableText(payload?.title ?? payload?.subject ?? "");
       const fp = `conversation:new|fp:${t || bodyCut(payload)}`;
       const keys = [cid ? `conversation:new|cid:${cid}` : "", fp];
       if (markSeenAny(keys)) return;
 
+      // notify: apenas se privilegiado (e com contexto)
       if (isPrivilegedRef.current) {
         const title = conversationTitleOf(payload);
-        const creator =
-          payload?.creator?.full_name ?? payload?.creator?.name ?? "Alguém";
         const assignedToMe = isConversationAssignedToMe(payload);
 
         toastSuccess(
@@ -612,10 +662,13 @@ export function RealtimeProvider({ children }) {
           title: "Nova conversa",
           body: title
             ? `${title}${assignedToMe ? " (atribuída a você)" : ""}`
-            : `Criada por ${creator}${assignedToMe ? " (atribuída a você)" : ""}`,
+            : assignedToMe
+              ? "Conversa atribuída a você."
+              : "Nova conversa criada.",
         });
       }
 
+      // sync sempre
       scheduleSyncAll(150);
     };
 
@@ -630,14 +683,20 @@ export function RealtimeProvider({ children }) {
       if (markSeenAny(keys)) return;
 
       const currentUserId = Number(activeUserIdRef.current);
-      if (isUserOnlyRef.current && sid && sid !== currentUserId) return;
 
-      // ✅ atualiza contagem imediatamente + sync
-      await loadCreatedRequestsCount();
-      scheduleSyncAll(250);
+      // USER: só notifica se foi ele quem criou
+      if (isUserOnlyRef.current && sid && sid !== currentUserId) {
+        // ainda assim faz sync
+        await syncAfterRequestChange(1);
+        return;
+      }
 
+      // notify: geralmente ok (já era assim), mas sem “todo mundo”
       toastSuccess("Solicitação criada.");
       showBrowserNotification({ title: "Controle MP", body: "Solicitação criada." });
+
+      // sync/badge: criação geralmente implica status 1
+      await syncAfterRequestChange(1);
     };
 
     const onRequestItemChanged = async (payload) => {
@@ -645,32 +704,37 @@ export function RealtimeProvider({ children }) {
       const statusId = Number(payload?.request_status_id ?? payload?.status_id);
 
       const changedBy = Number(payload?.changed_by ?? senderIdOf(payload));
-      const requestOwnerId = Number(payload?.request?.created_by);
-      const currentUserId = Number(activeUserIdRef.current);
+      const requestOwnerId =
+        Number(payload?.request?.created_by ?? payload?.request_owner_id ?? payload?.owner_id);
 
-      const fp = `request:item_changed|fp:${changedBy}|${conversationIdOf(payload)}|${stableText(payload?.change_kind)}|${statusId}`;
+      const fp = `request:item_changed|fp:${changedBy}|${conversationIdOf(payload)}|${stableText(
+        payload?.change_kind
+      )}|${statusId}|${itemId}`;
+
       const keys = [
         itemId ? `request:item_changed|item:${itemId}|st:${statusId}` : "",
         fp,
       ];
       if (markSeenAny(keys)) return;
 
-      const shouldNotify =
-        currentUserId === changedBy || currentUserId === requestOwnerId;
+      // notify: só para interessados
+      const notify = shouldNotifyRequestChange(payload, {
+        statusId,
+        changedBy,
+        requestOwnerId,
+      });
 
-      if (!shouldNotify && statusId !== 2 && statusId !== 1) return;
+      if (notify) {
+        const t = toastForRequestStatus(statusId);
+        if (t.kind === "success") toastSuccess(t.text);
+        else if (t.kind === "warning") toastWarning(t.text);
+        else toastError(t.text);
 
-      if (statusId === 3) toastSuccess("Item finalizado.");
-      else if (statusId === 5) toastWarning("Item devolvido.");
-      else if (statusId === 6) toastError("Item rejeitado.");
-      else if (statusId === 4) toastError("Falha ao processar item.");
-      else toastWarning("Solicitação atualizada.");
+        showBrowserNotification({ title: "Controle MP", body: t.text });
+      }
 
-      // ✅ mantém badge correto (principalmente após refresh/login)
-      await loadCreatedRequestsCount();
-      scheduleSyncAll(250);
-
-      showBrowserNotification({ title: "Controle MP", body: "Solicitação atualizada." });
+      // sync SEMPRE (badge depende do status 1; ex.: 5 -> 1 precisa subir)
+      await syncAfterRequestChange(statusId);
     };
 
     const onProductCreated = (payload) => {
@@ -720,7 +784,7 @@ export function RealtimeProvider({ children }) {
       socket.off("product:created", onProductCreated);
       socket.off("product:updated", onProductUpdated);
     };
-  }, [accessToken]); // 🔥 intencional: handlers usam refs anti-closure
+  }, [accessToken]); // 🔥 intencional: handlers usam refs
 
   return (
     <RealtimeContext.Provider
