@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.base_repository import BaseRepository
 from app.infrastructure.database.models.conversation_participant_model import ConversationParticipantModel
 from app.infrastructure.database.models.message_model import MessageModel
+from app.infrastructure.database.models.conversation_model import ConversationModel
 
 class ConversationParticipantRepository(BaseRepository[ConversationParticipantModel]):
     def __init__(self, session: Session) -> None:
@@ -44,7 +45,7 @@ class ConversationParticipantRepository(BaseRepository[ConversationParticipantMo
         )
         self._session.execute(stmt)
 
-    def get_unread_count_by_conversation(self, *, user_id: int) -> dict[int, int]:
+    def get_unread_count_by_conversation(self, *, user_id: int, created_by_id: int | None = None) -> dict[int, int]:
         """
         Retorna um dict:
         {
@@ -61,6 +62,10 @@ class ConversationParticipantRepository(BaseRepository[ConversationParticipantMo
                 ConversationParticipantModel,
                 ConversationParticipantModel.conversation_id == MessageModel.conversation_id,
             )
+            .join(
+                ConversationModel,
+                ConversationModel.id == ConversationParticipantModel.conversation_id,
+            )
             .where(
                 ConversationParticipantModel.user_id == user_id,
                 ConversationParticipantModel.is_deleted.is_(False),
@@ -75,9 +80,15 @@ class ConversationParticipantRepository(BaseRepository[ConversationParticipantMo
 
                 MessageModel.is_deleted.is_(False),
             )
-            .group_by(MessageModel.conversation_id)
         )
 
+        
+        # created_by (Request.owner)
+        if created_by_id is not None:
+            stmt = stmt.where(ConversationModel.created_by == int(created_by_id))
+
+        stmt  = stmt.group_by(MessageModel.conversation_id)
+        
         rows = self._session.execute(stmt).all()
 
         return {row.conversation_id: row.unread_count for row in rows}

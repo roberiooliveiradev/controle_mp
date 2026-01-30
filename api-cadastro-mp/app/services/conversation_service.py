@@ -161,16 +161,19 @@ class ConversationService:
         if not ok:
             raise NotFoundError("Conversa não encontrada.")
     
-    def get_unread_summary(self, *, user_id: int) -> dict[int, int]:
+    def get_unread_summary(self, *, user_id: int, role_id: int) -> dict[int, int]:
         """
         Retorna:
         {
             conversation_id: unread_count
         }
         """
+        created_by_id = None
+        if role_id == Role.USER:
+            created_by_id = user_id
 
         participant_repo = ConversationParticipantRepository(self._repo._session)
 
         return participant_repo.get_unread_count_by_conversation(
-            user_id=user_id
+            user_id = user_id, created_by_id = created_by_id
         )

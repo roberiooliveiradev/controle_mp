@@ -114,11 +114,11 @@ def get_conversation(conversation_id: int):
 @bp_conv.get("/unread-summary")
 @require_auth
 def get_unread_summary():
-    user_id, _ = _auth_user()
+    user_id, role_id = _auth_user()
 
     with db_session() as session:
         service = _build_service(session)
-        summary = service.get_unread_summary(user_id=user_id)
+        summary = service.get_unread_summary(user_id=user_id, role_id=role_id)
 
     return jsonify(summary), 200
 
