@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.base_repository import BaseRepository
 from app.infrastructure.database.models.conversation_participant_model import ConversationParticipantModel
-
+from app.infrastructure.database.models.message_model import MessageModel
 
 class ConversationParticipantRepository(BaseRepository[ConversationParticipantModel]):
     def __init__(self, session: Session) -> None:
@@ -43,3 +43,41 @@ class ConversationParticipantRepository(BaseRepository[ConversationParticipantMo
             .values(last_read_message_id=last_read_message_id, last_read_at=func.now(), updated_at=func.now())
         )
         self._session.execute(stmt)
+
+    def get_unread_count_by_conversation(self, *, user_id: int) -> dict[int, int]:
+        """
+        Retorna um dict:
+        {
+            conversation_id: unread_count
+        }
+        """
+
+        stmt = (
+            select(
+                MessageModel.conversation_id,
+                func.count(MessageModel.id).label("unread_count"),
+            )
+            .join(
+                ConversationParticipantModel,
+                ConversationParticipantModel.conversation_id == MessageModel.conversation_id,
+            )
+            .where(
+                ConversationParticipantModel.user_id == user_id,
+                ConversationParticipantModel.is_deleted.is_(False),
+
+                # mensagens depois da última lida
+                MessageModel.id > func.coalesce(
+                    ConversationParticipantModel.last_read_message_id, 0
+                ),
+
+                # não contar mensagens do próprio usuário
+                MessageModel.sender_id != user_id,
+
+                MessageModel.is_deleted.is_(False),
+            )
+            .group_by(MessageModel.conversation_id)
+        )
+
+        rows = self._session.execute(stmt).all()
+
+        return {row.conversation_id: row.unread_count for row in rows}

@@ -9,7 +9,9 @@ from app.core.exceptions import NotFoundError, ForbiddenError
 from app.infrastructure.database.models.conversation_model import ConversationModel
 from app.repositories.conversation_repository import ConversationRepository
 from app.core.interfaces.conversation_notifier import ConversationNotifier, ConversationCreatedEvent
-
+from app.repositories.conversation_participant_repository import (
+    ConversationParticipantRepository,
+)
 
 class Role(IntEnum):
     ADMIN = 1
@@ -158,3 +160,17 @@ class ConversationService:
         ok = self._repo.soft_delete(conversation_id)
         if not ok:
             raise NotFoundError("Conversa não encontrada.")
+    
+    def get_unread_summary(self, *, user_id: int) -> dict[int, int]:
+        """
+        Retorna:
+        {
+            conversation_id: unread_count
+        }
+        """
+
+        participant_repo = ConversationParticipantRepository(self._repo._session)
+
+        return participant_repo.get_unread_count_by_conversation(
+            user_id=user_id
+        )

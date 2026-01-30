@@ -111,6 +111,16 @@ def get_conversation(conversation_id: int):
 
     return jsonify(_row_to_response(row)), 200
 
+@bp_conv.get("/unread-summary")
+@require_auth
+def get_unread_summary():
+    user_id, _ = _auth_user()
+
+    with db_session() as session:
+        service = _build_service(session)
+        summary = service.get_unread_summary(user_id=user_id)
+
+    return jsonify(summary), 200
 
 # -------------------------
 # Rotas (mutação) + Auditoria
