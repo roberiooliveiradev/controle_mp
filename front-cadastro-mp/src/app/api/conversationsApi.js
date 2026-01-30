@@ -29,3 +29,9 @@ export async function updateConversationApi(id, payload) {
 export async function deleteConversationApi(id) {
 	await httpClient.delete(`/conversations/${id}`);
 }
+
+export async function getUnreadSummaryApi() {
+  const { data } = await httpClient.get("/conversations/unread-summary");
+  return data; // { [conversationId]: unreadCount }
+}
+

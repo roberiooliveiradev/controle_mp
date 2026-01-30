@@ -15,7 +15,7 @@ import {
   setSocketAuthToken,
 } from "./socket";
 
-import { listConversationsApi } from "../api/conversationsApi";
+import { listConversationsApi, getUnreadSummaryApi } from "../api/conversationsApi";
 import { getRequestsCountApi } from "../api/requestsApi";
 
 import { useAuth } from "../auth/AuthContext";
@@ -434,6 +434,14 @@ export function RealtimeProvider({ children }) {
     }
   }
 
+  async function loadUnreadSummary() {
+      try {
+        const summary = await getUnreadSummaryApi();
+        setUnreadCounts(summary ?? {});
+      } catch {
+        setUnreadCounts({});
+      }
+    }
   // -----------------------------
   // ✅ efeito principal (token + login/logout + listeners)
   // -----------------------------
@@ -469,6 +477,7 @@ export function RealtimeProvider({ children }) {
       if (cancelled) return;
       try {
         await loadInitial();
+        await loadUnreadSummary();
       } catch {
         // ignore
       }
@@ -481,6 +490,7 @@ export function RealtimeProvider({ children }) {
     (async () => {
       try {
         await loadInitial();
+        await loadUnreadSummary();
       } catch {
         // ignore
       }
