@@ -617,12 +617,20 @@ export function RealtimeProvider({ children }) {
     };
   }, [activeUserId, isPrivileged, isUserOnly]);
 
+  const totalUnreadMessages = useMemo(() => {
+    return Object.values(unreadCounts ?? {}).reduce(
+      (sum, n) => sum + Number(n || 0),
+      0
+    );
+  }, [unreadCounts]);
+
   return (
     <RealtimeContext.Provider
       value={{
         conversations,
         setConversations,
         unreadCounts,
+        totalUnreadMessages,
         setUnreadCounts,
         activeConvRef,
         updateConversationTitle,

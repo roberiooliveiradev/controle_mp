@@ -206,7 +206,17 @@ button:focus-visible {
 	transition: all 0.3s ease;
 }
 
-/* @media (prefers-color-scheme: light) {
+.topbar-badge{
+	font-size: small;
+	background-color: var(--danger-bg);
+	padding:0px 5px;
+	margin:5px 5px;
+	border: 1px solid var(--danger-border);
+	border-radius: 10px;
+}
+
+/* 
+@media (prefers-color-scheme: light) {
 	:root {
 		color: #213547;
 		background-color: #ffffff;
@@ -217,4 +227,5 @@ button:focus-visible {
 	button {
 		background-color: #f9f9f9;
 	}
-} */
+} 
+*/

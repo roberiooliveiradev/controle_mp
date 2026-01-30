@@ -7,6 +7,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useRealtime } from "../realtime/RealtimeContext";
 import { toastSuccess, toastWarning, toastError } from "../ui/toast";
 
+
 function roleLabel(roleId) {
   if (roleId === 1) return "ADMIN";
   if (roleId === 2) return "ANALYST";
@@ -15,19 +16,19 @@ function roleLabel(roleId) {
 
 export function EnableNotificationsButton() {
   const rt = useRealtime();
-
+  
   async function onEnable() {
     if (!rt.isSecureForNotifications?.()) {
       toastWarning("No Chrome, notificações precisam de HTTPS (ou localhost).");
       return;
     }
-
+    
     const res = await rt.requestBrowserNotificationsPermission?.();
     if (res?.ok) toastSuccess("Notificações do navegador ativadas.");
     else if (res?.reason === "denied") toastError("Permissão de notificações negada no navegador.");
     else toastWarning("Não foi possível ativar as notificações agora.");
   }
-
+  
   return (
     <button type="button" onClick={onEnable} style={{ padding: "8px 10px", borderRadius: 10 }}>
       Ativar notificações
@@ -38,7 +39,8 @@ export function EnableNotificationsButton() {
 export function Topbar() {
   const { user, logout, activeUserId, setActiveUserId, listProfiles } = useAuth();
   const location = useLocation();
-
+  const { totalUnreadMessages } = useRealtime();
+  
   const profiles = useMemo(() => listProfiles(), [listProfiles]);
 
   const isActive = (path) => location.pathname.startsWith(path);
@@ -71,6 +73,11 @@ export function Topbar() {
       >
         <Link to="/conversations" className={linkClass("/conversations")}>
           Conversas
+          {totalUnreadMessages > 0 && (
+            <span className="topbar-badge">
+              {totalUnreadMessages}
+            </span>
+          )}
         </Link>
 
         <Link to="/requests" className={linkClass("/requests")}>
