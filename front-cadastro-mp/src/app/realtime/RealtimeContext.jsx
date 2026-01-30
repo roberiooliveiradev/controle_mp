@@ -661,8 +661,8 @@ export function RealtimeProvider({ children }) {
       if (!shouldNotify && statusId !== 2 && statusId !== 1) return;
 
       if (statusId === 3) toastSuccess("Item finalizado.");
-      else if (statusId === 5) toastWarning("Item devolvido atualizado.");
-      else if (statusId === 6) toastError("Item rejeitado atualizado.");
+      else if (statusId === 5) toastWarning("Item devolvido.");
+      else if (statusId === 6) toastError("Item rejeitado.");
       else if (statusId === 4) toastError("Falha ao processar item.");
       else toastWarning("Solicitação atualizada.");
 
