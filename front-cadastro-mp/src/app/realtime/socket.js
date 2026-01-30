@@ -3,75 +3,120 @@ import { io } from "socket.io-client";
 import { env } from "../config/env";
 
 /**
- * Se o backend exige token, ele costuma chegar via querystring (?token=...).
- * Alguns setups aceitam via auth: { token }.
- * Aqui damos suporte aos dois.
+ * Token pode ir via:
+ * - querystring (?token=...)
+ * - auth: { token }
+ *
+ * Este arquivo garante:
+ * - login/refresh: token atualizado e reconexão se necessário
+ * - logout: desconecta e limpa token
  */
 
 function guessTokenFromStorage() {
-	// tenta chaves comuns (ajuste se seu AuthContext usar outra)
-	const keys = ["access_token", "token", "cadmp_token", "jwt", "auth_token"];
-
-	for (const k of keys) {
-		const v = localStorage.getItem(k);
-		if (v && String(v).trim()) return String(v).trim();
-	}
-	return "";
+  const keys = ["access_token", "token", "cadmp_token", "jwt", "auth_token"];
+  for (const k of keys) {
+    const v = localStorage.getItem(k);
+    if (v && String(v).trim()) return String(v).trim();
+  }
+  return "";
 }
 
 const baseUrl = env?.apiBaseUrl || window.location.origin;
-
-// ✅ path explícito ajuda muito com nginx/flask-socketio
 const socketPath = env?.socketPath || "/socket.io";
 
 export const socket = io(baseUrl, {
-	path: socketPath,
-	autoConnect: false,
-	transports: ["websocket", "polling"],
-	reconnection: true,
-	reconnectionAttempts: Infinity,
-	reconnectionDelay: 500,
-	timeout: 20000,
-	// query fica vazio até setarmos token
-	query: {},
-	// auth também fica vazio até setarmos token
-	auth: {},
+  path: socketPath,
+  autoConnect: false,
+  transports: ["websocket", "polling"],
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 500,
+  timeout: 20000,
+  query: {},
+  auth: {},
 });
 
+let lastAppliedToken = "";
+
 export function setSocketAuthToken(token) {
-	const t = token ? String(token).trim() : "";
+  const t = token ? String(token).trim() : "";
 
-	// ✅ compat com backend que lê querystring
-	socket.io.opts.query = { ...(socket.io.opts.query ?? {}), token: t };
+  // querystring compat
+  socket.io.opts.query = { ...(socket.io.opts.query ?? {}) };
+  if (t) socket.io.opts.query.token = t;
+  else delete socket.io.opts.query.token;
 
-	// ✅ compat com backend que lê auth payload
-	socket.auth = { ...(socket.auth ?? {}), token: t };
+  // auth payload compat
+  socket.auth = { ...(socket.auth ?? {}) };
+  if (t) socket.auth.token = t;
+  else delete socket.auth.token;
+
+  lastAppliedToken = t;
 }
 
+function getEffectiveToken(tokenParam) {
+  const param = tokenParam ? String(tokenParam).trim() : "";
+  if (param) return param;
+
+  const fromQuery = String(socket.io.opts?.query?.token ?? "").trim();
+  if (fromQuery) return fromQuery;
+
+  const fromAuth = String(socket.auth?.token ?? "").trim();
+  if (fromAuth) return fromAuth;
+
+  return guessTokenFromStorage();
+}
+
+/**
+ * Conecta garantindo token atualizado.
+ * Se já estiver conectado com token diferente, reconecta.
+ */
 export function connectSocket(token) {
-	// garante token antes de conectar (se o backend exigir)
-	const t = token
-		? String(token).trim()
-		: socket.io.opts?.query?.token ||
-			socket.auth?.token ||
-			guessTokenFromStorage();
-	if (t) setSocketAuthToken(t);
+  const t = getEffectiveToken(token);
 
-	if (!socket.connected) socket.connect();
+  // aplica token (inclusive vazio) antes de conectar
+  if (t !== lastAppliedToken) {
+    setSocketAuthToken(t);
+
+    // se estava conectado com token antigo -> derruba e reconecta
+    if (socket.connected) socket.disconnect();
+  } else {
+    // garante token realmente aplicado
+    const hasQueryToken = !!String(socket.io.opts?.query?.token ?? "").trim();
+    const hasAuthToken = !!String(socket.auth?.token ?? "").trim();
+    if (t && !hasQueryToken && !hasAuthToken) {
+      setSocketAuthToken(t);
+      if (socket.connected) socket.disconnect();
+    }
+  }
+
+  if (!socket.connected) socket.connect();
 }
 
-export function disconnectSocket() {
-	if (socket.connected) socket.disconnect();
+/**
+ * Logout-safe: desconecta e opcionalmente limpa token do socket
+ */
+export function disconnectSocket({ clearAuth = false } = {}) {
+  if (socket.connected) socket.disconnect();
+  if (clearAuth) setSocketAuthToken("");
 }
 
-export function joinConversationRoom(conversationId) {
-	const id = Number(conversationId);
-	if (!id) return;
-	socket.emit("conversation:join", { conversation_id: id });
+export function ensureSocketConnected(token) {
+  if (!socket.connected) connectSocket(token);
 }
 
-export function leaveConversationRoom(conversationId) {
-	const id = Number(conversationId);
-	if (!id) return;
-	socket.emit("conversation:leave", { conversation_id: id });
+export function joinConversationRoom(conversationId, token) {
+  const id = Number(conversationId);
+  if (!id) return;
+
+  ensureSocketConnected(token);
+  socket.emit("conversation:join", { conversation_id: id });
+}
+
+export function leaveConversationRoom(conversationId, token) {
+  const id = Number(conversationId);
+  if (!id) return;
+
+  ensureSocketConnected(token);
+  socket.emit("conversation:leave", { conversation_id: id });
 }

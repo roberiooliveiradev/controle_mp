@@ -1,10 +1,27 @@
 // src/app/realtime/RealtimeContext.jsx
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { socket } from "./socket";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  socket,
+  connectSocket,
+  disconnectSocket,
+  setSocketAuthToken,
+} from "./socket";
+
 import { listConversationsApi } from "../api/conversationsApi";
-import { useAuth } from "../auth/AuthContext";
-import { toastSuccess, toastWarning, toastError } from "../ui/toast";
 import { getRequestsCountApi } from "../api/requestsApi";
+
+import { useAuth } from "../auth/AuthContext";
+import { authStorage } from "../auth/authStorage";
+
+import { toastSuccess, toastWarning, toastError } from "../ui/toast";
 
 const RealtimeContext = createContext(null);
 
@@ -26,14 +43,7 @@ function getGlobalDedupeStore() {
 }
 
 function isTabFocused() {
-  // document.hasFocus() pode ser melhor em alguns browsers
   return !document.hidden && (document.hasFocus?.() ?? true);
-}
-
-function productIdOf(payload) {
-  const pid = payload?.product_id ?? payload?.productId ?? payload?.id;
-  const n = Number(pid);
-  return Number.isFinite(n) ? n : 0;
 }
 
 function canUseBrowserNotifications() {
@@ -41,22 +51,21 @@ function canUseBrowserNotifications() {
 }
 
 function isSecureForNotifications() {
-  // Chrome exige contexto seguro p/ Notification:
-  // https://, localhost, 127.0.0.1 (isSecureContext = true)
   return typeof window !== "undefined" && window.isSecureContext === true;
 }
 
 // -----------------------------
 // ✅ Notificação do navegador (Chrome-safe)
 // -----------------------------
-async function requestBrowserNotificationsPermission() {
+export async function requestBrowserNotificationsPermission() {
   if (!canUseBrowserNotifications()) return { ok: false, reason: "unsupported" };
-  if (!isSecureForNotifications()) return { ok: false, reason: "insecure_context" };
+  if (!isSecureForNotifications())
+    return { ok: false, reason: "insecure_context" };
 
   if (Notification.permission === "granted") return { ok: true };
-  if (Notification.permission === "denied") return { ok: false, reason: "denied" };
+  if (Notification.permission === "denied")
+    return { ok: false, reason: "denied" };
 
-  // ⚠️ IMPORTANTE: isso deve ser chamado por clique do usuário
   try {
     const res = await Notification.requestPermission();
     return { ok: res === "granted", reason: res };
@@ -71,11 +80,8 @@ function canShowBrowserNotificationNow() {
   return Notification.permission === "granted";
 }
 
-async function showBrowserNotification({ title, body }) {
-  // só quando não está focado (pra não duplicar a UX)
+async function showBrowserNotificationBase({ title, body }) {
   if (isTabFocused()) return;
-
-  // ✅ não tenta pedir permissão aqui (evento de socket no Chrome costuma falhar)
   if (!canShowBrowserNotificationNow()) return;
 
   try {
@@ -84,6 +90,12 @@ async function showBrowserNotification({ title, body }) {
   } catch {
     // ignore
   }
+}
+
+function productIdOf(payload) {
+  const pid = payload?.product_id ?? payload?.productId ?? payload?.id;
+  const n = Number(pid);
+  return Number.isFinite(n) ? n : 0;
 }
 
 export function RealtimeProvider({ children }) {
@@ -104,50 +116,62 @@ export function RealtimeProvider({ children }) {
   const [conversations, setConversations] = useState([]);
   const [createdRequestsCount, setCreatedRequestsCount] = useState(0);
 
-  async function loadCreatedRequestsCount() {
+  // -----------------------------
+  // ✅ Token "reativo" (corrige logout/login sem refresh)
+  // -----------------------------
+  const [accessToken, setAccessToken] = useState(() => {
     try {
-      const total = await getRequestsCountApi({ status_id: 1 }); // CRIADO
-      setCreatedRequestsCount(Number(total || 0));
+      return String(authStorage?.getActiveAccessToken?.() ?? "").trim();
     } catch {
-      setCreatedRequestsCount(0);
+      return "";
     }
-  }
+  });
 
-  function updateConversationTitle(conversationId, title) {
-    const cid = Number(conversationId);
-    if (!cid) return;
+  useEffect(() => {
+    // pega mudanças por "storage" (outra aba / algumas implementações)
+    function onStorage(e) {
+      // não sabemos a key exata, então só re-le
+      try {
+        const t = String(authStorage?.getActiveAccessToken?.() ?? "").trim();
+        setAccessToken((prev) => (prev === t ? prev : t));
+      } catch {
+        setAccessToken((prev) => (prev === "" ? prev : ""));
+      }
+    }
 
-    setConversations((prev) => {
-      const list = Array.isArray(prev) ? [...prev] : [];
-      const idx = list.findIndex((c) => Number(c.id) === cid);
-      if (idx < 0) return list;
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
-      list[idx] = {
-        ...list[idx],
-        title,
-        updated_at: new Date().toISOString(),
-      };
+  useEffect(() => {
+    // fallback robusto: polling curto (garante reação no mesmo tab)
+    const id = setInterval(() => {
+      try {
+        const t = String(authStorage?.getActiveAccessToken?.() ?? "").trim();
+        setAccessToken((prev) => (prev === t ? prev : t));
+      } catch {
+        setAccessToken((prev) => (prev === "" ? prev : ""));
+      }
+    }, 500);
 
-      return list;
-    });
-  }
+    return () => clearInterval(id);
+  }, []);
 
+  // -----------------------------
   // ✅ Unread por perfil
+  // -----------------------------
   const unreadKey = useMemo(
     () => `cadmp_unread_counts:${activeUserId ?? "na"}`,
     [activeUserId]
   );
 
-  const [unreadCounts, setUnreadCounts] = useState(() => {
-    try {
-      const raw = localStorage.getItem(unreadKey);
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
-  });
+  const lastUnreadKeyRef = useRef(null);
+  const [unreadCounts, setUnreadCounts] = useState({});
 
   useEffect(() => {
+    if (lastUnreadKeyRef.current === unreadKey) return;
+    lastUnreadKeyRef.current = unreadKey;
+
     try {
       const raw = localStorage.getItem(unreadKey);
       setUnreadCounts(raw ? JSON.parse(raw) : {});
@@ -164,27 +188,14 @@ export function RealtimeProvider({ children }) {
     }
   }, [unreadKey, unreadCounts]);
 
+  const totalUnreadMessages = useMemo(() => {
+    return Object.values(unreadCounts ?? {}).reduce(
+      (sum, n) => sum + Number(n || 0),
+      0
+    );
+  }, [unreadCounts]);
+
   const activeConvRef = useRef(null);
-
-  function bumpConversation(conversationId, iso) {
-    const cid = Number(conversationId);
-    if (!cid) return;
-
-    setConversations((prev) => {
-      const list = Array.isArray(prev) ? [...prev] : [];
-      const idx = list.findIndex((c) => Number(c.id) === cid);
-      if (idx === -1) return list;
-
-      list[idx] = { ...list[idx], updated_at: iso };
-      list.sort(
-        (a, b) =>
-          new Date(b.updated_at ?? b.created_at).getTime() -
-          new Date(a.updated_at ?? a.created_at).getTime()
-      );
-
-      return list;
-    });
-  }
 
   // -----------------------------
   // ✅ Controle de acesso
@@ -205,7 +216,7 @@ export function RealtimeProvider({ children }) {
   }
 
   // -----------------------------
-  // ✅ helpers payload
+  // helpers
   // -----------------------------
   function stableText(v) {
     if (v == null) return "";
@@ -213,7 +224,12 @@ export function RealtimeProvider({ children }) {
   }
 
   function bodyCut(payload) {
-    const body = payload?.body ?? payload?.text ?? payload?.message?.body ?? payload?.message?.text ?? "";
+    const body =
+      payload?.body ??
+      payload?.text ??
+      payload?.message?.body ??
+      payload?.message?.text ??
+      "";
     return stableText(body).slice(0, 80);
   }
 
@@ -278,7 +294,11 @@ export function RealtimeProvider({ children }) {
   }
 
   function conversationIdOf(payload) {
-    const cid = payload?.conversation_id ?? payload?.conversationId ?? payload?.conversation?.id ?? payload?.id;
+    const cid =
+      payload?.conversation_id ??
+      payload?.conversationId ??
+      payload?.conversation?.id ??
+      payload?.id;
     const n = Number(cid);
     return Number.isFinite(n) ? n : 0;
   }
@@ -287,6 +307,43 @@ export function RealtimeProvider({ children }) {
     const rid = payload?.request_item_id ?? payload?.item_id ?? payload?.requestItemId;
     const n = Number(rid);
     return Number.isFinite(n) ? n : 0;
+  }
+
+  function bumpConversation(conversationId, iso) {
+    const cid = Number(conversationId);
+    if (!cid) return;
+
+    setConversations((prev) => {
+      const list = Array.isArray(prev) ? [...prev] : [];
+      const idx = list.findIndex((c) => Number(c.id) === cid);
+      if (idx === -1) return list;
+
+      list[idx] = { ...list[idx], updated_at: iso };
+      list.sort(
+        (a, b) =>
+          new Date(b.updated_at ?? b.created_at).getTime() -
+          new Date(a.updated_at ?? a.created_at).getTime()
+      );
+      return list;
+    });
+  }
+
+  function updateConversationTitle(conversationId, title) {
+    const cid = Number(conversationId);
+    if (!cid) return;
+
+    setConversations((prev) => {
+      const list = Array.isArray(prev) ? [...prev] : [];
+      const idx = list.findIndex((c) => Number(c.id) === cid);
+      if (idx < 0) return list;
+
+      list[idx] = {
+        ...list[idx],
+        title,
+        updated_at: new Date().toISOString(),
+      };
+      return list;
+    });
   }
 
   // -----------------------------
@@ -318,21 +375,18 @@ export function RealtimeProvider({ children }) {
   }
 
   // -----------------------------
-  // ✅ Notificação do navegador
+  // ✅ Notificação do navegador (com throttling)
   // -----------------------------
   const notifPermissionAskedRef = useRef(false);
 
   async function ensureNotificationPermissionOnce() {
     if (!canUseBrowserNotifications()) return false;
 
-    // já decidido
     if (Notification.permission === "granted") return true;
     if (Notification.permission === "denied") return false;
 
-    // evita pedir permissão repetidamente
     if (notifPermissionAskedRef.current) return false;
 
-    // evita pedir toda hora entre reloads
     const askedKey = "cadmp_notif_permission_asked";
     const alreadyAsked = localStorage.getItem(askedKey) === "1";
     if (alreadyAsked) {
@@ -353,67 +407,86 @@ export function RealtimeProvider({ children }) {
 
   async function showBrowserNotification({ title, body }) {
     if (!canUseBrowserNotifications()) return;
-
-    // só quando não está focado (pra não duplicar a UX)
     if (isTabFocused()) return;
 
     const ok = await ensureNotificationPermissionOnce();
     if (!ok) return;
 
+    await showBrowserNotificationBase({ title, body });
+  }
+
+  // -----------------------------
+  // loads (API)
+  // -----------------------------
+  async function loadInitial() {
+    const data = await listConversationsApi({ limit: 50, offset: 0 });
+    const list = Array.isArray(data) ? data : data?.items ?? [];
+    setConversations(list);
+    prevConvIdsRef.current = new Set(list.map((c) => Number(c.id)).filter(Boolean));
+  }
+
+  async function loadCreatedRequestsCount() {
     try {
-      // sem ícone por padrão; se quiser, me diga o caminho do logo
-      const n = new Notification(title, { body });
-      // fecha automaticamente
-      setTimeout(() => n.close(), 6000);
+      const total = await getRequestsCountApi({ status_id: 1 }); // CRIADO
+      setCreatedRequestsCount(Number(total || 0));
     } catch {
-      // ignore
+      setCreatedRequestsCount(0);
     }
   }
 
   // -----------------------------
-  // efeito principal
+  // ✅ efeito principal (token + login/logout + listeners)
   // -----------------------------
   useEffect(() => {
-    if (!activeUserId) return;
-
     let cancelled = false;
 
-    async function loadInitial() {
-      const data = await listConversationsApi({ limit: 50, offset: 0 });
-      if (cancelled) return;
-
-      const list = Array.isArray(data) ? data : data?.items ?? [];
-      setConversations(list);
-      prevConvIdsRef.current = new Set(list.map((c) => Number(c.id)).filter(Boolean));
-    }
-
-    async function reloadAndToastIfUserCanSeeNewConversation() {
-      const data = await listConversationsApi({ limit: 50, offset: 0 });
-      if (cancelled) return;
-
-      const list = Array.isArray(data) ? data : data?.items ?? [];
-      const newIds = new Set(list.map((c) => Number(c.id)).filter(Boolean));
-
-      let hasNew = false;
-      for (const id of newIds) {
-        if (!prevConvIdsRef.current.has(id)) {
-          hasNew = true;
-          break;
-        }
+    // 🔴 Se não tem token => trata como logout (mesmo que activeUserId não mude)
+    if (!accessToken) {
+      try {
+        disconnectSocket({ clearAuth: true });
+      } catch {
+        // ignore
       }
 
-      setConversations(list);
-      prevConvIdsRef.current = newIds;
+      setConversations([]);
+      setUnreadCounts({});
+      setCreatedRequestsCount(0);
+      prevConvIdsRef.current = new Set();
+      allowedConvIdsRef.current = new Set();
+      activeConvRef.current = null;
 
-      if (hasNew) {
-        toastSuccess("Você recebeu uma nova conversa.");
-        showBrowserNotification({ title: "Controle MP", body: "Você recebeu uma nova conversa." });
-      }
+      return () => {
+        cancelled = true;
+      };
     }
 
-    loadInitial();
-    loadCreatedRequestsCount();
-  
+    // ✅ Tem token => garante socket autenticado e conectado
+    setSocketAuthToken(accessToken);
+    connectSocket(accessToken);
+
+    // sempre que conectar/reconectar, recarrega dados para badges ficarem corretos
+    const onConnect = async () => {
+      if (cancelled) return;
+      try {
+        await loadInitial();
+      } catch {
+        // ignore
+      }
+      await loadCreatedRequestsCount();
+    };
+
+    socket.on("connect", onConnect);
+
+    // também roda já (sem esperar connect)
+    (async () => {
+      try {
+        await loadInitial();
+      } catch {
+        // ignore
+      }
+      await loadCreatedRequestsCount();
+    })();
+
     const onMessageNew = (payload) => {
       const cid = conversationIdOf(payload);
       if (!cid) return;
@@ -421,20 +494,18 @@ export function RealtimeProvider({ children }) {
       const sid = senderIdOf(payload);
       const mid = msgIdOf(payload);
 
-      // ✅ dedupe OR (mata global + room mesmo com payload diferente)
       const fp = `message:new|fp:${cid}|${sid}|${bodyCut(payload)}`;
       const keys = [mid ? `message:new|mid:${mid}` : "", fp];
       if (markSeenAny(keys)) return;
 
-      // ✅ permissão
       if (isUserOnly && !canAccessConversationId(cid)) return;
 
-      bumpConversation(cid, payload?.created_at_iso ?? payload?.created_at ?? new Date().toISOString());
+      bumpConversation(
+        cid,
+        payload?.created_at_iso ?? payload?.created_at ?? new Date().toISOString()
+      );
 
-      // ✅ não notificar msg minha
       const isMine = sid && Number(activeUserId) === sid;
-
-      // ✅ se estou dentro da conversa, nada
       if (activeConvRef.current === cid) return;
       if (isMine) return;
 
@@ -457,20 +528,19 @@ export function RealtimeProvider({ children }) {
         title: title ? `Mensagem • ${title}` : "Nova mensagem",
         body: prev ? `${who}: ${prev}` : `${who} enviou uma mensagem.`,
       });
-
     };
 
     const onConversationNew = async (payload) => {
       const cid = conversationIdOf(payload);
-      const title = stableText(payload?.title ?? payload?.subject ?? "");
-      const fp = `conversation:new|fp:${title || bodyCut(payload)}`;
+      const t = stableText(payload?.title ?? payload?.subject ?? "");
+      const fp = `conversation:new|fp:${t || bodyCut(payload)}`;
       const keys = [cid ? `conversation:new|cid:${cid}` : "", fp];
       if (markSeenAny(keys)) return;
 
       if (isPrivileged) {
-
         const title = conversationTitleOf(payload);
-        const creator = payload?.creator?.full_name ?? payload?.creator?.name ?? "Alguém";
+        const creator =
+          payload?.creator?.full_name ?? payload?.creator?.name ?? "Alguém";
         const assignedToMe = isConversationAssignedToMe(payload);
 
         const toastText = title
@@ -485,33 +555,33 @@ export function RealtimeProvider({ children }) {
             ? `${title}${assignedToMe ? " (atribuída a você)" : ""}`
             : `Criada por ${creator}${assignedToMe ? " (atribuída a você)" : ""}`,
         });
-        
+      }
+
+      try {
         await loadInitial();
-      } else {
-        await reloadAndToastIfUserCanSeeNewConversation();
+      } catch {
+        // ignore
       }
     };
 
-    const onRequestCreated = (payload) => {
-      // mantém dedupe simples por id ou fallback
+    const onRequestCreated = async (payload) => {
       const reqId = Number(payload?.request_id ?? payload?.requestId ?? payload?.id);
-      const sid = Number(payload?.created_by ?? payload?.user_id ?? payload?.owner_id) || senderIdOf(payload);
+      const sid =
+        Number(payload?.created_by ?? payload?.user_id ?? payload?.owner_id) ||
+        senderIdOf(payload);
+
       const fp = `request:created|fp:${sid}|${conversationIdOf(payload)}`;
-      const keys = [Number.isFinite(reqId) && reqId ? `request:created|rid:${reqId}` : "", fp];
+      const keys = [reqId ? `request:created|rid:${reqId}` : "", fp];
       if (markSeenAny(keys)) return;
 
       if (isUserOnly && sid && sid !== Number(activeUserId)) return;
 
-      setCreatedRequestsCount((c) => c + 1);
-
+      await loadCreatedRequestsCount();
       toastSuccess("Solicitação criada.");
-      showBrowserNotification({
-        title: "Controle MP",
-        body: "Solicitação criada.",
-      });
+      showBrowserNotification({ title: "Controle MP", body: "Solicitação criada." });
     };
 
-    const onRequestItemChanged = (payload) => {
+    const onRequestItemChanged = async (payload) => {
       const itemId = requestItemIdOf(payload);
       const statusId = Number(payload?.request_status_id ?? payload?.status_id);
 
@@ -523,18 +593,10 @@ export function RealtimeProvider({ children }) {
       const keys = [itemId ? `request:item_changed|item:${itemId}|st:${statusId}` : "", fp];
       if (markSeenAny(keys)) return;
 
-      // 🔐 regra de visibilidade de toast
       const shouldNotify =
-        currentUserId === changedBy || // quem alterou
-        currentUserId === requestOwnerId; // criador da solicitação
+        currentUserId === changedBy || currentUserId === requestOwnerId;
 
-      if (!shouldNotify && !(statusId===2) && !(statusId===1)) {
-        return; // ❌ sai silenciosamente
-      }
-
-      // ✅ payload completo disponível
-      const fullRequest = payload?.request;
-      const fullItem = payload?.item;
+      if (!shouldNotify && statusId !== 2 && statusId !== 1) return;
 
       if (statusId === 3) toastSuccess("Item finalizado.");
       else if (statusId === 5) toastWarning("Item devolvido atualizado.");
@@ -542,14 +604,9 @@ export function RealtimeProvider({ children }) {
       else if (statusId === 4) toastError("Falha ao processar item.");
       else toastWarning("Solicitação atualizada.");
 
-      if (statusId !== 1) {
-        loadCreatedRequestsCount();
-      }
+      if (statusId !== 1) await loadCreatedRequestsCount();
 
-      showBrowserNotification({
-        title: "Controle MP",
-        body: "Solicitação atualizada.",
-      });
+      showBrowserNotification({ title: "Controle MP", body: "Solicitação atualizada." });
     };
 
     const onProductCreated = (payload) => {
@@ -560,14 +617,7 @@ export function RealtimeProvider({ children }) {
       const keys = [`product:created|pid:${pid}`, fp];
       if (markSeenAny(keys)) return;
 
-      const code = stableText(payload?.codigo_atual);
-      const desc = stableText(payload?.descricao);
-
-      toastSuccess(`Produto criado: #${pid}${code ? ` • ${code}` : ""}`);
-      showBrowserNotification({
-        title: "Produto criado",
-        body: desc ? `#${pid} • ${desc}` : `Produto #${pid} criado.`,
-      });
+      toastSuccess(`Produto criado: #${pid}`);
     };
 
     const onProductUpdated = (payload) => {
@@ -578,62 +628,29 @@ export function RealtimeProvider({ children }) {
       const keys = [`product:updated|pid:${pid}`, fp];
       if (markSeenAny(keys)) return;
 
-      const code = stableText(payload?.codigo_atual);
-      const desc = stableText(payload?.descricao);
-
-      toastWarning(`Produto atualizado: #${pid}${code ? ` • ${code}` : ""}`);
-      showBrowserNotification({
-        title: "Produto atualizado",
-        body: desc ? `#${pid} • ${desc}` : `Produto #${pid} atualizado.`,
-      });
-    };
-
-    const onProductFlagChanged = (payload) => {
-      const pid = productIdOf(payload);
-      const fid = Number(payload?.field_id);
-      if (!pid || !fid) return;
-
-      const flag = stableText(payload?.field_flag);
-      const tag = stableText(payload?.field_tag);
-
-      const fp = `product:flag_changed|fp:${pid}|${fid}|${tag}|${flag}`;
-      const keys = [`product:flag_changed|pid:${pid}|fid:${fid}|flag:${flag}`, fp];
-      if (markSeenAny(keys)) return;
-
-      // toastWarning(`Flag alterada no produto #${pid}${tag ? ` • ${tag}` : ""}`);
-      // showBrowserNotification({
-      //   title: "Flag alterada",
-      //   body: `Produto #${pid}${tag ? ` • ${tag}` : ""}${flag ? ` • 🚩 ${flag}` : " • flag removida"}`,
-      // });
+      toastWarning(`Produto atualizado: #${pid}`);
     };
 
     socket.on("message:new", onMessageNew);
     socket.on("conversation:new", onConversationNew);
     socket.on("request:created", onRequestCreated);
     socket.on("request:item_changed", onRequestItemChanged);
-
     socket.on("product:created", onProductCreated);
     socket.on("product:updated", onProductUpdated);
-    socket.on("product:flag_changed", onProductFlagChanged);
 
     return () => {
       cancelled = true;
+
+      socket.off("connect", onConnect);
+
       socket.off("message:new", onMessageNew);
       socket.off("conversation:new", onConversationNew);
       socket.off("request:created", onRequestCreated);
       socket.off("request:item_changed", onRequestItemChanged);
       socket.off("product:created", onProductCreated);
       socket.off("product:updated", onProductUpdated);
-      socket.off("product:flag_changed", onProductFlagChanged);
     };
-  }, [activeUserId, isPrivileged, isUserOnly]);
-
-  const totalUnreadMessages = useMemo(() => {
-    return Object.values(unreadCounts ?? {}).reduce(
-      (sum, n) => sum + Number(n || 0),
-      0
-    );
-  }, [unreadCounts]);
+  }, [accessToken, activeUserId, isPrivileged, isUserOnly]);
 
   return (
     <RealtimeContext.Provider
@@ -645,17 +662,17 @@ export function RealtimeProvider({ children }) {
         totalUnreadMessages,
         setUnreadCounts,
 
-        createdRequestsCount,    
-        setCreatedRequestsCount,       
+        createdRequestsCount,
+        setCreatedRequestsCount,
 
         activeConvRef,
         updateConversationTitle,
+
         requestBrowserNotificationsPermission,
         canShowBrowserNotificationNow,
         isSecureForNotifications,
       }}
     >
-
       {children}
     </RealtimeContext.Provider>
   );
@@ -666,5 +683,3 @@ export function useRealtime() {
   if (!ctx) throw new Error("useRealtime deve ser usado dentro de RealtimeProvider");
   return ctx;
 }
-
-
