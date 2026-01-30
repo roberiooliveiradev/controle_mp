@@ -7,9 +7,10 @@ import { env } from "../config/env";
  * - querystring (?token=...)
  * - auth: { token }
  *
- * Este arquivo garante:
- * - login/refresh: token atualizado e reconexão se necessário
- * - logout: desconecta e limpa token
+ * Regras:
+ * - connectSocket(token): aplica token e conecta (reconecta se token mudou)
+ * - disconnectSocket({clearAuth}): desconecta e opcionalmente limpa token
+ * - join/leave: garante que o socket está conectado
  */
 
 function guessTokenFromStorage() {
@@ -38,8 +39,12 @@ export const socket = io(baseUrl, {
 
 let lastAppliedToken = "";
 
+function normalizeToken(t) {
+  return t ? String(t).trim() : "";
+}
+
 export function setSocketAuthToken(token) {
-  const t = token ? String(token).trim() : "";
+  const t = normalizeToken(token);
 
   // querystring compat
   socket.io.opts.query = { ...(socket.io.opts.query ?? {}) };
@@ -55,35 +60,33 @@ export function setSocketAuthToken(token) {
 }
 
 function getEffectiveToken(tokenParam) {
-  const param = tokenParam ? String(tokenParam).trim() : "";
+  const param = normalizeToken(tokenParam);
   if (param) return param;
 
-  const fromQuery = String(socket.io.opts?.query?.token ?? "").trim();
-  if (fromQuery) return fromQuery;
+  const q = normalizeToken(socket.io.opts?.query?.token);
+  if (q) return q;
 
-  const fromAuth = String(socket.auth?.token ?? "").trim();
-  if (fromAuth) return fromAuth;
+  const a = normalizeToken(socket.auth?.token);
+  if (a) return a;
 
   return guessTokenFromStorage();
 }
 
 /**
  * Conecta garantindo token atualizado.
- * Se já estiver conectado com token diferente, reconecta.
+ * Se já estiver conectado e token mudou -> reconecta.
  */
 export function connectSocket(token) {
   const t = getEffectiveToken(token);
 
-  // aplica token (inclusive vazio) antes de conectar
-  if (t !== lastAppliedToken) {
+  const tokenChanged = t !== lastAppliedToken;
+  if (tokenChanged) {
     setSocketAuthToken(t);
-
-    // se estava conectado com token antigo -> derruba e reconecta
     if (socket.connected) socket.disconnect();
   } else {
-    // garante token realmente aplicado
-    const hasQueryToken = !!String(socket.io.opts?.query?.token ?? "").trim();
-    const hasAuthToken = !!String(socket.auth?.token ?? "").trim();
+    // garante que token existe no objeto do socket (alguns builds resetam opts)
+    const hasQueryToken = !!normalizeToken(socket.io.opts?.query?.token);
+    const hasAuthToken = !!normalizeToken(socket.auth?.token);
     if (t && !hasQueryToken && !hasAuthToken) {
       setSocketAuthToken(t);
       if (socket.connected) socket.disconnect();
@@ -93,30 +96,30 @@ export function connectSocket(token) {
   if (!socket.connected) socket.connect();
 }
 
-/**
- * Logout-safe: desconecta e opcionalmente limpa token do socket
- */
 export function disconnectSocket({ clearAuth = false } = {}) {
-  if (socket.connected) socket.disconnect();
-  if (clearAuth) setSocketAuthToken("");
+  try {
+    if (socket.connected) socket.disconnect();
+  } finally {
+    if (clearAuth) setSocketAuthToken("");
+  }
 }
 
-export function ensureSocketConnected(token) {
-  if (!socket.connected) connectSocket(token);
+function ensureConnected() {
+  if (socket.connected) return;
+  // tenta conectar com token atual (se houver)
+  connectSocket();
 }
 
-export function joinConversationRoom(conversationId, token) {
+export function joinConversationRoom(conversationId) {
   const id = Number(conversationId);
   if (!id) return;
-
-  ensureSocketConnected(token);
+  ensureConnected();
   socket.emit("conversation:join", { conversation_id: id });
 }
 
-export function leaveConversationRoom(conversationId, token) {
+export function leaveConversationRoom(conversationId) {
   const id = Number(conversationId);
   if (!id) return;
-
-  ensureSocketConnected(token);
+  ensureConnected();
   socket.emit("conversation:leave", { conversation_id: id });
 }

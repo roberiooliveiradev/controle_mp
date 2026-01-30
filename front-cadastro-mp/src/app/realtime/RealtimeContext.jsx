@@ -15,7 +15,11 @@ import {
   setSocketAuthToken,
 } from "./socket";
 
-import { listConversationsApi, getUnreadSummaryApi } from "../api/conversationsApi";
+import {
+  listConversationsApi,
+  getUnreadSummaryApi,
+} from "../api/conversationsApi";
+
 import { getRequestsCountApi } from "../api/requestsApi";
 
 import { useAuth } from "../auth/AuthContext";
@@ -55,16 +59,14 @@ function isSecureForNotifications() {
 }
 
 // -----------------------------
-// ✅ Notificação do navegador (Chrome-safe)
+// ✅ Notificação do navegador
 // -----------------------------
 export async function requestBrowserNotificationsPermission() {
   if (!canUseBrowserNotifications()) return { ok: false, reason: "unsupported" };
-  if (!isSecureForNotifications())
-    return { ok: false, reason: "insecure_context" };
+  if (!isSecureForNotifications()) return { ok: false, reason: "insecure_context" };
 
   if (Notification.permission === "granted") return { ok: true };
-  if (Notification.permission === "denied")
-    return { ok: false, reason: "denied" };
+  if (Notification.permission === "denied") return { ok: false, reason: "denied" };
 
   try {
     const res = await Notification.requestPermission();
@@ -113,11 +115,25 @@ export function RealtimeProvider({ children }) {
   const isPrivileged = roleId === ROLE_ADMIN || roleId === ROLE_ANALYST;
   const isUserOnly = roleId === ROLE_USER;
 
+  // refs anti-closure (evita handlers ficarem com user antigo após logout/login)
+  const activeUserIdRef = useRef(activeUserId ?? null);
+  const isPrivilegedRef = useRef(isPrivileged);
+  const isUserOnlyRef = useRef(isUserOnly);
+
+  useEffect(() => {
+    activeUserIdRef.current = activeUserId ?? null;
+  }, [activeUserId]);
+
+  useEffect(() => {
+    isPrivilegedRef.current = isPrivileged;
+    isUserOnlyRef.current = isUserOnly;
+  }, [isPrivileged, isUserOnly]);
+
   const [conversations, setConversations] = useState([]);
   const [createdRequestsCount, setCreatedRequestsCount] = useState(0);
 
   // -----------------------------
-  // ✅ Token "reativo" (corrige logout/login sem refresh)
+  // ✅ Token "reativo"
   // -----------------------------
   const [accessToken, setAccessToken] = useState(() => {
     try {
@@ -128,9 +144,8 @@ export function RealtimeProvider({ children }) {
   });
 
   useEffect(() => {
-    // pega mudanças por "storage" (outra aba / algumas implementações)
-    function onStorage(e) {
-      // não sabemos a key exata, então só re-le
+    // outra aba / alguns fluxos disparam storage
+    function onStorage() {
       try {
         const t = String(authStorage?.getActiveAccessToken?.() ?? "").trim();
         setAccessToken((prev) => (prev === t ? prev : t));
@@ -144,7 +159,7 @@ export function RealtimeProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // fallback robusto: polling curto (garante reação no mesmo tab)
+    // mesmo tab: polling leve
     const id = setInterval(() => {
       try {
         const t = String(authStorage?.getActiveAccessToken?.() ?? "").trim();
@@ -152,7 +167,7 @@ export function RealtimeProvider({ children }) {
       } catch {
         setAccessToken((prev) => (prev === "" ? prev : ""));
       }
-    }, 500);
+    }, 800);
 
     return () => clearInterval(id);
   }, []);
@@ -165,8 +180,8 @@ export function RealtimeProvider({ children }) {
     [activeUserId]
   );
 
-  const lastUnreadKeyRef = useRef(null);
   const [unreadCounts, setUnreadCounts] = useState({});
+  const lastUnreadKeyRef = useRef(null);
 
   useEffect(() => {
     if (lastUnreadKeyRef.current === unreadKey) return;
@@ -195,10 +210,11 @@ export function RealtimeProvider({ children }) {
     );
   }, [unreadCounts]);
 
+  // conversa ativa (controlada pela página)
   const activeConvRef = useRef(null);
 
   // -----------------------------
-  // ✅ Controle de acesso
+  // ✅ Controle de acesso (para USER)
   // -----------------------------
   const allowedConvIdsRef = useRef(new Set());
   const prevConvIdsRef = useRef(new Set());
@@ -211,12 +227,12 @@ export function RealtimeProvider({ children }) {
 
   function canAccessConversationId(cid) {
     if (!cid) return false;
-    if (isPrivileged) return true;
+    if (isPrivilegedRef.current) return true;
     return allowedConvIdsRef.current.has(Number(cid));
   }
 
   // -----------------------------
-  // helpers
+  // helpers payload
   // -----------------------------
   function stableText(v) {
     if (v == null) return "";
@@ -269,7 +285,7 @@ export function RealtimeProvider({ children }) {
       payload?.conversation?.assignee?.id ??
       payload?.assigned_to;
     const n = Number(assigneeId);
-    return Number.isFinite(n) && n > 0 && n === Number(activeUserId);
+    return Number.isFinite(n) && n > 0 && n === Number(activeUserIdRef.current);
   }
 
   function senderIdOf(payload) {
@@ -313,12 +329,14 @@ export function RealtimeProvider({ children }) {
     const cid = Number(conversationId);
     if (!cid) return;
 
+    const activityIso = iso || new Date().toISOString();
+
     setConversations((prev) => {
       const list = Array.isArray(prev) ? [...prev] : [];
       const idx = list.findIndex((c) => Number(c.id) === cid);
       if (idx === -1) return list;
 
-      list[idx] = { ...list[idx], updated_at: iso };
+      list[idx] = { ...list[idx], updated_at: activityIso };
       list.sort(
         (a, b) =>
           new Date(b.updated_at ?? b.created_at).getTime() -
@@ -347,7 +365,7 @@ export function RealtimeProvider({ children }) {
   }
 
   // -----------------------------
-  // ✅ DEDUPE OR (id + assinatura estável)
+  // ✅ DEDUPE
   // -----------------------------
   function markSeenAny(keys) {
     const store = getGlobalDedupeStore();
@@ -375,7 +393,7 @@ export function RealtimeProvider({ children }) {
   }
 
   // -----------------------------
-  // ✅ Notificação do navegador (com throttling)
+  // ✅ Browser notification (throttle)
   // -----------------------------
   const notifPermissionAskedRef = useRef(false);
 
@@ -418,37 +436,56 @@ export function RealtimeProvider({ children }) {
   // -----------------------------
   // loads (API)
   // -----------------------------
-  async function loadInitial() {
+  async function loadConversations() {
     const data = await listConversationsApi({ limit: 50, offset: 0 });
     const list = Array.isArray(data) ? data : data?.items ?? [];
     setConversations(list);
     prevConvIdsRef.current = new Set(list.map((c) => Number(c.id)).filter(Boolean));
   }
 
+  async function loadUnreadSummary() {
+    try {
+      const summary = await getUnreadSummaryApi();
+      setUnreadCounts(summary ?? {});
+    } catch {
+      setUnreadCounts({});
+    }
+  }
+
   async function loadCreatedRequestsCount() {
     try {
-      const total = await getRequestsCountApi({ status_id: 1 }); // CRIADO
+      const total = await getRequestsCountApi({ status_id: 1 });
       setCreatedRequestsCount(Number(total || 0));
     } catch {
       setCreatedRequestsCount(0);
     }
   }
 
-  async function loadUnreadSummary() {
-      try {
-        const summary = await getUnreadSummaryApi();
-        setUnreadCounts(summary ?? {});
-      } catch {
-        setUnreadCounts({});
-      }
-    }
+  // ✅ “refreshAll” central (login/refresh/reconnect/voltar pra aba)
+  async function refreshAll() {
+    await Promise.allSettled([
+      loadConversations(),
+      loadUnreadSummary(),
+      loadCreatedRequestsCount(),
+    ]);
+  }
+
+  // debounce de sync (pra não floodar a API quando chegam muitas msgs)
+  const syncTimerRef = useRef(null);
+  function scheduleSyncAll(delayMs = 300) {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => {
+      refreshAll();
+    }, delayMs);
+  }
+
   // -----------------------------
-  // ✅ efeito principal (token + login/logout + listeners)
+  // ✅ efeito principal
   // -----------------------------
   useEffect(() => {
     let cancelled = false;
 
-    // 🔴 Se não tem token => trata como logout (mesmo que activeUserId não mude)
+    // logout (ou refresh sem token)
     if (!accessToken) {
       try {
         disconnectSocket({ clearAuth: true });
@@ -459,6 +496,7 @@ export function RealtimeProvider({ children }) {
       setConversations([]);
       setUnreadCounts({});
       setCreatedRequestsCount(0);
+
       prevConvIdsRef.current = new Set();
       allowedConvIdsRef.current = new Set();
       activeConvRef.current = null;
@@ -468,35 +506,37 @@ export function RealtimeProvider({ children }) {
       };
     }
 
-    // ✅ Tem token => garante socket autenticado e conectado
+    // login/refresh com token
     setSocketAuthToken(accessToken);
     connectSocket(accessToken);
 
-    // sempre que conectar/reconectar, recarrega dados para badges ficarem corretos
     const onConnect = async () => {
       if (cancelled) return;
-      try {
-        await loadInitial();
-        await loadUnreadSummary();
-      } catch {
-        // ignore
-      }
-      await loadCreatedRequestsCount();
+      await refreshAll();
+    };
+
+    const onReconnect = async () => {
+      if (cancelled) return;
+      await refreshAll();
     };
 
     socket.on("connect", onConnect);
+    socket.io.on?.("reconnect", onReconnect);
 
-    // também roda já (sem esperar connect)
+    // primeira carga (não depende do connect)
     (async () => {
-      try {
-        await loadInitial();
-        await loadUnreadSummary();
-      } catch {
-        // ignore
-      }
-      await loadCreatedRequestsCount();
+      await refreshAll();
     })();
 
+    // quando volta pra aba (muito comum ficar stale)
+    const onVisibility = () => {
+      if (!document.hidden) scheduleSyncAll(100);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    // -----------------------------
+    // handlers realtime
+    // -----------------------------
     const onMessageNew = (payload) => {
       const cid = conversationIdOf(payload);
       if (!cid) return;
@@ -508,31 +548,40 @@ export function RealtimeProvider({ children }) {
       const keys = [mid ? `message:new|mid:${mid}` : "", fp];
       if (markSeenAny(keys)) return;
 
-      if (isUserOnly && !canAccessConversationId(cid)) return;
+      if (isUserOnlyRef.current && !canAccessConversationId(cid)) return;
 
       bumpConversation(
         cid,
         payload?.created_at_iso ?? payload?.created_at ?? new Date().toISOString()
       );
 
-      const isMine = sid && Number(activeUserId) === sid;
-      if (activeConvRef.current === cid) return;
+      const currentUserId = Number(activeUserIdRef.current);
+      const isMine = sid && currentUserId === sid;
+
+      // se estou dentro da conversa ou msg minha, não conta como unread aqui
+      if (activeConvRef.current === cid) {
+        // mesmo assim: mantém o backend como fonte da verdade
+        scheduleSyncAll(250);
+        return;
+      }
       if (isMine) return;
 
       const who = senderNameOf(payload);
       const title = conversationTitleOf(payload);
       const prev = messagePreviewOf(payload);
 
-      const toastText = title
-        ? `Nova mensagem de ${who} • ${title}`
-        : `Nova mensagem de ${who}`;
+      toastSuccess(
+        title ? `Nova mensagem de ${who} • ${title}` : `Nova mensagem de ${who}`
+      );
 
-      toastSuccess(toastText);
-
+      // ✅ feedback instantâneo no badge
       setUnreadCounts((prevCounts) => ({
         ...(prevCounts ?? {}),
         [cid]: Number((prevCounts ?? {})[cid] ?? 0) + 1,
       }));
+
+      // ✅ e sincroniza com o servidor (fonte da verdade)
+      scheduleSyncAll(350);
 
       showBrowserNotification({
         title: title ? `Mensagem • ${title}` : "Nova mensagem",
@@ -547,17 +596,17 @@ export function RealtimeProvider({ children }) {
       const keys = [cid ? `conversation:new|cid:${cid}` : "", fp];
       if (markSeenAny(keys)) return;
 
-      if (isPrivileged) {
+      if (isPrivilegedRef.current) {
         const title = conversationTitleOf(payload);
         const creator =
           payload?.creator?.full_name ?? payload?.creator?.name ?? "Alguém";
         const assignedToMe = isConversationAssignedToMe(payload);
 
-        const toastText = title
-          ? `Nova conversa: ${title}${assignedToMe ? " • atribuída a você" : ""}`
-          : `Nova conversa criada${assignedToMe ? " • atribuída a você" : ""}`;
-
-        toastSuccess(toastText);
+        toastSuccess(
+          title
+            ? `Nova conversa: ${title}${assignedToMe ? " • atribuída a você" : ""}`
+            : `Nova conversa criada${assignedToMe ? " • atribuída a você" : ""}`
+        );
 
         showBrowserNotification({
           title: "Nova conversa",
@@ -567,11 +616,7 @@ export function RealtimeProvider({ children }) {
         });
       }
 
-      try {
-        await loadInitial();
-      } catch {
-        // ignore
-      }
+      scheduleSyncAll(150);
     };
 
     const onRequestCreated = async (payload) => {
@@ -584,9 +629,13 @@ export function RealtimeProvider({ children }) {
       const keys = [reqId ? `request:created|rid:${reqId}` : "", fp];
       if (markSeenAny(keys)) return;
 
-      if (isUserOnly && sid && sid !== Number(activeUserId)) return;
+      const currentUserId = Number(activeUserIdRef.current);
+      if (isUserOnlyRef.current && sid && sid !== currentUserId) return;
 
+      // ✅ atualiza contagem imediatamente + sync
       await loadCreatedRequestsCount();
+      scheduleSyncAll(250);
+
       toastSuccess("Solicitação criada.");
       showBrowserNotification({ title: "Controle MP", body: "Solicitação criada." });
     };
@@ -597,10 +646,13 @@ export function RealtimeProvider({ children }) {
 
       const changedBy = Number(payload?.changed_by ?? senderIdOf(payload));
       const requestOwnerId = Number(payload?.request?.created_by);
-      const currentUserId = Number(activeUserId);
+      const currentUserId = Number(activeUserIdRef.current);
 
       const fp = `request:item_changed|fp:${changedBy}|${conversationIdOf(payload)}|${stableText(payload?.change_kind)}|${statusId}`;
-      const keys = [itemId ? `request:item_changed|item:${itemId}|st:${statusId}` : "", fp];
+      const keys = [
+        itemId ? `request:item_changed|item:${itemId}|st:${statusId}` : "",
+        fp,
+      ];
       if (markSeenAny(keys)) return;
 
       const shouldNotify =
@@ -614,7 +666,9 @@ export function RealtimeProvider({ children }) {
       else if (statusId === 4) toastError("Falha ao processar item.");
       else toastWarning("Solicitação atualizada.");
 
-      if (statusId !== 1) await loadCreatedRequestsCount();
+      // ✅ mantém badge correto (principalmente após refresh/login)
+      await loadCreatedRequestsCount();
+      scheduleSyncAll(250);
 
       showBrowserNotification({ title: "Controle MP", body: "Solicitação atualizada." });
     };
@@ -651,7 +705,13 @@ export function RealtimeProvider({ children }) {
     return () => {
       cancelled = true;
 
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = null;
+
+      document.removeEventListener("visibilitychange", onVisibility);
+
       socket.off("connect", onConnect);
+      socket.io.off?.("reconnect", onReconnect);
 
       socket.off("message:new", onMessageNew);
       socket.off("conversation:new", onConversationNew);
@@ -660,7 +720,7 @@ export function RealtimeProvider({ children }) {
       socket.off("product:created", onProductCreated);
       socket.off("product:updated", onProductUpdated);
     };
-  }, [accessToken, activeUserId, isPrivileged, isUserOnly]);
+  }, [accessToken]); // 🔥 intencional: handlers usam refs anti-closure
 
   return (
     <RealtimeContext.Provider
