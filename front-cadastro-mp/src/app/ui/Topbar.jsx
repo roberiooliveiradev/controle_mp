@@ -39,7 +39,7 @@ export function EnableNotificationsButton() {
 export function Topbar() {
   const { user, logout, activeUserId, setActiveUserId, listProfiles } = useAuth();
   const location = useLocation();
-  const { totalUnreadMessages } = useRealtime();
+  const { totalUnreadMessages, createdRequestsCount } = useRealtime();
   
   const profiles = useMemo(() => listProfiles(), [listProfiles]);
 
@@ -82,6 +82,11 @@ export function Topbar() {
 
         <Link to="/requests" className={linkClass("/requests")}>
           Solicitações
+          {createdRequestsCount > 0 && (
+            <span className="topbar-badge">
+              {createdRequestsCount}
+            </span>
+          )}
         </Link>
 
         <Link to="/products" className={linkClass("/products")}>

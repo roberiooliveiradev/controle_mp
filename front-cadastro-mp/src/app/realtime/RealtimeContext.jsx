@@ -4,6 +4,7 @@ import { socket } from "./socket";
 import { listConversationsApi } from "../api/conversationsApi";
 import { useAuth } from "../auth/AuthContext";
 import { toastSuccess, toastWarning, toastError } from "../ui/toast";
+import { getRequestsCountApi } from "../api/requestsApi";
 
 const RealtimeContext = createContext(null);
 
@@ -85,13 +86,6 @@ async function showBrowserNotification({ title, body }) {
   }
 }
 
-
-
-
-
-
-
-
 export function RealtimeProvider({ children }) {
   const auth = useAuth();
   const activeUserId = auth?.activeUserId;
@@ -108,6 +102,16 @@ export function RealtimeProvider({ children }) {
   const isUserOnly = roleId === ROLE_USER;
 
   const [conversations, setConversations] = useState([]);
+  const [createdRequestsCount, setCreatedRequestsCount] = useState(0);
+
+  async function loadCreatedRequestsCount() {
+    try {
+      const total = await getRequestsCountApi({ status_id: 1 }); // CRIADO
+      setCreatedRequestsCount(Number(total || 0));
+    } catch {
+      setCreatedRequestsCount(0);
+    }
+  }
 
   function updateConversationTitle(conversationId, title) {
     const cid = Number(conversationId);
@@ -408,7 +412,8 @@ export function RealtimeProvider({ children }) {
     }
 
     loadInitial();
-
+    loadCreatedRequestsCount();
+  
     const onMessageNew = (payload) => {
       const cid = conversationIdOf(payload);
       if (!cid) return;
@@ -497,6 +502,8 @@ export function RealtimeProvider({ children }) {
 
       if (isUserOnly && sid && sid !== Number(activeUserId)) return;
 
+      setCreatedRequestsCount((c) => c + 1);
+
       toastSuccess("Solicitação criada.");
       showBrowserNotification({
         title: "Controle MP",
@@ -534,6 +541,10 @@ export function RealtimeProvider({ children }) {
       else if (statusId === 6) toastError("Item rejeitado atualizado.");
       else if (statusId === 4) toastError("Falha ao processar item.");
       else toastWarning("Solicitação atualizada.");
+
+      if (statusId !== 1) {
+        loadCreatedRequestsCount();
+      }
 
       showBrowserNotification({
         title: "Controle MP",
@@ -629,9 +640,14 @@ export function RealtimeProvider({ children }) {
       value={{
         conversations,
         setConversations,
+
         unreadCounts,
         totalUnreadMessages,
         setUnreadCounts,
+
+        createdRequestsCount,    
+        setCreatedRequestsCount,       
+
         activeConvRef,
         updateConversationTitle,
         requestBrowserNotificationsPermission,
@@ -639,6 +655,7 @@ export function RealtimeProvider({ children }) {
         isSecureForNotifications,
       }}
     >
+
       {children}
     </RealtimeContext.Provider>
   );

@@ -95,6 +95,14 @@ export async function getRequestsMetaApi() {
 	return data; // { types: [...], statuses: [...] }
 }
 
+export async function getRequestsCountApi({ status_id } = {}) {
+  const params = new URLSearchParams();
+  if (status_id != null) params.set("status_id", String(status_id));
+
+  const { data } = await httpClient.get(`/requests/count?${params.toString()}`);
+  return data?.total ?? 0;
+}
+
 // INFORMAÇÕES ATUAIS DO PRODUTO TOTVS
 export async function getTotvsByProductCodeApi(productCode) {
   const code = String(productCode || "").trim();
