@@ -69,6 +69,8 @@ class ConversationParticipantRepository(BaseRepository[ConversationParticipantMo
             .where(
                 ConversationParticipantModel.user_id == user_id,
                 ConversationParticipantModel.is_deleted.is_(False),
+                ConversationModel.is_deleted.is_(False),
+                MessageModel.is_deleted.is_(False),
 
                 # mensagens depois da última lida
                 MessageModel.id > func.coalesce(
