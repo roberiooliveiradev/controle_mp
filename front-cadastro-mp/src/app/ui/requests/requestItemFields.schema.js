@@ -103,7 +103,7 @@ export const SUPPLIER_COLUMNS = Object.freeze([
 	},
 	{
 		key: "catalog_number",
-		header: "Cód. do Catálogo",
+		header: "Cód. de Catálogo",
 		width: 200,
 		inputType: "text",
 		placeholder: "Ex: ABC-001",
