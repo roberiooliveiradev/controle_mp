@@ -1,5 +1,12 @@
 // src/app/ui/chat/MessageBubble.jsx
-import { downloadFileApi } from "../../api/filesApi"
+import { downloadFileApi } from "../../api/filesApi";
+
+import { REQUEST_ITEM_FIELD_META } from "../requests/requestItemFields.schema";
+import { FIELD_TYPES } from "../../constants";
+
+/* -------------------------------------------------------------------------- */
+/* Utils                                                                      */
+/* -------------------------------------------------------------------------- */
 
 function myStatusLabel(status) {
   if (status === "sending") return "🕓 Enviando";
@@ -13,24 +20,7 @@ function fileLabel(originalName) {
   return String(ext).toUpperCase();
 }
 
-const FIELD_LABELS = {
-  codigo_atual: "Código atual",
-  grupo: "Grupo",
-  novo_codigo: "Novo código",
-  descricao: "Descrição",
-  tipo: "Tipo",
-  armazem_padrao: "Armazém padrão",
-  unidade: "Unidade",
-  produto_terceiro: "Produto de 3º?",
-  cta_contabil: "Cta. Contábil",
-  ref_cliente: "Ref. Cliente",
-  fornecedores: "Fornecedores",
-};
-
-const REQUEST_TYPE_ID_CREATE = 1;
-const REQUEST_TYPE_ID_UPDATE = 2;
-
-function fieldsToMap(fields) {
+function buildFieldMap(fields) {
   const map = {};
   (fields || []).forEach((f) => {
     map[f.field_tag] = f.field_value ?? "";
@@ -47,6 +37,10 @@ function parseSuppliers(jsonStr) {
     return [];
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* UI Pieces                                                                  */
+/* -------------------------------------------------------------------------- */
 
 function ReadonlyInput({ label, value }) {
   return (
@@ -67,13 +61,25 @@ function ReadonlyInput({ label, value }) {
   );
 }
 
-function RequestItemReadonlyCard({ item, index }) {
-  const map = fieldsToMap(item.fields);
-  const isUpdate = item?.request_type_id === REQUEST_TYPE_ID_UPDATE;
-  const suppliers = parseSuppliers(map.fornecedores);
+/* -------------------------------------------------------------------------- */
+/* Request Item Card                                                          */
+/* -------------------------------------------------------------------------- */
 
-  const typeName = item?.request_type?.type_name || `#${item.request_type_id}`;
-  const statusName = item?.request_status?.status_name || `#${item.request_status_id}`;
+const REQUEST_TYPE_ID_UPDATE = 2;
+
+function RequestItemReadonlyCard({ item, index }) {
+  const fieldMap = buildFieldMap(item.fields);
+
+  const typeName =
+    item?.request_type?.type_name || `#${item.request_type_id}`;
+  const statusName =
+    item?.request_status?.status_name || `#${item.request_status_id}`;
+
+  const fieldMetaList = Object.values(REQUEST_ITEM_FIELD_META);
+
+  const suppliersMeta = REQUEST_ITEM_FIELD_META.fornecedores;
+  const suppliers = parseSuppliers(fieldMap[suppliersMeta.tag]);
+
   return (
     <div
       style={{
@@ -85,9 +91,20 @@ function RequestItemReadonlyCard({ item, index }) {
         gap: 12,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-        <div style={{ fontWeight: 800 }}>Solicitação • Item #{index + 1}</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "center",
+        }}
+      >
+        <div style={{ fontWeight: 800 }}>
+          Solicitação • Item #{index + 1}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <span
             style={{
               fontSize: 12,
@@ -95,7 +112,6 @@ function RequestItemReadonlyCard({ item, index }) {
               borderRadius: 999,
               border: "1px solid var(--border)",
               background: "var(--surface-2)",
-              opacity: 0.9,
               fontWeight: 700,
             }}
           >
@@ -109,7 +125,6 @@ function RequestItemReadonlyCard({ item, index }) {
               borderRadius: 999,
               border: "1px solid var(--border)",
               background: "var(--surface-2)",
-              opacity: 0.9,
             }}
           >
             Status: {statusName}
@@ -117,23 +132,45 @@ function RequestItemReadonlyCard({ item, index }) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 10 }}>
-        {isUpdate ? <ReadonlyInput label={FIELD_LABELS.codigo_atual} value={map.codigo_atual} /> : null}
-        <ReadonlyInput label={FIELD_LABELS.grupo} value={map.grupo} />
-        <ReadonlyInput label={FIELD_LABELS.novo_codigo} value={map.novo_codigo} />
-        <div style={{ gridColumn: "1 / -1" }}>
-          <ReadonlyInput label={FIELD_LABELS.descricao} value={map.descricao} />
-        </div>
-        <ReadonlyInput label={FIELD_LABELS.tipo} value={map.tipo} />
-        <ReadonlyInput label={FIELD_LABELS.armazem_padrao} value={map.armazem_padrao} />
-        <ReadonlyInput label={FIELD_LABELS.unidade} value={map.unidade} />
-        <ReadonlyInput label={FIELD_LABELS.produto_terceiro} value={map.produto_terceiro} />
-        <ReadonlyInput label={FIELD_LABELS.cta_contabil} value={map.cta_contabil} />
-        <ReadonlyInput label={FIELD_LABELS.ref_cliente} value={map.ref_cliente} />
+      {/* Campos TEXT */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "220px 1fr",
+          gap: 10,
+        }}
+      >
+        {fieldMetaList
+          .filter((meta) => meta.field_type_id === FIELD_TYPES.TEXT)
+          .filter((meta) => {
+            // regra de negócio: codigo_atual só em UPDATE
+            if (meta.tag === "codigo_atual") {
+              return item?.request_type_id === REQUEST_TYPE_ID_UPDATE;
+            }
+            return true;
+          })
+          .map((meta) => {
+            const isDescricao = meta.tag === "descricao";
+
+            return (
+              <div
+                key={meta.tag}
+                style={isDescricao ? { gridColumn: "1 / -1" } : undefined}
+              >
+                <ReadonlyInput
+                  label={meta.label}
+                  value={fieldMap[meta.tag]}
+                />
+              </div>
+            );
+          })}
       </div>
 
+      {/* Fornecedores (JSON) */}
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Fornecedores</div>
+        <div style={{ fontWeight: 700, marginBottom: 8 }}>
+          {suppliersMeta.label}
+        </div>
 
         {suppliers.length === 0 ? (
           <div style={{ fontSize: 12, opacity: 0.65 }}>—</div>
@@ -142,19 +179,25 @@ function RequestItemReadonlyCard({ item, index }) {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid var(--border)", padding: 8 }}>Código</th>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid var(--border)", padding: 8 }}>Loja</th>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid var(--border)", padding: 8 }}>Nome</th>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid var(--border)", padding: 8 }}>Part. Number</th>
+                  <th style={{ textAlign: "left", padding: 8 }}>Código</th>
+                  <th style={{ textAlign: "left", padding: 8 }}>Loja</th>
+                  <th style={{ textAlign: "left", padding: 8 }}>Fornecedor</th>
+                  <th style={{ textAlign: "left", padding: 8 }}>Part number</th>
+                  <th style={{ textAlign: "left", padding: 8 }}>
+                    Código do Catálogo
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {suppliers.map((r, i) => (
                   <tr key={i}>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f3f3f3" }}>{r.supplier_code || "—"}</td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f3f3f3" }}>{r.store || "—"}</td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f3f3f3" }}>{r.supplier_name || "—"}</td>
-                    <td style={{ padding: 8, borderBottom: "1px solid #f3f3f3" }}>{r.part_number || "—"}</td>
+                    <td style={{ padding: 8 }}>{r.supplier_code || "—"}</td>
+                    <td style={{ padding: 8 }}>{r.store || "—"}</td>
+                    <td style={{ padding: 8 }}>{r.supplier_name || "—"}</td>
+                    <td style={{ padding: 8 }}>{r.part_number || "—"}</td>
+                    <td style={{ padding: 8 }}>
+                      {r.catalog_number || "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -166,18 +209,37 @@ function RequestItemReadonlyCard({ item, index }) {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* Request Stack                                                              */
+/* -------------------------------------------------------------------------- */
+
 function RequestReadonlyStack({ requestFull }) {
   const items = requestFull?.items || [];
   if (!items.length) return null;
 
   return (
-    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+    <div
+      style={{
+        marginTop: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
       {items.map((it, idx) => (
-        <RequestItemReadonlyCard key={it.id ?? idx} item={it} index={idx} />
+        <RequestItemReadonlyCard
+          key={it.id ?? idx}
+          item={it}
+          index={idx}
+        />
       ))}
     </div>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Message Bubble                                                             */
+/* -------------------------------------------------------------------------- */
 
 export function MessageBubble({ message, isMine }) {
   const dt = message.created_at ? new Date(message.created_at) : null;
@@ -189,15 +251,19 @@ export function MessageBubble({ message, isMine }) {
     try {
       await downloadFileApi(f.id, f.original_name || "arquivo");
     } catch (err) {
-      // opcional: aqui você pode plugar um toast
-      // eslint-disable-next-line no-console
       console.error(err);
       alert(err?.response?.data?.error ?? "Falha ao baixar arquivo.");
     }
   }
 
   return (
-    <div style={{ display: "flex", justifyContent: isMine ? "flex-end" : "flex-start", marginBottom: 10 }}>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: isMine ? "flex-end" : "flex-start",
+        marginBottom: 10,
+      }}
+    >
       <div
         style={{
           maxWidth: 780,
@@ -209,17 +275,35 @@ export function MessageBubble({ message, isMine }) {
         }}
       >
         {!isMine && (
-          <div style={{ fontSize: 12, opacity: "var(--text-muted)", marginBottom: 6 }}>
+          <div
+            style={{
+              fontSize: 12,
+              opacity: "var(--text-muted)",
+              marginBottom: 6,
+            }}
+          >
             {message.sender?.full_name ?? message.sender?.email}
           </div>
         )}
 
-        {message.body ? <div style={{ whiteSpace: "pre-wrap" }}>{message.body}</div> : null}
+        {message.body ? (
+          <div style={{ whiteSpace: "pre-wrap" }}>{message.body}</div>
+        ) : null}
 
-        {message.request_full ? <RequestReadonlyStack requestFull={message.request_full} /> : null}
+        {message.request_full ? (
+          <RequestReadonlyStack requestFull={message.request_full} />
+        ) : null}
 
-        {files.length > 0 ? (
-          <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 10 }}>
+        {/* Arquivos */}
+        {files.length > 0 && (
+          <div
+            style={{
+              marginTop: 10,
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+            }}
+          >
             {files.map((f, idx) => {
               const isImg = (f.content_type || "").startsWith("image/");
               const preview = f._local_preview_url;
@@ -227,7 +311,6 @@ export function MessageBubble({ message, isMine }) {
               return (
                 <div
                   key={f.id ?? `${f.original_name}-${idx}`}
-                  title={f.original_name}
                   style={{
                     width: 180,
                     border: "1px solid var(--border)",
@@ -249,10 +332,20 @@ export function MessageBubble({ message, isMine }) {
                       <img
                         src={preview}
                         alt={f.original_name}
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
                       />
                     ) : (
-                      <div style={{ fontSize: 12, fontWeight: 700, opacity: "var(--text-muted)" }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          opacity: "var(--text-muted)",
+                        }}
+                      >
                         {fileLabel(f.original_name)}
                       </div>
                     )}
@@ -261,7 +354,6 @@ export function MessageBubble({ message, isMine }) {
                   <div style={{ padding: 8, display: "grid", gap: 8 }}>
                     <div
                       style={{
-                        padding:12,
                         fontSize: 12,
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -270,12 +362,6 @@ export function MessageBubble({ message, isMine }) {
                     >
                       {f.original_name}
                     </div>
-
-                    {f._status ? (
-                      <div style={{ fontSize: 11, opacity: 0.65 }}>
-                        {f._status === "uploading" ? "🕓 Upload..." : f._status === "uploaded" ? "✓ Upload ok" : ""}
-                      </div>
-                    ) : null}
 
                     <button
                       type="button"
@@ -298,20 +384,19 @@ export function MessageBubble({ message, isMine }) {
               );
             })}
           </div>
-        ) : null}
+        )}
 
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
-            gap: 12,
             fontSize: 11,
             opacity: 0.65,
             marginTop: 8,
           }}
         >
           <span>{dt ? dt.toLocaleString("pt-BR") : ""}</span>
-          {isMine ? <span>{myStatusLabel(status)}</span> : null}
+          {isMine && <span>{myStatusLabel(status)}</span>}
         </div>
       </div>
     </div>

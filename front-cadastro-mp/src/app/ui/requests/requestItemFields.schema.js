@@ -101,4 +101,12 @@ export const SUPPLIER_COLUMNS = Object.freeze([
 		placeholder: "Ex: ABC-001",
 		required: true,
 	},
+	{
+		key: "catalog_number",
+		header: "Cód. do Catálogo",
+		width: 200,
+		inputType: "text",
+		placeholder: "Ex: ABC-001",
+		required: false,
+	},
 ]);
