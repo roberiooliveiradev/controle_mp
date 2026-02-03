@@ -46,6 +46,20 @@ export function RequestComposerModal({ onClose, onSubmit }) {
   const active = items[activeIndex];
   const canSubmit = useMemo(() => items.length > 0, [items.length]);
 
+  const hasUnsavedChanges = useMemo(() => {
+    if (items.length > 1) return true;
+
+    const first = items[0];
+    if (!first) return false;
+
+    // qualquer campo relevante preenchido
+    return Object.entries(first).some(([k, v]) => {
+      if (k === "_client_id") return false;
+      if (Array.isArray(v)) return v.length > 0;
+      return Boolean(v);
+    });
+  }, [items]);
+
   function getItemErrors(idx) {
     return errors?.[idx] || { fields: {}, suppliers: {} };
   }
@@ -166,6 +180,21 @@ export function RequestComposerModal({ onClose, onSubmit }) {
     return nextErrors;
   }
 
+  function requestClose() {
+    if (!hasUnsavedChanges) {
+      onClose();
+      return;
+    }
+
+    const ok = window.confirm(
+      "Você tem informações preenchidas.\n\nDeseja realmente fechar e perder os dados?"
+    );
+
+    if (ok) {
+      onClose();
+    }
+  }
+
   async function submit() {
     const nextErrors = validateAll();
     setErrors(nextErrors);
@@ -201,7 +230,11 @@ export function RequestComposerModal({ onClose, onSubmit }) {
         padding: 16,
       }}
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget ) 
+        {
+          // Disparar um alerta para evitar fechamento por clique errado e perda de informação
+          requestClose();
+        }
       }}
     >
       <div style={{ background: "var(--surface)", borderRadius: 16, overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}>
@@ -222,7 +255,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
           </div>
 
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="button" onClick={onClose} style={{ padding: "8px 12px", borderRadius: 10 }}>
+            <button type="button" onClick={requestClose} style={{ padding: "8px 12px", borderRadius: 10 }}>
               Cancelar
             </button>
             <button type="button" onClick={submit} disabled={!canSubmit} style={{ padding: "8px 12px", borderRadius: 10, fontWeight: 700 }}>
