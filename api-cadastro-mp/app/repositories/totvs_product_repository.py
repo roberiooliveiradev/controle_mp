@@ -23,7 +23,8 @@ class TotvsProductRepository:
                             LTRIM(RTRIM(A5_FORNECE))  AS supplier_code,
                             LTRIM(RTRIM(A5_LOJA))     AS store,
                             LTRIM(RTRIM(A5_NOMEFOR))  AS supplier_name,
-                            LTRIM(RTRIM(A5_CODPRF))   AS part_number
+                            LTRIM(RTRIM(A5_CODPRF))   AS part_number,
+                            LTRIM(RTRIM(A5_CODPRCA))   AS catalog_number
                         FROM SA5010
                         WHERE
                             SA5010.D_E_L_E_T_ = ''

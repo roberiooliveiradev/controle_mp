@@ -30,7 +30,6 @@ class RequestRepository(BaseRepository[RequestModel]):
         )
         return self._session.execute(stmt).scalars().first()
 
-    # ✅ NOVO
     def get_by_message_ids(self, message_ids: list[int]) -> dict[int, RequestModel]:
         """
         Retorna um dict {message_id: RequestModel} para as mensagens informadas.
