@@ -85,15 +85,19 @@ export function safeJsonParse(str, fallback) {
 }
 
 export function pushTextField(fields, tag, value) {
-	const v = String(value ?? "").trim();
-	if (!v) return;
-	fields.push({
-		field_type_id: FIELD_TYPE_ID_TEXT,
-		field_tag: tag,
-		field_value: v,
-		field_flag: null,
-	});
+  let v = String(value ?? "").trim();
+  if (!v) return;
+
+  v = v.toUpperCase(); // ✅ TODAS AS TAGS
+
+  fields.push({
+    field_type_id: FIELD_TYPE_ID_TEXT,
+    field_tag: tag,
+    field_value: v,
+    field_flag: null,
+  });
 }
+
 
 /**
  * Converte o "item estruturado" do Composer para payload de request_items.
@@ -123,7 +127,15 @@ export function structuredItemToRequestPayloadItem(it) {
 	pushTextField(fields, TAGS.cta_contabil, it.cta_contabil);
 	pushTextField(fields, TAGS.ref_cliente, it.ref_cliente);
 
-	const fornecedores = Array.isArray(it.fornecedores) ? it.fornecedores : [];
+	const fornecedores = (Array.isArray(it.fornecedores) ? it.fornecedores : []).map(
+	(r) => ({
+		supplier_code: String(r.supplier_code ?? "").trim().toUpperCase(),
+		store: String(r.store ?? "").trim().toUpperCase(),
+		supplier_name: String(r.supplier_name ?? "").trim().toUpperCase(),
+		part_number: String(r.part_number ?? "").trim().toUpperCase(),
+	}),
+	);
+
 	fields.push({
 		field_type_id: FIELD_TYPE_ID_JSON,
 		field_tag: TAGS.fornecedores,

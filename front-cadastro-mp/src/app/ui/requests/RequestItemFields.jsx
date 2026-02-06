@@ -192,9 +192,6 @@ const [flagModal, setFlagModal] = useState({
     return value;
   }
 
-
-
-
   const key = String(itemKey ?? "default");
 
   const lastFetchedByKeyRef = useRef(new Map()); // key -> code
@@ -239,20 +236,9 @@ const [flagModal, setFlagModal] = useState({
 
   function setVal(tag, v) {
     const isSpecialNovoCodigo = tag === TAGS.novo_codigo && canEditNovoCodigoField;
-
-    // regra:
-    // - se readOnly: só permite alterar novo_codigo quando CREATE e canEditNovoCodigo=true
-    // - se não readOnly: permite tudo (edit normal)
     if (!canEditNormal && !isSpecialNovoCodigo) return;
 
-    // ✅ REGRA: alguns campos sempre em UPPERCASE
-    const mustUppercase = true;
-
-    let nextValue = normalizeValueForTyping(v);
-
-    if (mustUppercase && typeof nextValue === "string") {
-      nextValue = nextValue.toUpperCase();
-    }
+    const nextValue = normalizeValueForTyping(v); // 👈 SEM uppercase
 
     markDirty(tag);
 
@@ -265,6 +251,7 @@ const [flagModal, setFlagModal] = useState({
     onChangeTagValue?.(tag, nextValue);
     onClearFieldError?.(tag);
   }
+
   
   function setFornecedores(nextRows) {
     // respeita readOnly
