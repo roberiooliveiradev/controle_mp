@@ -77,8 +77,12 @@ def _row_to_response(row) -> dict:
 @bp_conv.get("")
 @require_auth
 def list_conversations():
-    limit = max(1, min(int(request.args.get("limit", 50)), 200))
-    offset = max(0, int(request.args.get("offset", 0)))
+    limit_arg = request.args.get("limit")
+    offset_arg = request.args.get("offset")
+
+    limit = int(limit_arg) if limit_arg is not None else None
+    offset = int(offset_arg) if offset_arg is not None else None
+
     title = request.args.get("title")
     user_id, role_id = _auth_user()
 

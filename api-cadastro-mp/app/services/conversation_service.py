@@ -67,7 +67,7 @@ class ConversationService:
             "assignee": self._pack_user_mini(assignee),
         }
 
-    def list_conversations(self, *, user_id: int, role_id: int, limit: int = 50, offset: int = 0, title: str=""):
+    def list_conversations(self, *, user_id, role_id, limit=None, offset=None, title=""):
         if role_id in (Role.ADMIN, Role.ANALYST):
             return self._repo.list_all_conversations_rows(limit=limit, offset=offset, title=title)
         return self._repo.list_my_conversations_rows(user_id=user_id, limit=limit, offset=offset, title=title)

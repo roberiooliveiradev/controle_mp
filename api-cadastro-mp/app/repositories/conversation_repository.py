@@ -36,9 +36,13 @@ class ConversationRepository(BaseRepository[ConversationModel]):
         stmt = (
             stmt
             .order_by(self._order_by_last_activity())
-            .limit(limit)
-            .offset(offset)
         )
+
+        if limit is not None:
+            stmt = stmt.limit(limit)
+
+        if offset is not None:
+            stmt = stmt.offset(offset)
 
         return list(self._session.execute(stmt).all())
 
@@ -52,9 +56,13 @@ class ConversationRepository(BaseRepository[ConversationModel]):
         stmt = (
             stmt
             .order_by(self._order_by_last_activity())
-            .limit(limit)
-            .offset(offset)
         )
+        
+        if limit is not None:
+            stmt = stmt.limit(limit)
+
+        if offset is not None:
+            stmt = stmt.offset(offset)
 
         return list(self._session.execute(stmt).all())
 
