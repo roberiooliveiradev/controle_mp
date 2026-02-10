@@ -479,11 +479,11 @@ def count_requests():
 def list_request_items():
     user_id, role_id = _auth_user()
 
-    try:
-        limit = int(request.args.get("limit", 30))
-        offset = int(request.args.get("offset", 0))
-    except ValueError:
-        return jsonify({"error": "Parâmetros limit/offset inválidos."}), 400
+    limit_raw = request.args.get("limit")
+    offset_raw = request.args.get("offset")
+
+    limit = int(limit_raw) if limit_raw not in (None, "") else None
+    offset = int(offset_raw) if offset_raw not in (None, "") else None
 
     status_id = request.args.get("status_id")
     status_id = int(

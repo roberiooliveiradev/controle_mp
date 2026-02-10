@@ -124,10 +124,9 @@ class RequestItemRepository(BaseRepository[RequestItemModel]):
     def list_items_for_page(
         self,
         *,
-        limit: int,
-        offset: int,
+        limit: int | None,
+        offset: int | None,
         status_id: int | None,
-        # novos filtros
         created_by_user_id: int | None,
         created_by_name: str | None,
         type_id: int | None,
@@ -206,9 +205,15 @@ class RequestItemRepository(BaseRepository[RequestItemModel]):
 
         # ordenação: mais recente (updated_at se existir, senão created_at)
         sort_col = func.coalesce(RequestItemModel.updated_at, RequestItemModel.created_at)
-        page_stmt = base_stmt.order_by(sort_col.desc(), RequestItemModel.id.desc()).limit(int(limit)).offset(int(offset))
+        base_stmt = base_stmt.order_by(sort_col.desc(), RequestItemModel.id.desc())
+        
+        if limit is not None:
+            base_stmt = base_stmt.limit(int(limit))
 
-        rows = self._session.execute(page_stmt).mappings().all()
+        if offset is not None:
+            base_stmt = base_stmt.offset(int(offset))
+
+        rows = self._session.execute(base_stmt).mappings().all()
 
         out: list[dict] = []
         for r in rows:
