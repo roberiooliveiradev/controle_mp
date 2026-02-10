@@ -79,7 +79,7 @@ def _row_to_response(row) -> dict:
 def list_conversations():
     limit = max(1, min(int(request.args.get("limit", 50)), 200))
     offset = max(0, int(request.args.get("offset", 0)))
-
+    title = request.args.get("title")
     user_id, role_id = _auth_user()
 
     with db_session() as session:
@@ -89,6 +89,7 @@ def list_conversations():
             role_id=role_id,
             limit=limit,
             offset=offset,
+            title=title
         )
 
     payload = [ConversationListItemResponse(

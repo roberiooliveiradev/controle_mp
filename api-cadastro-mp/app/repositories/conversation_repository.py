@@ -27,20 +27,37 @@ class ConversationRepository(BaseRepository[ConversationModel]):
         )
         return stmt, creator, assignee
 
-    def list_all_conversations_rows(self, limit: int = 50, offset: int = 0):
+    def list_all_conversations_rows(self, limit=50, offset=0, title: str | None = None):
         stmt, _, _ = self._base_rows_stmt()
-        stmt = stmt.order_by(self._order_by_last_activity()).limit(limit).offset(offset)
-        return list(self._session.execute(stmt).all())
 
-    def list_my_conversations_rows(self, user_id: int, limit: int = 50, offset: int = 0):
-        stmt, _, _ = self._base_rows_stmt()
+        if title:
+            stmt = stmt.where(ConversationModel.title.ilike(f"%{title}%"))
+
         stmt = (
-            stmt.where(ConversationModel.created_by == user_id)
+            stmt
             .order_by(self._order_by_last_activity())
             .limit(limit)
             .offset(offset)
         )
+
         return list(self._session.execute(stmt).all())
+
+    def list_my_conversations_rows(self, user_id: int, limit=50, offset=0, title: str | None = None):
+        stmt, _, _ = self._base_rows_stmt()
+        stmt = stmt.where(ConversationModel.created_by == user_id)
+
+        if title:
+            stmt = stmt.where(ConversationModel.title.ilike(f"%{title}%"))
+
+        stmt = (
+            stmt
+            .order_by(self._order_by_last_activity())
+            .limit(limit)
+            .offset(offset)
+        )
+
+        return list(self._session.execute(stmt).all())
+
 
     def get_row_by_id(self, conversation_id: int):
         stmt, _, _ = self._base_rows_stmt()
