@@ -68,11 +68,11 @@ def _build_audit(session) -> AuditService:
 @bp_prod.get("")
 @require_auth
 def list_products():
-    try:
-        limit = int(request.args.get("limit", 30))
-        offset = int(request.args.get("offset", 0))
-    except ValueError:
-        return jsonify({"error": "Parâmetros limit/offset inválidos."}), 400
+    limit_raw = request.args.get("limit")
+    offset_raw = request.args.get("offset")
+
+    limit = int(limit_raw) if limit_raw not in (None, "") else None
+    offset = int(offset_raw) if offset_raw not in (None, "") else None
 
     q = (request.args.get("q") or "").strip() or None
 

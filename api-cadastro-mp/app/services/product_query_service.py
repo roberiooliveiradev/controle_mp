@@ -26,8 +26,8 @@ class ProductQueryService:
     def list_products(
         self,
         *,
-        limit: int,
-        offset: int,
+        limit: int | None,
+        offset: int | None,
         q: str | None,
         flag: str = "all",  # all | with | without
         date_from: str | None = None,
@@ -36,7 +36,9 @@ class ProductQueryService:
 
         base = select(ProductModel).where(ProductModel.is_deleted.is_(False))
 
-        # ✅ filtro por flag no SQL (antes de paginar)
+        # --------------------------------------------------
+        # filtro por flag (antes da paginação)
+        # --------------------------------------------------
         flag_predicate = exists(
             select(1).where(
                 and_(
@@ -53,31 +55,66 @@ class ProductQueryService:
         elif flag == "without":
             base = base.where(~flag_predicate)
 
-        # filtro por data (coalesce(updated_at, created_at))
+        # --------------------------------------------------
+        # filtro por data
+        # --------------------------------------------------
         if date_from:
             dt_from = self._parse_date(date_from)
-            base = base.where(func.coalesce(ProductModel.updated_at, ProductModel.created_at) >= dt_from)
+            base = base.where(
+                func.coalesce(ProductModel.updated_at, ProductModel.created_at) >= dt_from
+            )
 
         if date_to:
-            dt_to = self._parse_date(date_to) + timedelta(days=1)  # exclusivo no próximo dia
-            base = base.where(func.coalesce(ProductModel.updated_at, ProductModel.created_at) < dt_to)
+            dt_to = self._parse_date(date_to) + timedelta(days=1)
+            base = base.where(
+                func.coalesce(ProductModel.updated_at, ProductModel.created_at) < dt_to
+            )
 
+        # --------------------------------------------------
+        # 🔥 filtro por texto (codigo_atual / descricao) NO SQL
+        # --------------------------------------------------
+        if q and q.strip():
+            qq = f"%{q.strip()}%"
+
+            text_predicate = exists(
+                select(1).where(
+                    and_(
+                        ProductFieldModel.product_id == ProductModel.id,
+                        ProductFieldModel.is_deleted.is_(False),
+                        ProductFieldModel.field_tag.in_(["codigo_atual", "descricao"]),
+                        ProductFieldModel.field_value.ilike(qq),
+                    )
+                )
+            )
+
+            base = base.where(text_predicate)
+
+        # --------------------------------------------------
+        # total (antes da paginação)
+        # --------------------------------------------------
         total_stmt = select(func.count()).select_from(base.subquery())
         total = int(self._session.execute(total_stmt).scalar_one())
 
-        page = (
-            base.order_by(
-                func.coalesce(ProductModel.updated_at, ProductModel.created_at).desc(),
-                ProductModel.id.desc(),
-            )
-            .limit(int(limit))
-            .offset(int(offset))
+        # --------------------------------------------------
+        # paginação (por último)
+        # --------------------------------------------------
+        page = base.order_by(
+            func.coalesce(ProductModel.updated_at, ProductModel.created_at).desc(),
+            ProductModel.id.desc(),
         )
+
+        if limit is not None:
+            page = page.limit(int(limit))
+
+        if offset is not None:
+            page = page.offset(int(offset))
 
         products = list(self._session.execute(page).scalars().all())
         pids = [int(p.id) for p in products]
 
-        # campos básicos
+        # --------------------------------------------------
+        # campos básicos (codigo_atual / descricao)
+        # --------------------------------------------------
         fields = []
         if pids:
             stmtf = (
@@ -90,11 +127,13 @@ class ProductQueryService:
             )
             fields = list(self._session.execute(stmtf).scalars().all())
 
-        by_pid = {}
+        by_pid: dict[int, dict[str, str | None]] = {}
         for f in fields:
             by_pid.setdefault(int(f.product_id), {})[f.field_tag] = f.field_value
 
+        # --------------------------------------------------
         # contagem de flags por produto
+        # --------------------------------------------------
         flags_by_pid: dict[int, int] = {}
         if pids:
             flags_stmt = (
@@ -110,7 +149,10 @@ class ProductQueryService:
             for product_id, total_flags in self._session.execute(flags_stmt).all():
                 flags_by_pid[int(product_id)] = int(total_flags)
 
-        rows = []
+        # --------------------------------------------------
+        # payload final
+        # --------------------------------------------------
+        rows: list[dict] = []
         for p in products:
             d = by_pid.get(int(p.id), {})
             rows.append(
@@ -123,16 +165,6 @@ class ProductQueryService:
                     "flags_count": flags_by_pid.get(int(p.id), 0),
                 }
             )
-
-        # filtro client-side por q (mantido)
-        if q and q.strip():
-            qq = q.strip().lower()
-            rows = [
-                r
-                for r in rows
-                if (r.get("codigo_atual") or "").lower().find(qq) >= 0
-                or (r.get("descricao") or "").lower().find(qq) >= 0
-            ]
 
         return rows, total
 
