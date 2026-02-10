@@ -1,10 +1,13 @@
 // src/app/api/conversationsApi.js
 import { httpClient } from "./httpClient";
 
-export async function listConversationsApi({ limit = 50, offset = 0 } = {}) {
-  const { data } = await httpClient.get("/conversations", {
-    params: { limit, offset },
-  });
+export async function listConversationsApi({ limit, offset, title = "" } = {}) {
+  const params = {};
+  if (limit != null) params.limit = limit;
+  if (offset != null) params.offset = offset;
+  if (title) params.title = title;
+
+  const { data } = await httpClient.get("/conversations", { params });
   return data;
 }
 

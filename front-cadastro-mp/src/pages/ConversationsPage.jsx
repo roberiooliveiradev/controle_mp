@@ -221,26 +221,52 @@ export default function ConversationsPage() {
     if (conv?.title) setTitleDraft(conv.title);
   }, [conv?.title]);
 
-async function saveTitle() {
-  if (!conv?.id) return setEditingTitle(false);
+  async function saveTitle() {
+    if (!conv?.id) return setEditingTitle(false);
 
-  const value = titleDraft.trim();
-  if (!value || value === conv.title) {
-    setEditingTitle(false);
-    return;
+    const value = titleDraft.trim();
+    if (!value || value === conv.title) {
+      setEditingTitle(false);
+      return;
+    }
+
+    try {
+      const updated = await updateConversationApi(conv.id, { title: value });
+
+      setConv(updated); // header do chat
+      updateConversationTitle(updated.id, updated.title); 
+    } catch (err) {
+      alert(err?.response?.data?.error ?? "Erro ao atualizar título");
+    } finally {
+      setEditingTitle(false);
+    }
   }
+  
+  //----------------------------------------------------
+  // carregar conversas (com filtro)
+  //----------------------------------------------------
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-  try {
-    const updated = await updateConversationApi(conv.id, { title: value });
+  async function handleSearch(forcedTitle) {
+    const raw = typeof forcedTitle === "string"
+      ? forcedTitle
+      : typeof newTitle === "string"
+        ? newTitle
+        : "";
 
-    setConv(updated); // header do chat
-    updateConversationTitle(updated.id, updated.title); 
-  } catch (err) {
-    alert(err?.response?.data?.error ?? "Erro ao atualizar título");
-  } finally {
-    setEditingTitle(false);
+    const value = raw.trim();
+
+    try {
+      const data = await listConversationsApi({
+        title: value,
+      });
+
+      const arr = Array.isArray(data) ? data : data?.items ?? [];
+      setConversations(sortConversationsByLastActivity(arr));
+    } catch (err) {
+      console.error("Erro ao filtrar conversas", err);
+    }
   }
-}
 
   function isUnreadFromOthers(m) {
     return !m.is_read && m.sender?.id !== myUserIdRef.current;
@@ -421,7 +447,7 @@ async function saveTitle() {
 
       // atualiza lista global
       try {
-        const data = await listConversationsApi({ limit: 50, offset: 0 });
+        const data = await listConversationsApi();
         const arr = Array.isArray(data) ? data : data?.items ?? [];
         setConversations(sortConversationsByLastActivity(arr));
       } catch {
@@ -638,16 +664,83 @@ async function saveTitle() {
             Clique para abrir o chat
           </div>
 
-          <form onSubmit={handleCreateConversation} style={{ marginTop: 12, display: "grid", gap: 8 }}>
+          <form
+            onSubmit={handleCreateConversation}
+            style={{ marginTop: 12, display: "grid", gap: 8 }}
+          >
+          <div style={{ position: "relative" }}>
             <input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Título da nova conversa..."
-              style={{ padding: 10, borderRadius: 10, border: "1px solid var(--border)" }}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.ctrlKey) {
+                  e.preventDefault();
+                  handleSearch();
+                }
+              }}
+              placeholder="Digite para criar ou pesquisar..."
+              style={{
+                width: "100%",
+                padding: "10px 64px 10px 12px",
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+              }}
               disabled={createBusy}
             />
 
-            {createError ? <div style={{ color: "crimson", fontSize: 12 }}>{createError}</div> : null}
+            {/* 🔍 Pesquisar */}
+            <button
+              type="button"
+              onClick={handleSearch}
+              title="Pesquisar conversas"
+              style={{
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: 6,
+                fontSize: 16,
+                color: isSearchFocused ? "var(--primary)" : "var(--text-muted)",
+              }}
+            >
+              🔍
+            </button>
+
+            {/* ✕ Limpar */}
+            {newTitle.trim() && (
+              <button
+                type="button"
+                onClick={() => {
+                  setNewTitle("");
+                  handleSearch("");
+                }}
+                title="Limpar filtro"
+                style={{
+                  position: "absolute",
+                  right: 40,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: 6,
+                  fontSize: 14,
+                  color: "var(--text-muted)",
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+            {createError ? (
+              <div style={{ color: "crimson", fontSize: 12 }}>{createError}</div>
+            ) : null}
 
             <button
               type="submit"
@@ -661,6 +754,8 @@ async function saveTitle() {
               {createBusy ? "Criando..." : "Criar conversa"}
             </button>
           </form>
+
+
         </div>
 
         <div style={{ padding: 12, overflow: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
