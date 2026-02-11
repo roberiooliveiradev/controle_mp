@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from flask import Blueprint, jsonify, request, g
-
+from pydantic import ValidationError
 from app.api.schemas.user_schema import (
     CreateUserRequest,
     UpdateUserRequest,
@@ -51,7 +51,15 @@ def _build_audit(session) -> AuditService:
 
 @bp_users.post("")
 def create_user():
-    payload = CreateUserRequest.model_validate(request.get_json(force=True))
+    try:
+        payload = CreateUserRequest.model_validate(
+            request.get_json(force=True)
+        )
+    except ValidationError as e:
+        return jsonify({
+            "error": "Erro de validação",
+            "details": e.errors()
+        }), 400
 
     with db_session() as session:
         service = _build_service(session)
@@ -111,8 +119,18 @@ def update_user(user_id: int):
     """
     auth_user_id, _ = _auth_user()
 
-    payload = UpdateUserRequest.model_validate(request.get_json(force=True))
+    try:
+        payload = UpdateUserRequest.model_validate(
+            request.get_json(force=True)
+        )
+    except ValidationError as e:
+        return jsonify({
+            "error": "Erro de validação",
+            "details": e.errors()
+        }), 400
+
     data = payload.model_dump(exclude_none=True)
+
 
     current_password = data.pop("current_password")
 
@@ -217,9 +235,18 @@ def admin_list_users():
 def admin_update_user(user_id: int):
     admin_user_id, _ = _auth_user()
 
-    payload = AdminUpdateUserRequest.model_validate(
-        request.get_json(force=True))
+    try:
+        payload = AdminUpdateUserRequest.model_validate(
+            request.get_json(force=True)
+        )
+    except ValidationError as e:
+        return jsonify({
+            "error": "Erro de validação",
+            "details": e.errors()
+        }), 400
+
     data = payload.model_dump(exclude_none=True)
+
 
     with db_session() as session:
         service = _build_service(session)
