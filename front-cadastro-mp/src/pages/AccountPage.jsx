@@ -19,7 +19,7 @@ export default function AccountPage() {
   const [fullName, setFullName] = useState(initial.full_name);
   const [email, setEmail] = useState(initial.email);
 
-  const [currentPassword, setCurrentPassword] = useState(""); // ✅ novo obrigatório
+  const [currentPassword, setCurrentPassword] = useState(""); 
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
@@ -31,6 +31,13 @@ export default function AccountPage() {
     setFullName(initial.full_name);
     setEmail(initial.email);
   }, [initial.full_name, initial.email]);
+
+  function validatePassword(pwd) {
+    if (pwd.length < 8) {
+      return "A nova senha deve ter no mínimo 8 caracteres.";
+    }
+    return "";
+  }
 
   async function onSave(e) {
     e.preventDefault();
@@ -48,9 +55,17 @@ export default function AccountPage() {
       return;
     }
 
-    if ((password || password2) && password !== password2) {
-      setError("As senhas não conferem.");
-      return;
+    if (password || password2) {
+      const pwdError = validatePassword(password);
+      if (pwdError) {
+        setError(pwdError);
+        return;
+      }
+
+      if (password !== password2) {
+        setError("As senhas não conferem.");
+        return;
+      }
     }
 
     const full_name_to_send = fullName.trim();
@@ -69,7 +84,7 @@ export default function AccountPage() {
     try {
       const payload = {
         user_id: activeUserId,
-        current_password: cp, // ✅ obrigatório
+        current_password: cp, 
         full_name: full_name_to_send,
         email: email_to_send,
       };
@@ -119,7 +134,7 @@ export default function AccountPage() {
 
         <hr style={{ width: "100%", border: 0, borderTop: "1px solid var(--border)" }} />
 
-        {/* ✅ obrigatório */}
+        {/* obrigatório */}
         <div style={{ display: "grid", gap: 6 }}>
           <label>Senha atual (obrigatória para salvar)</label>
           <input

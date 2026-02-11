@@ -17,9 +17,22 @@ export default function RegisterPage() {
   const [busyCreate, setBusyCreate] = useState(false);
   const [error, setError] = useState("");
 
+  function validatePassword(pwd) {
+    if (pwd.length < 8) {
+      return "A senha deve ter no mínimo 8 caracteres.";
+    }
+    return "";
+  }
+
   async function onCreate(e) {
     e.preventDefault();
     setError("");
+
+    const pwdError = validatePassword(password);
+    if (pwdError) {
+      setError(pwdError);
+      return;
+    }
 
     if (password !== password2) {
       setError("As senhas não conferem.");
@@ -48,7 +61,7 @@ export default function RegisterPage() {
       setBusyCreate(false);
     }
   }
-
+  const isPasswordValid = password.length >= 8;
   return (
     <div style={{ minHeight: "100dvh", display: "flex", flexDirection:"column", justifyContent:"center", alignItems:"center" }}>
       <div>
@@ -88,6 +101,11 @@ export default function RegisterPage() {
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
         />
+        {password && password.length < 8 && (
+          <div style={{ color: "var(--danger)", fontSize: 12 }}>
+            Mínimo de 8 caracteres.
+          </div>
+        )}
 
         <label>Repetir Senha</label>
         <input
@@ -103,7 +121,7 @@ export default function RegisterPage() {
           </div>
         )}
 
-        <button disabled={busyCreate}>
+        <button disabled={busyCreate || !isPasswordValid}>
           {busyCreate ? "Criando..." : "Criar"}
         </button>
 
