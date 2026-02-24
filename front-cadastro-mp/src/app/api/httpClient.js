@@ -8,7 +8,7 @@ import { refreshApi } from "./authApi";
 import { connectSocket, setSocketAuthToken } from "../realtime/socket";
 
 export const httpClient = axios.create({
-  baseURL: `${env.apiBaseUrl}/api`,
+  baseURL: `${env.apiBaseUrl}${env.apiPrefix}`,
   timeout: 20000,
 });
 
