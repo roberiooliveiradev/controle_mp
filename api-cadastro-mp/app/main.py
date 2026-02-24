@@ -17,6 +17,11 @@ from app.api.middlewares.error_handler import register_error_handlers  # noqa: E
 
 import app.infrastructure.database.models  # noqa: F401, E402
 
+import os
+
+APP_PREFIX = os.getenv("APP_PREFIX", "/apps/controle-mp").rstrip("/")
+API_PREFIX = f"{APP_PREFIX}/api"
+SOCKET_PREFIX = f"{APP_PREFIX}/socket.io"
 
 def create_app() -> Flask:
     app = Flask(__name__)
@@ -25,7 +30,8 @@ def create_app() -> Flask:
     CORS(
         app,
         resources={
-            r"/api/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}},
+            rf"{API_PREFIX}/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]},
+        },
         allow_headers=["Content-Type", "Authorization"],
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     )
@@ -34,7 +40,7 @@ def create_app() -> Flask:
     register_routes(app)
     register_error_handlers(app)
 
-    socketio.init_app(app)
+    socketio.init_app(app, path=SOCKET_PREFIX)
     register_socket_handlers()
 
     return app

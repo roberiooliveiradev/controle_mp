@@ -1,3 +1,5 @@
+# app/api/routes/__init__.py
+
 from flask import Flask
 
 from app.api.routes.health_routes import bp_health
@@ -12,15 +14,23 @@ from app.api.routes.product_routes import bp_prod
 from app.api.routes.audit_routes import bp_audit
 
 
-def register_routes(app: Flask) -> None:
-    app.register_blueprint(bp_health)  # /health
-    app.register_blueprint(bp_users, url_prefix="/api/users")
-    app.register_blueprint(bp_auth, url_prefix="/api/auth")
-    app.register_blueprint(bp_conv, url_prefix="/api/conversations")
+def register_routes(app: Flask, *, api_prefix: str, app_prefix: str) -> None:
+    # health fora de /api (mas dentro do app)
+    app.register_blueprint(bp_health, url_prefix=f"{app_prefix}/health")
+
+    # tudo de API padronizado
+    app.register_blueprint(bp_users, url_prefix=f"{api_prefix}/users")
+    app.register_blueprint(bp_auth, url_prefix=f"{api_prefix}/auth")
+    app.register_blueprint(bp_conv, url_prefix=f"{api_prefix}/conversations")
+
     app.register_blueprint(
-        bp_msg, url_prefix="/api/conversations/<int:conversation_id>/messages")
-    app.register_blueprint(bp_files, url_prefix="/api/files")
-    app.register_blueprint(bp_test)
-    app.register_blueprint(bp_req)
-    app.register_blueprint(bp_prod)
-    app.register_blueprint(bp_audit)
+        bp_msg, url_prefix=f"{api_prefix}/conversations/<int:conversation_id>/messages"
+    )
+
+    app.register_blueprint(bp_files, url_prefix=f"{api_prefix}/files")
+    app.register_blueprint(bp_req, url_prefix=f"{api_prefix}/requests")
+    app.register_blueprint(bp_prod, url_prefix=f"{api_prefix}/products")
+    app.register_blueprint(bp_audit, url_prefix=f"{api_prefix}/audit")
+
+    # rotas de teste (se quiser dentro do app)
+    app.register_blueprint(bp_test, url_prefix=f"{app_prefix}/test")
