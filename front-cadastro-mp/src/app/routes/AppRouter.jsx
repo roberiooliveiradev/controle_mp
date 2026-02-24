@@ -16,7 +16,7 @@ import AuditPage from "../../pages/AuditPage";
 
 export function AppRouter() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/apps/controle-mp">
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -40,8 +40,6 @@ export function AppRouter() {
           <Route path="products" element={<ProductsPage />} />
 
           <Route path="account" element={<AccountPage />} />
-
-          {/* ✅ admin */}
           <Route path="admin/users" element={<AdminUsersPage />} />
           <Route path="audit" element={<AuditPage />} />
         </Route>
