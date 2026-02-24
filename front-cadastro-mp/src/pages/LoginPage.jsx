@@ -36,7 +36,7 @@ export default function LoginPage() {
   return (
     <div style={{ minHeight: "100dvh", display: "flex", flexDirection:"column", justifyContent:"center", alignItems:"center" }}>
       <div>
-        <img src="/logoTransformaMaisDelpi.svg" alt="Transforma mais DELPI" style={{maxHeight:"140px"}} />
+        <img src={`${import.meta.env.BASE_URL}logoTransformaMaisDelpi.svg`} alt="Transforma mais DELPI" style={{maxHeight:"140px"}} />
       </div>
       <form
         onSubmit={onLogin}

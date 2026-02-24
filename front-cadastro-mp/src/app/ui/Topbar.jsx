@@ -61,7 +61,7 @@ export function Topbar() {
       }}
     >
       <div>
-        <img src="/logoTransformaMaisDelpi.svg" alt="Transforma mais DELPI" style={{maxHeight:"80px"}} />
+        <img src={`${import.meta.env.BASE_URL}logoTransformaMaisDelpi.svg`} alt="Transforma mais DELPI" style={{maxHeight:"80px"}} />
       </div>
       <nav
         style={{
