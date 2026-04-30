@@ -22,7 +22,9 @@ import app.infrastructure.database.models  # noqa: F401, E402
 # -------------------------
 # Prefixos (subpath)
 # -------------------------
-APP_PREFIX = os.getenv("APP_PREFIX", "/apps/controle-mp").rstrip("/")
+RAW_APP_PREFIX = os.getenv("APP_PREFIX", "").strip().rstrip("/")
+
+APP_PREFIX = RAW_APP_PREFIX if RAW_APP_PREFIX and RAW_APP_PREFIX != "/" else ""
 API_PREFIX = f"{APP_PREFIX}/api"
 SOCKET_PREFIX = f"{APP_PREFIX}/socket.io"
 
@@ -30,9 +32,6 @@ SOCKET_PREFIX = f"{APP_PREFIX}/socket.io"
 def create_app() -> Flask:
     app = Flask(__name__)
 
-    # ✅ CORS aplicado cedo (antes das rotas lidarem com OPTIONS)
-    # Em produção (mesma origem), CORS normalmente não é necessário,
-    # mas isso garante que o /apps/controle-mp/api/* aceite o dev server.
     CORS(
         app,
         resources={
@@ -40,6 +39,7 @@ def create_app() -> Flask:
                 "origins": [
                     "http://localhost:5173",
                     "http://127.0.0.1:5173",
+                    "https://controle-mp.minhadelpi.com.br",
                 ]
             }
         },
