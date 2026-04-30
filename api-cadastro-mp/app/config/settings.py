@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     db_password: str
     db_ssl: bool = False
 
+    # 🔵 Pool de conexões do banco principal
+    db_pool_size: int = int(os.getenv("DB_POOL_SIZE", "10"))
+    db_max_overflow: int = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+    db_pool_timeout: int = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+    db_pool_recycle: int = int(os.getenv("DB_POOL_RECYCLE", "1800"))
+
     environment: str = "development"
     debug: bool = True
 
@@ -31,7 +37,8 @@ class Settings(BaseSettings):
     jwt_issuer: str = os.getenv("JWT_ISSUER", "cadastro-mp-api")
     jwt_audience: str = os.getenv("JWT_AUDIENCE", "cadastro-mp-front")
     jwt_refresh_minutes: int = int(
-        os.getenv("JWT_REFRESH_MINUTES", str(60 * 24 * 7)))
+        os.getenv("JWT_REFRESH_MINUTES", str(60 * 24 * 7))
+    )
 
     files_storage_type: str = os.getenv("FILES_STORAGE_TYPE", "local")
     files_base_path: str = os.getenv("FILES_BASE_PATH", "./_uploads")
@@ -70,7 +77,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ✅ Strip em tudo que costuma vir do .env com aspas/espacos (inclui TOTVS)
+    # ✅ Strip em tudo que costuma vir do .env com aspas/espaços (inclui TOTVS)
     @field_validator(
         "db_host",
         "db_name",
@@ -101,7 +108,10 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         user = quote_plus(self.db_user)
         password = quote_plus(self.db_password)
-        return f"postgresql+psycopg2://{user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
+        return (
+            f"postgresql+psycopg2://{user}:{password}"
+            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+        )
 
     @property
     def totvs_database_url(self) -> str | None:
