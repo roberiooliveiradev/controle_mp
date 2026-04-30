@@ -23,5 +23,5 @@ pydantic-settings
 
 gunicorn==23.0.0
 
-PyJWT
-
+PyJWT[crypto]
+cryptography
