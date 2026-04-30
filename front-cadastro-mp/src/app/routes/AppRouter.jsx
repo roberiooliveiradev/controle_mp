@@ -16,7 +16,7 @@ import AuditPage from "../../pages/AuditPage";
 
 export function AppRouter() {
   return (
-    <BrowserRouter basename="/apps/controle-mp">
+    <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
