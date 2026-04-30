@@ -17,3 +17,17 @@ export async function logoutApi({ refresh_token } = {}) {
 	const { data } = await httpClient.post("/auth/logout", { refresh_token });
 	return data;
 }
+
+export async function ssoLoginApi({ centralAccessToken }) {
+  const { data } = await httpClient.post(
+    "/auth/sso-login",
+    {},
+    {
+      headers: {
+        Authorization: `Bearer ${centralAccessToken}`,
+      },
+    }
+  );
+
+  return data; // { access_token, refresh_token, token_type }
+}

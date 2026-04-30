@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { authStorage } from "./authStorage";
 import { decodeJwt } from "./jwt";
-import { loginApi, logoutApi } from "../api/authApi";
+import { loginApi, logoutApi, ssoLoginApi } from "../api/authApi";
 
 import { connectSocket, disconnectSocket, setSocketAuthToken } from "../realtime/socket";
 
@@ -33,6 +33,28 @@ export function AuthProvider({ children }) {
 
   const isAuthenticated = !!activeUserId && !!token;
 
+  function applyTokenPair(data) {
+    const accessToken = data.access_token;
+    const refreshToken = data.refresh_token;
+
+    if (!accessToken || !refreshToken) {
+      throw new Error("Login inválido: tokens ausentes.");
+    }
+
+    const builtUser = buildUserFromAccessToken(accessToken);
+    if (!builtUser?.id) {
+      throw new Error("Não foi possível ler o user_id (sub) do JWT.");
+    }
+
+    authStorage.setAccessToken(builtUser.id, accessToken);
+    authStorage.setRefreshToken(builtUser.id, refreshToken);
+    authStorage.setUser(builtUser.id, builtUser);
+
+    setActiveUserId(builtUser.id);
+
+    return builtUser;
+  }
+
   function setActiveUserId(userId) {
     if (!userId) return;
 
@@ -51,19 +73,12 @@ export function AuthProvider({ children }) {
 
   async function login({ email, password }) {
     const data = await loginApi({ email, password });
-    const accessToken = data.access_token;
-    const refreshToken = data.refresh_token;
-
-    if (!accessToken || !refreshToken) throw new Error("Login inválido: tokens ausentes.");
-
-    const builtUser = buildUserFromAccessToken(accessToken);
-    if (!builtUser?.id) throw new Error("Não foi possível ler o user_id (sub) do JWT.");
-
-    authStorage.setAccessToken(builtUser.id, accessToken);
-    authStorage.setRefreshToken(builtUser.id, refreshToken);
-    authStorage.setUser(builtUser.id, builtUser);
-
-    setActiveUserId(builtUser.id);
+    return applyTokenPair(data);
+  }
+  
+  async function ssoLogin({ centralAccessToken }) {
+    const data = await ssoLoginApi({ centralAccessToken });
+    return applyTokenPair(data);
   }
 
   async function logout() {
@@ -123,6 +138,7 @@ export function AuthProvider({ children }) {
       isAuthenticated,
       login,
       logout,
+      ssoLogin,
       setActiveUserId,
       listProfiles,
       updateActiveUserProfile, 

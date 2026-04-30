@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     files_base_path: str = os.getenv("FILES_BASE_PATH", "./_uploads")
     max_file_size_mb: int = int(os.getenv("MAX_FILE_SIZE_MB", "20"))
 
+    # 🔐 SSO Minha DELPI / Keycloak
+    central_jwks_url: str | None = os.getenv("CENTRAL_JWKS_URL")
+    central_jwt_issuer: str | None = os.getenv("CENTRAL_JWT_ISSUER")
+    central_jwt_audience: str = os.getenv("CENTRAL_JWT_AUDIENCE", "delpi-central")
+    central_default_role_id: int = int(os.getenv("CENTRAL_DEFAULT_ROLE_ID", "3"))
+
     # ✅ Whitelist de tipos permitidos
     allowed_mime_types_raw: str = os.getenv(
         "ALLOWED_MIME_TYPES",
@@ -80,6 +86,9 @@ class Settings(BaseSettings):
         "files_storage_type",
         "files_base_path",
         "allowed_mime_types_raw",
+        "central_jwks_url",
+        "central_jwt_issuer",
+        "central_jwt_audience",
         mode="before",
     )
     @classmethod

@@ -16,6 +16,9 @@ from app.services.user_service import UserService
 from app.core.audit.audit_entities import AuditEntity
 from app.core.audit.audit_actions import AuditAction
 
+from app.config.settings import settings
+from app.infrastructure.security.central_jwt_validator import CentralJwtValidator
+
 bp_auth = Blueprint("auth", __name__, url_prefix="/auth")
 
 
@@ -53,6 +56,63 @@ def login():
                   action_name=AuditAction.LOGIN, user_id=user.id)
 
     return jsonify(TokenPairResponse(access_token=access, refresh_token=refresh).model_dump()), 200
+
+@bp_auth.post("/sso-login")
+def sso_login():
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Token SSO ausente."}), 401
+
+    central_token = auth_header.split(" ", 1)[1].strip()
+    if not central_token:
+        return jsonify({"error": "Token SSO ausente."}), 401
+
+    identity = CentralJwtValidator().extract_identity(central_token)
+
+    with db_session() as session:
+        audit = AuditService(AuditLogRepository(session))
+
+        user_service = UserService(UserRepository(session))
+        user = user_service.get_or_create_from_sso(
+            full_name=identity["full_name"],
+            email=identity["email"],
+            role_id=settings.central_default_role_id,
+        )
+
+        jwt_provider = JwtProvider()
+        access = jwt_provider.issue_access_token(
+            subject=str(user.id),
+            payload={
+                "email": user.email,
+                "role_id": user.role_id,
+                "full_name": user.full_name,
+            },
+            minutes=60,
+        )
+        refresh = jwt_provider.issue_refresh_token(
+            subject=str(user.id),
+            minutes=60 * 24 * 7,
+        )
+
+        refresh_svc = RefreshTokenService(
+            jwt_provider=jwt_provider,
+            repo=RefreshTokenRepository(session),
+        )
+        refresh_svc.store_refresh_token(user_id=user.id, refresh_token=refresh)
+
+        audit.log(
+            entity_name=AuditEntity.AUTH,
+            action_name=AuditAction.LOGIN,
+            user_id=user.id,
+            details="sso=minhadelpi",
+        )
+
+    return jsonify(
+        TokenPairResponse(
+            access_token=access,
+            refresh_token=refresh,
+        ).model_dump()
+    ), 200
 
 
 @bp_auth.post("/refresh")

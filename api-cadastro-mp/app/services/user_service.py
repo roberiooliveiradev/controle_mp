@@ -145,3 +145,54 @@ class UserService:
 
         user.updated_at = datetime.utcnow()
         return user
+
+    # -------------------------
+    # SSO Minha DELPI / Keycloak
+    # -------------------------
+    def get_or_create_from_sso(
+        self,
+        *,
+        full_name: str,
+        email: str,
+        role_id: int = ROLE_USER_ID,
+    ) -> UserModel:
+        normalized_email = email.strip().lower()
+        user = self._user_repository.get_by_email(normalized_email)
+
+        if user is not None:
+            changed = False
+
+            if full_name and user.full_name != full_name.strip():
+                user.full_name = full_name.strip()
+                changed = True
+
+            if user.role_id is None:
+                user.role_id = role_id
+                changed = True
+
+            user.last_login = datetime.utcnow()
+            if changed:
+                user.updated_at = datetime.utcnow()
+
+            return user
+
+        # Usuário SSO não usa senha local, mas a tabela exige hash/salt.
+        # Geramos uma senha aleatória não conhecida pelo usuário.
+        random_password = f"sso:{normalized_email}:{datetime.utcnow().timestamp()}"
+        password_hash, password_salt, algo, iterations = PasswordHasher.hash_password(random_password)
+
+        now = datetime.utcnow()
+        model = UserModel(
+            full_name=full_name.strip() or normalized_email,
+            email=normalized_email,
+            role_id=role_id,
+            password_algo=algo,
+            password_iterations=iterations,
+            password_hash=password_hash,
+            password_salt=password_salt,
+            created_at=now,
+            updated_at=None,
+            last_login=now,
+            is_deleted=False,
+        )
+        return self._user_repository.add(model)

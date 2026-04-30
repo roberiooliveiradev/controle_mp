@@ -2,6 +2,7 @@
 
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
+import { DelpiSsoBridge } from "../sso/DelpiSsoBridge";
 import { Layout } from "../ui/Layout";
 
 import LoginPage from "../../pages/LoginPage";
@@ -13,10 +14,10 @@ import ProductsPage from "../../pages/ProductsPage";
 import AccountPage from "../../pages/AccountPage";
 import AdminUsersPage from "../../pages/AdminUsersPage";
 import AuditPage from "../../pages/AuditPage";
-
 export function AppRouter() {
   return (
     <BrowserRouter>
+      <DelpiSsoBridge />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
