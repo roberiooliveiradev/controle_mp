@@ -6,30 +6,7 @@ import {
   validateStructuredItem,
   structuredItemToRequestPayloadItem,
 } from "../requests/requestItemFields.logic";
-
-const styles = {
-  subtle: { fontSize: 12, opacity: "var(--text-muted)" },
-  pill: {
-    fontSize: 12,
-    padding: "4px 8px",
-    borderRadius: 999,
-    border: "1px solid var(--border)",
-    background: "var(--surface-2)",
-  },
-  itemErrorBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 18,
-    height: 18,
-    borderRadius: 999,
-    background: "var(--danger-bg)",
-    color: "var(--danger)",
-    fontWeight: 900,
-    fontSize: 12,
-    border: "1px solid var(--danger-border)",
-  },
-};
+import "./RequestComposerModal.css";
 
 export function RequestComposerModal({ onClose, onSubmit }) {
   const [items, setItems] = useState([newStructuredItem()]);
@@ -52,11 +29,10 @@ export function RequestComposerModal({ onClose, onSubmit }) {
     const first = items[0];
     if (!first) return false;
 
-    // qualquer campo relevante preenchido
-    return Object.entries(first).some(([k, v]) => {
-      if (k === "_client_id") return false;
-      if (Array.isArray(v)) return v.length > 0;
-      return Boolean(v);
+    return Object.entries(first).some(([key, value]) => {
+      if (key === "_client_id") return false;
+      if (Array.isArray(value)) return value.length > 0;
+      return Boolean(value);
     });
   }, [items]);
 
@@ -65,42 +41,66 @@ export function RequestComposerModal({ onClose, onSubmit }) {
   }
 
   function itemHasAnyError(idx) {
-    const itErr = getItemErrors(idx);
-    const fieldsCount = Object.keys(itErr.fields || {}).length;
-    const suppliersObj = itErr.suppliers || {};
-    const suppliersCount = Object.values(suppliersObj).reduce((acc, row) => acc + Object.keys(row || {}).length, 0);
+    const itemErrors = getItemErrors(idx);
+    const fieldsCount = Object.keys(itemErrors.fields || {}).length;
+    const suppliersObj = itemErrors.suppliers || {};
+    const suppliersCount = Object.values(suppliersObj).reduce(
+      (acc, row) => acc + Object.keys(row || {}).length,
+      0
+    );
+
     return fieldsCount + suppliersCount > 0;
   }
 
   function clearFieldError(itemIdx, key) {
     setErrors((prev) => {
-      const cur = prev?.[itemIdx];
-      if (!cur?.fields?.[key]) return prev;
+      const current = prev?.[itemIdx];
 
-      const nextFields = { ...(cur.fields || {}) };
+      if (!current?.fields?.[key]) return prev;
+
+      const nextFields = { ...(current.fields || {}) };
       delete nextFields[key];
-      return { ...prev, [itemIdx]: { fields: nextFields, suppliers: cur.suppliers || {} } };
+
+      return {
+        ...prev,
+        [itemIdx]: {
+          fields: nextFields,
+          suppliers: current.suppliers || {},
+        },
+      };
     });
   }
 
   function clearSupplierError(itemIdx, rowIdx, key) {
     setErrors((prev) => {
-      const cur = prev?.[itemIdx];
-      const row = cur?.suppliers?.[rowIdx];
+      const current = prev?.[itemIdx];
+      const row = current?.suppliers?.[rowIdx];
+
       if (!row?.[key]) return prev;
 
       const nextRow = { ...(row || {}) };
       delete nextRow[key];
 
-      const nextSuppliers = { ...(cur.suppliers || {}) };
+      const nextSuppliers = { ...(current.suppliers || {}) };
       nextSuppliers[rowIdx] = nextRow;
 
-      return { ...prev, [itemIdx]: { fields: cur.fields || {}, suppliers: nextSuppliers } };
+      return {
+        ...prev,
+        [itemIdx]: {
+          fields: current.fields || {},
+          suppliers: nextSuppliers,
+        },
+      };
     });
   }
 
   function setActiveItemField(key, value) {
-    setItems((prev) => prev.map((it, idx) => (idx === activeIndex ? { ...it, [key]: value } : it)));
+    setItems((prev) =>
+      prev.map((item, idx) =>
+        idx === activeIndex ? { ...item, [key]: value } : item
+      )
+    );
+
     clearFieldError(activeIndex, key);
   }
 
@@ -112,55 +112,59 @@ export function RequestComposerModal({ onClose, onSubmit }) {
   function duplicateItem(idx) {
     setItems((prev) => {
       const list = Array.isArray(prev) ? [...prev] : [];
-      const src = list[idx];
-      if (!src) return list;
+      const source = list[idx];
 
-      // clone profundo suficiente pro formato atual (inclui fornecedores)
+      if (!source) return list;
+
       const cloned = {
-        ...src,
-        _client_id: (crypto?.randomUUID?.() ?? `cid-${Date.now()}-${Math.random()}`), 
-        fornecedores: Array.isArray(src.fornecedores)
-          ? src.fornecedores.map((r) => ({ ...r }))
+        ...source,
+        _client_id:
+          crypto?.randomUUID?.() ?? `cid-${Date.now()}-${Math.random()}`,
+        fornecedores: Array.isArray(source.fornecedores)
+          ? source.fornecedores.map((row) => ({ ...row }))
           : [],
       };
-      // ✅ se for UPDATE, evita disparar TOTVS automaticamente no duplicado
+
       if (cloned.request_type_code === "UPDATE") {
         cloned.codigo_atual = "";
       }
 
-      // insere logo após o item original
       list.splice(idx + 1, 0, cloned);
       return list;
     });
 
-    // seleciona o item duplicado
     setActiveIndex(idx + 1);
 
-    // não duplica erros: o novo item começa “limpo”
     setErrors((prev) => {
       const next = {};
-      Object.keys(prev || {}).forEach((k) => {
-        const i = Number(k);
-        if (Number.isNaN(i)) return;
-        // desloca erros dos itens depois do idx
-        next[i > idx ? i + 1 : i] = prev[i];
+
+      Object.keys(prev || {}).forEach((key) => {
+        const currentIndex = Number(key);
+        if (Number.isNaN(currentIndex)) return;
+
+        next[currentIndex > idx ? currentIndex + 1 : currentIndex] =
+          prev[currentIndex];
       });
+
       return next;
     });
   }
 
   function removeItem(idx) {
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setItems((prev) => prev.filter((_, itemIdx) => itemIdx !== idx));
 
     setErrors((prev) => {
       const next = {};
-      Object.keys(prev || {}).forEach((k) => {
-        const i = Number(k);
-        if (Number.isNaN(i)) return;
-        if (i === idx) return;
-        const newKey = i > idx ? i - 1 : i;
-        next[newKey] = prev[i];
+
+      Object.keys(prev || {}).forEach((key) => {
+        const currentIndex = Number(key);
+        if (Number.isNaN(currentIndex)) return;
+        if (currentIndex === idx) return;
+
+        const newKey = currentIndex > idx ? currentIndex - 1 : currentIndex;
+        next[newKey] = prev[currentIndex];
       });
+
       return next;
     });
 
@@ -173,10 +177,15 @@ export function RequestComposerModal({ onClose, onSubmit }) {
 
   function validateAll() {
     const nextErrors = {};
-    items.forEach((it, idx) => {
-      const { fields, suppliers } = validateStructuredItem(it);
-      if (Object.keys(fields).length || Object.keys(suppliers).length) nextErrors[idx] = { fields, suppliers };
+
+    items.forEach((item, idx) => {
+      const { fields, suppliers } = validateStructuredItem(item);
+
+      if (Object.keys(fields).length || Object.keys(suppliers).length) {
+        nextErrors[idx] = { fields, suppliers };
+      }
     });
+
     return nextErrors;
   }
 
@@ -186,11 +195,11 @@ export function RequestComposerModal({ onClose, onSubmit }) {
       return;
     }
 
-    const ok = window.confirm(
+    const confirmed = window.confirm(
       "Você tem informações preenchidas.\n\nDeseja realmente fechar e perder os dados?"
     );
 
-    if (ok) {
+    if (confirmed) {
       onClose();
     }
   }
@@ -200,8 +209,8 @@ export function RequestComposerModal({ onClose, onSubmit }) {
     setErrors(nextErrors);
 
     const firstErrorItem = Object.keys(nextErrors)
-      .map((x) => Number(x))
-      .filter((n) => !Number.isNaN(n))
+      .map((value) => Number(value))
+      .filter((value) => !Number.isNaN(value))
       .sort((a, b) => a - b)[0];
 
     if (firstErrorItem !== undefined) {
@@ -213,99 +222,103 @@ export function RequestComposerModal({ onClose, onSubmit }) {
     await onSubmit({ requestItems });
   }
 
-  const activeErr = getItemErrors(activeIndex);
+  const activeError = getItemErrors(activeIndex);
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.35)",
-        zIndex: 60,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget ) 
-        {
-          // Disparar um alerta para evitar fechamento por clique errado e perda de informação
+      className="cmp-request-modal"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
           requestClose();
         }
       }}
     >
-      <div style={{ background: "var(--surface)", borderRadius: 16, overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}>
-        {/* Header */}
-        <div
-          style={{
-            padding: 14,
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <strong style={{ fontSize: 16 }}>Nova Request</strong>
-            <span style={styles.subtle}>Preencha os itens e envie como um “carrinho”.</span>
+      <div className="cmp-request-modal__panel">
+        <header className="cmp-request-modal__header">
+          <div className="cmp-request-modal__heading">
+            <strong className="cmp-request-modal__title">Nova solicitação</strong>
+            <span className="cmp-request-modal__subtitle">
+              Preencha os itens e envie como um carrinho.
+            </span>
           </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
-            <button type="button" onClick={requestClose} style={{ padding: "8px 12px", borderRadius: 10 }}>
+          <div className="cmp-request-modal__header-actions">
+            <button
+              type="button"
+              onClick={requestClose}
+              className="cmp-request-modal__button"
+            >
               Cancelar
             </button>
-            <button type="button" onClick={submit} disabled={!canSubmit} style={{ padding: "8px 12px", borderRadius: 10, fontWeight: 700 }}>
+
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!canSubmit}
+              className="cmp-request-modal__button cmp-request-modal__button--primary"
+            >
               Enviar
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* Body */}
-        <div style={{display:"flex", flexDirection: "column", maxHeight:"85dvh"}}>
-        <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", overflow:"auto",}}>
-          {/* Items list */}
-          <aside style={{ borderRight: "1px solid var(--border)", padding: 12, background: "var(--surface-2)", overflow: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <strong>Itens</strong>
-              <button type="button" onClick={addItem} style={{ padding: "8px 10px", borderRadius: 10 }}>
+        <div className="cmp-request-modal__body">
+          <aside className="cmp-request-modal__items">
+            <div className="cmp-request-modal__items-header">
+              <strong className="cmp-request-modal__items-title">Itens</strong>
+
+              <button
+                type="button"
+                onClick={addItem}
+                className="cmp-request-modal__button cmp-request-modal__button--compact"
+              >
                 + Item
               </button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {items.map((it, idx) => {
+            <div className="cmp-request-modal__items-list">
+              {items.map((item, idx) => {
                 const isActive = idx === activeIndex;
-                const hasErr = itemHasAnyError(idx);
+                const hasError = itemHasAnyError(idx);
 
                 return (
-                  <div
-                    key={idx}
+                  <article
+                    key={item._client_id ?? idx}
                     onClick={() => setActiveIndex(idx)}
-                    style={{
-                      border: hasErr ? "2px solid var(--danger-border)" : isActive ? "2px solid var(--border)" : "1px solid var(--border-2)",
-                      borderRadius: 12,
-                      padding: 10,
-                      cursor: "pointer",
-                      background: isActive? "var(--surface)" : "var(--surface-2)",
-                    }}
+                    className={[
+                      "cmp-request-modal__item-card",
+                      isActive ? "cmp-request-modal__item-card--active" : "",
+                      hasError ? "cmp-request-modal__item-card--error" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <div style={{fontSize:15}}>Item #{idx + 1}</div>
-                        {hasErr ? <span title="Há campos obrigatórios faltando" style={styles.itemErrorBadge}>!</span> : null}
+                    <div className="cmp-request-modal__item-top">
+                      <div className="cmp-request-modal__item-title-wrap">
+                        <span className="cmp-request-modal__item-title">
+                          Item #{idx + 1}
+                        </span>
+
+                        {hasError ? (
+                          <span
+                            title="Há campos obrigatórios faltando"
+                            className="cmp-request-modal__item-error-badge"
+                          >
+                            !
+                          </span>
+                        ) : null}
                       </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+
+                      <div className="cmp-request-modal__item-actions">
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
+                          onClick={(event) => {
+                            event.stopPropagation();
                             duplicateItem(idx);
                           }}
-                          style={{ padding: "6px 10px", borderRadius: 10, fontSize:12}}
+                          className="cmp-request-modal__mini-button"
                         >
                           Duplicar
                         </button>
@@ -313,45 +326,47 @@ export function RequestComposerModal({ onClose, onSubmit }) {
                         {items.length > 1 ? (
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={(event) => {
+                              event.stopPropagation();
                               removeItem(idx);
                             }}
-                            style={{ padding: "6px 10px", borderRadius: 10, fontSize:12}}
+                            className="cmp-request-modal__mini-button cmp-request-modal__mini-button--danger"
                           >
                             Remover
                           </button>
                         ) : null}
                       </div>
-
                     </div>
 
-                    <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
-                      <span style={styles.pill}>{it.request_type_code === "UPDATE" ? "ALTERAR" : "CRIAR"}</span>
-                      <span style={{ ...styles.subtle, marginTop: 0 }}>
-                        {it.descricao ? it.descricao.slice(0, 40) : "Sem descrição"}
+                    <div className="cmp-request-modal__item-meta">
+                      <span className="cmp-request-modal__pill">
+                        {item.request_type_code === "UPDATE" ? "ALTERAR" : "CRIAR"}
+                      </span>
+
+                      <span className="cmp-request-modal__item-description">
+                        {item.descricao ? item.descricao.slice(0, 40) : "Sem descrição"}
                       </span>
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </div>
           </aside>
 
-          {/* Active item editor */}
-          <main style={{ padding: 12, overflow: "auto" }}>
+          <main className="cmp-request-modal__editor">
             <RequestItemFields
               variant="structured"
               item={active}
               itemKey={active?._client_id ?? activeIndex}
               readOnly={false}
-              errors={activeErr}
+              errors={activeError}
               onItemChange={(key, value) => setActiveItemField(key, value)}
               onClearFieldError={(key) => clearFieldError(activeIndex, key)}
-              onClearSupplierError={(rowIdx, key) => clearSupplierError(activeIndex, rowIdx, key)}
+              onClearSupplierError={(rowIdx, key) =>
+                clearSupplierError(activeIndex, rowIdx, key)
+              }
             />
           </main>
-        </div>
         </div>
       </div>
     </div>
