@@ -7,7 +7,6 @@ import { useAuth } from "../auth/AuthContext";
 import { useRealtime } from "../realtime/RealtimeContext";
 import { toastSuccess, toastWarning, toastError } from "../ui/toast";
 
-
 function roleLabel(roleId) {
   if (roleId === 1) return "ADMIN";
   if (roleId === 2) return "ANALYST";
@@ -16,31 +15,48 @@ function roleLabel(roleId) {
 
 export function EnableNotificationsButton() {
   const rt = useRealtime();
-  
+
   async function onEnable() {
     if (!rt.isSecureForNotifications?.()) {
       toastWarning("No Chrome, notificações precisam de HTTPS (ou localhost).");
       return;
     }
-    
+
     const res = await rt.requestBrowserNotificationsPermission?.();
-    if (res?.ok) toastSuccess("Notificações do navegador ativadas.");
-    else if (res?.reason === "denied") toastError("Permissão de notificações negada no navegador.");
-    else toastWarning("Não foi possível ativar as notificações agora.");
+
+    if (res?.ok) {
+      toastSuccess("Notificações do navegador ativadas.");
+    } else if (res?.reason === "denied") {
+      toastError("Permissão de notificações negada no navegador.");
+    } else {
+      toastWarning("Não foi possível ativar as notificações agora.");
+    }
   }
-  
+
   return (
-    <button type="button" onClick={onEnable} style={{ padding: "8px 10px", borderRadius: 10 }}>
+    <button
+      type="button"
+      onClick={onEnable}
+      style={{ padding: "8px 10px", borderRadius: 10 }}
+    >
       Ativar notificações
     </button>
   );
 }
 
 export function Topbar() {
-  const { user, logout, activeUserId, setActiveUserId, listProfiles } = useAuth();
+  const {
+    user,
+    logout,
+    activeUserId,
+    setActiveUserId,
+    listProfiles,
+    isSsoSession,
+  } = useAuth();
+
   const location = useLocation();
   const { totalUnreadMessages, createdRequestsCount } = useRealtime();
-  
+
   const profiles = useMemo(() => listProfiles(), [listProfiles]);
 
   const isActive = (path) => location.pathname.startsWith(path);
@@ -57,12 +73,17 @@ export function Topbar() {
         justifyContent: "space-around",
         alignItems: "center",
         gap: 12,
-        flexShrink: 0
+        flexShrink: 0,
       }}
     >
       <div>
-        <img src={`${import.meta.env.BASE_URL}logoTransformaMaisDelpi.svg`} alt="Transforma mais DELPI" style={{maxHeight:"80px"}} />
+        <img
+          src={`${import.meta.env.BASE_URL}logoTransformaMaisDelpi.svg`}
+          alt="Transforma mais DELPI"
+          style={{ maxHeight: "80px" }}
+        />
       </div>
+
       <nav
         style={{
           display: "flex",
@@ -74,29 +95,27 @@ export function Topbar() {
         <Link to="/conversations" className={linkClass("/conversations")}>
           Conversas
           {totalUnreadMessages > 0 && (
-            <span className="topbar-badge">
-              {totalUnreadMessages}
-            </span>
+            <span className="topbar-badge">{totalUnreadMessages}</span>
           )}
         </Link>
 
         <Link to="/requests" className={linkClass("/requests")}>
           Solicitações
           {createdRequestsCount > 0 && (
-            <span className="topbar-badge">
-              {createdRequestsCount}
-            </span>
+            <span className="topbar-badge">{createdRequestsCount}</span>
           )}
         </Link>
 
         <Link to="/products" className={linkClass("/products")}>
           Produtos
         </Link>
+
         {isAdmin && (
           <Link to="/audit" className={isActive("/audit") ? "select" : ""}>
             Auditoria
           </Link>
-         )}
+        )}
+
         {isAdmin && (
           <Link to="/admin/users" className={linkClass("/admin/users")}>
             Admin · Usuários
@@ -128,7 +147,11 @@ export function Topbar() {
           {user?.role_id ? ` (${roleLabel(user.role_id)})` : ""}
         </Link>
 
-        <button onClick={logout} id="btn-logout">Sair</button>
+        {!isSsoSession && (
+          <button type="button" onClick={() => logout()} id="btn-logout">
+            Sair
+          </button>
+        )}
       </div>
     </header>
   );

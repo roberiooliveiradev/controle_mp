@@ -5,7 +5,11 @@ import { authStorage } from "./authStorage";
 import { decodeJwt } from "./jwt";
 import { loginApi, logoutApi, ssoLoginApi } from "../api/authApi";
 
-import { connectSocket, disconnectSocket, setSocketAuthToken } from "../realtime/socket";
+import {
+  connectSocket,
+  disconnectSocket,
+  setSocketAuthToken,
+} from "../realtime/socket";
 
 const AuthContext = createContext(null);
 
@@ -22,18 +26,44 @@ function buildUserFromAccessToken(accessToken) {
 }
 
 function pickFallbackActiveUserId(excludingUserId = null) {
-  const ids = authStorage.listProfileUserIds().filter((id) => id !== excludingUserId);
+  const ids = authStorage
+    .listProfileUserIds()
+    .filter((id) => id !== excludingUserId);
+
   return ids.length > 0 ? ids[ids.length - 1] : null;
 }
 
 export function AuthProvider({ children }) {
-  const [activeUserId, setActiveUserIdState] = useState(() => authStorage.getActiveUserId());
+  const [activeUserId, setActiveUserIdState] = useState(() =>
+    authStorage.getActiveUserId()
+  );
+
   const [user, setUser] = useState(() => authStorage.getActiveUser());
   const [token, setToken] = useState(() => authStorage.getActiveAccessToken());
+  const [loginMode, setLoginMode] = useState(() => authStorage.getLoginMode());
 
   const isAuthenticated = !!activeUserId && !!token;
 
-  function applyTokenPair(data) {
+  function setActiveUserId(userId) {
+    if (!userId) return;
+
+    authStorage.setActiveUserId(userId);
+    setActiveUserIdState(userId);
+    setUser(authStorage.getUser(userId));
+    setToken(authStorage.getAccessToken(userId));
+    setLoginMode(authStorage.getLoginMode());
+  }
+
+  function refreshActiveFromStorage() {
+    const uid = authStorage.getActiveUserId();
+
+    setActiveUserIdState(uid);
+    setUser(uid ? authStorage.getUser(uid) : null);
+    setToken(uid ? authStorage.getAccessToken(uid) : null);
+    setLoginMode(authStorage.getLoginMode());
+  }
+
+  function applyTokenPair(data, mode = "local") {
     const accessToken = data.access_token;
     const refreshToken = data.refresh_token;
 
@@ -49,42 +79,32 @@ export function AuthProvider({ children }) {
     authStorage.setAccessToken(builtUser.id, accessToken);
     authStorage.setRefreshToken(builtUser.id, refreshToken);
     authStorage.setUser(builtUser.id, builtUser);
+    authStorage.setLoginMode(mode);
 
+    setLoginMode(mode);
     setActiveUserId(builtUser.id);
 
     return builtUser;
   }
 
-  function setActiveUserId(userId) {
-    if (!userId) return;
-
-    authStorage.setActiveUserId(userId);
-    setActiveUserIdState(userId);
-    setUser(authStorage.getUser(userId));
-    setToken(authStorage.getAccessToken(userId));
-  }
-
-  function refreshActiveFromStorage() {
-    const uid = authStorage.getActiveUserId();
-    setActiveUserIdState(uid);
-    setUser(uid ? authStorage.getUser(uid) : null);
-    setToken(uid ? authStorage.getAccessToken(uid) : null);
-  }
-
   async function login({ email, password }) {
     const data = await loginApi({ email, password });
-    return applyTokenPair(data);
-  }
-  
-  async function ssoLogin({ centralAccessToken }) {
-    const data = await ssoLoginApi({ centralAccessToken });
-    return applyTokenPair(data);
+    return applyTokenPair(data, "local");
   }
 
-  async function logout() {
+  async function ssoLogin({ centralAccessToken }) {
+    const data = await ssoLoginApi({ centralAccessToken });
+    return applyTokenPair(data, "sso");
+  }
+
+  async function logout(options = {}) {
+    const { silent = false, clearAll = false } = options;
+
     const uid = authStorage.getActiveUserId();
+
     if (!uid) {
       authStorage.clearActiveUserId();
+      authStorage.clearLoginMode();
       refreshActiveFromStorage();
       return;
     }
@@ -92,25 +112,41 @@ export function AuthProvider({ children }) {
     const refreshToken = authStorage.getRefreshToken(uid);
 
     try {
-      await logoutApi({ refresh_token: refreshToken });
+      if (silent) {
+        await logoutApi({ refresh_token: refreshToken }).catch(() => {});
+      } else {
+        await logoutApi({ refresh_token: refreshToken });
+      }
     } finally {
-      authStorage.clearProfile(uid);
+      if (clearAll) {
+        authStorage.clearAllAuth();
+      } else {
+        authStorage.clearProfile(uid);
 
-      const nextUid = pickFallbackActiveUserId(uid);
-      if (nextUid) authStorage.setActiveUserId(nextUid);
+        if (!silent) {
+          const nextUid = pickFallbackActiveUserId(uid);
+          if (nextUid) authStorage.setActiveUserId(nextUid);
+        } else {
+          authStorage.clearActiveUserId();
+          authStorage.clearLoginMode();
+        }
+      }
+
       refreshActiveFromStorage();
     }
   }
 
   function listProfiles() {
-    return authStorage.listProfileUserIds().map((id) => authStorage.getUser(id)).filter(Boolean);
+    return authStorage
+      .listProfileUserIds()
+      .map((id) => authStorage.getUser(id))
+      .filter(Boolean);
   }
 
   function updateActiveUserProfile(updatedUser) {
     const uid = authStorage.getActiveUserId();
     if (!uid) return;
 
-    // se o backend retornou o id, validamos; senão assume o ativo
     const targetId = updatedUser?.id ? Number(updatedUser.id) : uid;
     if (targetId !== uid) return;
 
@@ -118,7 +154,6 @@ export function AuthProvider({ children }) {
     setUser(updatedUser);
   }
 
-  // Socket lifecycle: sempre manter autenticado pelo token ativo
   useEffect(() => {
     if (!token) {
       setSocketAuthToken(null);
@@ -136,14 +171,19 @@ export function AuthProvider({ children }) {
       token,
       activeUserId,
       isAuthenticated,
+
       login,
-      logout,
       ssoLogin,
+      logout,
+
       setActiveUserId,
       listProfiles,
-      updateActiveUserProfile, 
+      updateActiveUserProfile,
+
+      loginMode,
+      isSsoSession: loginMode === "sso",
     }),
-    [user, token, activeUserId, isAuthenticated]
+    [user, token, activeUserId, isAuthenticated, loginMode]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

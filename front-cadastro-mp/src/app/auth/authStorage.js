@@ -1,7 +1,8 @@
 // src/app/auth/authStorage.js
 
-
 const ACTIVE_USER_ID_KEY = "cadmp_active_user_id";
+const LOGIN_MODE_KEY = "cadmp_login_mode";
+
 const ACCESS_TOKEN_PREFIX = "cadmp_access_token:";
 const REFRESH_TOKEN_PREFIX = "cadmp_refresh_token:";
 const USER_PREFIX = "cadmp_user:";
@@ -11,14 +12,33 @@ function key(prefix, userId) {
 }
 
 export const authStorage = {
+  // ---- Login mode ----
+  getLoginMode() {
+    return localStorage.getItem(LOGIN_MODE_KEY);
+  },
+
+  setLoginMode(mode) {
+    localStorage.setItem(LOGIN_MODE_KEY, mode);
+  },
+
+  clearLoginMode() {
+    localStorage.removeItem(LOGIN_MODE_KEY);
+  },
+
+  isSsoSession() {
+    return this.getLoginMode() === "sso";
+  },
+
   // ---- Active profile ----
   getActiveUserId() {
     const v = localStorage.getItem(ACTIVE_USER_ID_KEY);
     return v ? Number(v) : null;
   },
+
   setActiveUserId(userId) {
     localStorage.setItem(ACTIVE_USER_ID_KEY, String(userId));
   },
+
   clearActiveUserId() {
     localStorage.removeItem(ACTIVE_USER_ID_KEY);
   },
@@ -27,9 +47,11 @@ export const authStorage = {
   getAccessToken(userId) {
     return localStorage.getItem(key(ACCESS_TOKEN_PREFIX, userId));
   },
+
   setAccessToken(userId, token) {
     localStorage.setItem(key(ACCESS_TOKEN_PREFIX, userId), token);
   },
+
   clearAccessToken(userId) {
     localStorage.removeItem(key(ACCESS_TOKEN_PREFIX, userId));
   },
@@ -37,9 +59,11 @@ export const authStorage = {
   getRefreshToken(userId) {
     return localStorage.getItem(key(REFRESH_TOKEN_PREFIX, userId));
   },
+
   setRefreshToken(userId, token) {
     localStorage.setItem(key(REFRESH_TOKEN_PREFIX, userId), token);
   },
+
   clearRefreshToken(userId) {
     localStorage.removeItem(key(REFRESH_TOKEN_PREFIX, userId));
   },
@@ -48,9 +72,11 @@ export const authStorage = {
     const raw = localStorage.getItem(key(USER_PREFIX, userId));
     return raw ? JSON.parse(raw) : null;
   },
+
   setUser(userId, user) {
     localStorage.setItem(key(USER_PREFIX, userId), JSON.stringify(user));
   },
+
   clearUser(userId) {
     localStorage.removeItem(key(USER_PREFIX, userId));
   },
@@ -61,25 +87,43 @@ export const authStorage = {
     this.clearRefreshToken(userId);
     this.clearUser(userId);
 
-    // se estava ativo, remove ativo (quem decide próximo é o AuthContext)
     if (this.getActiveUserId() === Number(userId)) {
       this.clearActiveUserId();
     }
+
+    if (!this.getActiveUserId()) {
+      this.clearLoginMode();
+    }
+  },
+
+  clearAllAuth() {
+    const ids = this.listProfileUserIds();
+
+    ids.forEach((id) => {
+      this.clearAccessToken(id);
+      this.clearRefreshToken(id);
+      this.clearUser(id);
+    });
+
+    this.clearActiveUserId();
+    this.clearLoginMode();
   },
 
   // ---- Helpers ----
   listProfileUserIds() {
-    // Lista userIds existentes com base nas chaves de user
     const ids = [];
+
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
+
       if (k.startsWith(USER_PREFIX)) {
         const idStr = k.slice(USER_PREFIX.length);
         const id = Number(idStr);
         if (Number.isFinite(id)) ids.push(id);
       }
     }
+
     ids.sort((a, b) => a - b);
     return ids;
   },
@@ -89,11 +133,13 @@ export const authStorage = {
     if (!uid) return null;
     return this.getAccessToken(uid);
   },
+
   getActiveRefreshToken() {
     const uid = this.getActiveUserId();
     if (!uid) return null;
     return this.getRefreshToken(uid);
   },
+
   getActiveUser() {
     const uid = this.getActiveUserId();
     if (!uid) return null;
