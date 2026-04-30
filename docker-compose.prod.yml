@@ -1,0 +1,38 @@
+services:
+  controle-mp-api:
+    build:
+      context: ${API_BUILD_CONTEXT}
+      dockerfile: ${API_DOCKERFILE}
+    container_name: ${COMPOSE_PROJECT_NAME}-api
+    env_file:
+      - .env.production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${API_UPLOADS_HOST_PATH}:${FILES_BASE_PATH}
+    restart: unless-stopped
+    networks:
+      - controle-mp-net
+
+  controle-mp-front:
+    build:
+      context: ${FRONT_BUILD_CONTEXT}
+      dockerfile: ${FRONT_DOCKERFILE}
+      args:
+        VITE_API_BASE_URL: ${VITE_PROD_API_BASE_URL}
+        VITE_API_PREFIX: ${VITE_PROD_API_PREFIX}
+        VITE_SOCKET_PATH: ${VITE_PROD_SOCKET_PATH}
+        VITE_DELPI_PARENT_ORIGIN: ${VITE_PROD_DELPI_PARENT_ORIGIN}
+    container_name: ${COMPOSE_PROJECT_NAME}-front
+    ports:
+      - "127.0.0.1:${FRONT_HOST_PORT}:80"
+    depends_on:
+      - controle-mp-api
+    restart: unless-stopped
+    networks:
+      - controle-mp-net
+
+networks:
+  controle-mp-net:
+    name: ${COMPOSE_PROJECT_NAME}_net
+    driver: ${DOCKER_NETWORK_DRIVER}
