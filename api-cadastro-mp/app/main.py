@@ -13,6 +13,7 @@ from flask_cors import CORS  # noqa: E402
 from app.api.realtime.socket_handlers import register_socket_handlers  # noqa: E402
 from app.infrastructure.realtime.socketio_server import socketio  # noqa: E402
 from app.config.flask_config import configure_app  # noqa: E402
+from app.config.settings import settings  # noqa: E402
 from app.api.routes import register_routes  # noqa: E402
 from app.api.middlewares.error_handler import register_error_handlers  # noqa: E402
 
@@ -29,6 +30,23 @@ API_PREFIX = f"{APP_PREFIX}/api"
 SOCKET_PREFIX = f"{APP_PREFIX}/socket.io"
 
 
+def _get_cors_origins() -> list[str]:
+    raw_origins = os.getenv("CORS_ORIGINS", "").strip()
+
+    if raw_origins:
+        return [
+            origin.strip()
+            for origin in raw_origins.split(",")
+            if origin.strip()
+        ]
+
+    return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://controle-mp.minhadelpi.com.br",
+    ]
+
+
 def create_app() -> Flask:
     app = Flask(__name__)
 
@@ -36,11 +54,7 @@ def create_app() -> Flask:
         app,
         resources={
             rf"{API_PREFIX}/*": {
-                "origins": [
-                    "http://localhost:5173",
-                    "http://127.0.0.1:5173",
-                    "https://controle-mp.minhadelpi.com.br",
-                ]
+                "origins": _get_cors_origins(),
             }
         },
         allow_headers=["Content-Type", "Authorization"],
@@ -49,12 +63,10 @@ def create_app() -> Flask:
 
     configure_app(app)
 
-    # ✅ AQUI estava o crash do gunicorn: faltavam api_prefix e app_prefix
     register_routes(app, api_prefix=API_PREFIX, app_prefix=APP_PREFIX)
 
     register_error_handlers(app)
 
-    # ✅ Socket.IO no subpath
     socketio.init_app(app, path=SOCKET_PREFIX)
     register_socket_handlers()
 
@@ -64,6 +76,11 @@ def create_app() -> Flask:
 app = create_app()
 
 if __name__ == "__main__":
-    # OBS: em produção você usa gunicorn na 8000,
-    # este bloco é só para execução direta.
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    # OBS: em produção usamos gunicorn.
+    # Este bloco é apenas para execução direta/local.
+    socketio.run(
+        app,
+        host="0.0.0.0",
+        port=int(os.getenv("API_CONTAINER_PORT", "5000")),
+        debug=settings.debug,
+    )

@@ -149,7 +149,8 @@ def list_sql_files(directory: Path, *, kind: ScriptKind) -> list[Path]:
         # O arquivo 000_permisions.sql depende de tabelas/sequences já criadas
         # e contém grants. Por isso, ele é executado por último.
         permission_files = [
-            path for path in files
+            path
+            for path in files
             if "permission" in path.name.lower() or "permision" in path.name.lower()
         ]
         regular_files = [path for path in files if path not in permission_files]
@@ -254,6 +255,100 @@ def run_up(*, run_seeds: bool = True) -> None:
         run_scripts(kind="seed", directory=SEEDS_DIR)
 
 
+def assert_existing_database_has_core_tables(conn) -> None:
+    required_tables = [
+        "tbUsers",
+        "tbRoles",
+        "tbConversations",
+        "tbMessages",
+    ]
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_type = 'BASE TABLE'
+              AND table_name = ANY(%s)
+            """,
+            (required_tables,),
+        )
+        existing = {row[0] for row in cur.fetchall()}
+
+    missing = [name for name in required_tables if name not in existing]
+
+    if missing:
+        raise MigrationError(
+            "Baseline bloqueado. O banco não parece estar inicializado. "
+            f"Tabelas ausentes: {', '.join(missing)}"
+        )
+
+
+def baseline_script(conn, *, kind: ScriptKind, path: Path) -> None:
+    version, name = parse_version_and_name(path)
+    checksum = calculate_checksum(path)
+
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            f"""
+            SELECT checksum
+            FROM {TRACKING_TABLE}
+            WHERE kind = %s
+              AND version = %s
+            """,
+            (kind, version),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            if existing["checksum"] != checksum:
+                raise MigrationError(
+                    f"Checksum divergente no baseline para {path.name}. "
+                    "Existe registro anterior com checksum diferente."
+                )
+
+            print(f"= Já registrado: {kind} {path.name}")
+            return
+
+        cur.execute(
+            f"""
+            INSERT INTO {TRACKING_TABLE}
+                (kind, version, name, filename, checksum)
+            VALUES
+                (%s, %s, %s, %s, %s)
+            """,
+            (kind, version, name, path.name, checksum),
+        )
+
+    print(f"+ Baseline registrado: {kind} {path.name}")
+
+
+def run_baseline() -> None:
+    migration_files = list_sql_files(MIGRATIONS_DIR, kind="migration")
+    seed_files = list_sql_files(SEEDS_DIR, kind="seed")
+
+    with get_connection() as conn:
+        ensure_tracking_table(conn)
+        assert_existing_database_has_core_tables(conn)
+
+        try:
+            print("Criando baseline de migrations...")
+            for path in migration_files:
+                baseline_script(conn, kind="migration", path=path)
+
+            print("Criando baseline de seeds...")
+            for path in seed_files:
+                baseline_script(conn, kind="seed", path=path)
+
+            conn.commit()
+            print("Baseline concluído com sucesso.")
+
+        except Exception:
+            conn.rollback()
+            raise
+
+
 def show_status_for(*, kind: ScriptKind, directory: Path) -> None:
     files = list_sql_files(directory, kind=kind)
 
@@ -312,12 +407,13 @@ def main() -> None:
 
     parser.add_argument(
         "command",
-        choices=["up", "migrate", "seed", "status", "reset"],
+        choices=["up", "migrate", "seed", "status", "baseline", "reset"],
         help=(
             "up: aplica migrations e seeds | "
             "migrate: aplica apenas migrations | "
             "seed: aplica apenas seeds | "
             "status: mostra status | "
+            "baseline: registra migrations/seeds existentes sem executar SQL | "
             "reset: recria schema public"
         ),
     )
@@ -344,6 +440,10 @@ def main() -> None:
 
     if args.command == "status":
         show_status()
+        return
+
+    if args.command == "baseline":
+        run_baseline()
         return
 
     if args.command == "reset":
