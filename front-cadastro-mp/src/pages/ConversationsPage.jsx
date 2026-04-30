@@ -1,7 +1,7 @@
 // src/pages/ConversationsPage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-
+import "./ConversationsPage.css";
 import { useAuth } from "../app/auth/AuthContext";
 import { useRealtime } from "../app/realtime/RealtimeContext";
 
@@ -690,125 +690,88 @@ export default function ConversationsPage() {
   return (
     <div
       ref={containerRef}
-      style={{
-        display: "grid",
-        gridTemplateColumns: `${leftWidth}px ${DIVIDER_W}px 1fr`,
-        gap: 0,
-        height: "100%",
-      }}
+      className={
+        selectedId
+          ? "cmp-conversations cmp-conversations--chat-open"
+          : "cmp-conversations"
+      }
+      style={{ "--cmp-conversations-sidebar-width": `${leftWidth}px` }}
     >
-      <aside
-        style={{
-          border: "1px solid var(--border)",
-          borderRadius: 14,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div style={{ padding: 12, borderBottom: "1px solid var(--border)" }}>
-          <strong>Conversas</strong>
-          <div style={{ fontSize: 12, opacity: "var(--text-muted)", marginTop: 4 }}>
+      <aside className="cmp-conversations__sidebar">
+        <div className="cmp-conversations__sidebar-header">
+          <strong className="cmp-conversations__title">Conversas</strong>
+          <div className="cmp-conversations__subtitle">
             Clique para abrir o chat
           </div>
 
           <form
             onSubmit={handleCreateConversation}
-            style={{ marginTop: 12, display: "grid", gap: 8 }}
+            className="cmp-conversations__form"
           >
-          <div style={{ position: "relative" }}>
-            <input
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onFocus={() => setIsSearchFocused(true)}
-              onBlur={() => setIsSearchFocused(false)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && e.ctrlKey) {
-                  e.preventDefault();
-                  handleSearch();
-                }
-              }}
-              placeholder="Digite para criar ou pesquisar..."
-              style={{
-                width: "100%",
-                padding: "10px 64px 10px 12px",
-                borderRadius: 10,
-                border: "1px solid var(--border)",
-              }}
-              disabled={createBusy}
-            />
+            <div className="cmp-conversations__search-wrap">
+              <input
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.ctrlKey) {
+                    e.preventDefault();
+                    handleSearch();
+                  }
+                }}
+                placeholder="Digite para criar ou pesquisar..."
+                className="cmp-conversations__search-input"
+                disabled={createBusy}
+              />
 
-            {/* 🔍 Pesquisar */}
-            <button
-              type="button"
-              onClick={handleSearch}
-              title="Pesquisar conversas"
-              style={{
-                position: "absolute",
-                right: 8,
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: 6,
-                fontSize: 16,
-                color: isSearchFocused ? "var(--primary)" : "var(--text-muted)",
-              }}
-            >
-              🔍
-            </button>
+              {newTitle.trim() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewTitle("");
+                    handleSearch("");
+                  }}
+                  title="Limpar filtro"
+                  className="cmp-conversations__field-action cmp-conversations__field-action--clear"
+                >
+                  ✕
+                </button>
+              )}
 
-            {/* ✕ Limpar */}
-            {newTitle.trim() && (
               <button
                 type="button"
-                onClick={() => {
-                  setNewTitle("");
-                  handleSearch("");
-                }}
-                title="Limpar filtro"
-                style={{
-                  position: "absolute",
-                  right: 40,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 6,
-                  fontSize: 14,
-                  color: "var(--text-muted)",
-                }}
+                onClick={handleSearch}
+                title="Pesquisar conversas"
+                className={
+                  isSearchFocused
+                    ? "cmp-conversations__field-action cmp-conversations__field-action--search cmp-conversations__field-action--active"
+                    : "cmp-conversations__field-action cmp-conversations__field-action--search"
+                }
               >
-                ✕
+                🔍
               </button>
-            )}
-          </div>
+            </div>
 
             {createError ? (
-              <div style={{ color: "crimson", fontSize: 12 }}>{createError}</div>
+              <div className="cmp-conversations__form-error">{createError}</div>
             ) : null}
 
             <button
               type="submit"
               disabled={createBusy || !newTitle.trim()}
-              style={{
-                padding: "10px 12px",
-                borderRadius: 12,
-                cursor: createBusy ? "not-allowed" : "pointer",
-              }}
+              className="cmp-conversations__create-button"
             >
               {createBusy ? "Criando..." : "Criar conversa"}
             </button>
           </form>
-
-
         </div>
 
-        <div style={{ padding: 12, overflow: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="cmp-conversations__list">
           {conversations.length === 0 ? (
-            <div style={{ opacity: "var(--text-muted)" }}>Nenhuma conversa encontrada.</div>
+            <div className="cmp-conversations__empty">
+              Nenhuma conversa encontrada.
+            </div>
           ) : null}
 
           {sortConversationsByLastActivity(conversations).map((c) => (
@@ -834,20 +797,13 @@ export default function ConversationsPage() {
         onDoubleClick={resetSplit}
         onMouseEnter={() => setIsDividerHover(true)}
         onMouseLeave={() => setIsDividerHover(false)}
-        style={{ cursor: "col-resize", position: "relative", background: "transparent" }}
+        className={
+          isDividerHover
+            ? "cmp-conversations__divider cmp-conversations__divider--hover"
+            : "cmp-conversations__divider"
+        }
       >
-        <div
-          style={{
-            position: "absolute",
-            left: "50%",
-            top: 10,
-            bottom: 10,
-            width: 2,
-            transform: "translateX(-50%)",
-            background: isDividerHover ? "var(--border-2)" : "var(--border)",
-            borderRadius: 2,
-          }}
-        />
+        <span className="cmp-conversations__divider-line" />
       </div>
 
       <section
@@ -855,91 +811,76 @@ export default function ConversationsPage() {
         onDragOver={onDragOverChat}
         onDragLeave={onDragLeaveChat}
         onDrop={onDropChat}
-        style={{
-          border: "1px solid var(--border)",
-          borderRadius: 14,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-          background: "var(--surface)",
-          position: "relative",
-        }}
+        className="cmp-conversations__chat"
       >
         {isDraggingFiles ? (
-          <div
-            style={{
-              position: "absolute",
-              inset: 10,
-              borderRadius: 14,
-              border: "2px dashed #bbb",
-              background: "rgba(0, 0, 0, 0.1)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 16,
-              fontWeight: 700,
-              zIndex: 30,
-              pointerEvents: "none",
-            }}
-          >
+          <div className="cmp-conversations__dropzone">
             Solte os arquivos para anexar
           </div>
         ) : null}
 
         {!selectedId ? (
-          <div style={{ padding: 24, opacity: "var(--text-muted)" }}>
+          <div className="cmp-conversations__placeholder">
             Selecione uma conversa à esquerda para abrir o chat.
           </div>
         ) : (
           <>
-            <div style={{ padding: 12, borderBottom: "1px solid var(--border)" }}>
-              {editingTitle ? (
-                <input
-                  autoFocus
-                  value={titleDraft}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  onBlur={saveTitle}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveTitle();
-                    if (e.key === "Escape") {
-                      setTitleDraft(conv?.title ?? "");
-                      setEditingTitle(false);
-                    }
-                  }}
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 700,
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    padding: "4px 8px",
-                    width: "100%",
-                  }}
-                />
-              ) : (
-                <strong
-                  style={{ cursor: "pointer" }}
-                  title="Clique para editar"
-                  onClick={() => setEditingTitle(true)}
-                >
-                  {conv?.title ?? `Conversa #${selectedId}`}
-                </strong>
-              )}
-              <div style={{ fontSize: 12, opacity: "var(--text-muted)", marginTop: 4 }}>
-                {conv?.created_by?.full_name ?? conv?.created_by?.email ?? ""}
+            <div className="cmp-conversations__chat-header">
+              <button
+                type="button"
+                className="cmp-conversations__back-button"
+                onClick={() => navigate("/conversations")}
+              >
+                ← Conversas
+              </button>
+
+              <div className="cmp-conversations__chat-title-area">
+                {editingTitle ? (
+                  <input
+                    autoFocus
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onBlur={saveTitle}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveTitle();
+                      if (e.key === "Escape") {
+                        setTitleDraft(conv?.title ?? "");
+                        setEditingTitle(false);
+                      }
+                    }}
+                    className="cmp-conversations__title-input"
+                  />
+                ) : (
+                  <strong
+                    className="cmp-conversations__chat-title"
+                    title="Clique para editar"
+                    onClick={() => setEditingTitle(true)}
+                  >
+                    {conv?.title ?? `Conversa #${selectedId}`}
+                  </strong>
+                )}
+
+                <div className="cmp-conversations__chat-subtitle">
+                  {conv?.created_by?.full_name ?? conv?.created_by?.email ?? ""}
+                </div>
               </div>
             </div>
 
             <div
               ref={messagesContainerRef}
               onScroll={handleScrollMarkRead}
-              style={{ flex: 1, overflow: "auto", padding: 12 }}
+              className="cmp-conversations__messages"
             >
-              {chatBusy && <div>Carregando chat...</div>}
-              {chatError && <div style={{ color: "crimson" }}>{chatError}</div>}
+              {chatBusy && (
+                <div className="cmp-conversations__state">Carregando chat...</div>
+              )}
+
+              {chatError && (
+                <div className="cmp-conversations__error">{chatError}</div>
+              )}
 
               {!chatBusy && !chatError && messages.length === 0 ? (
-                <div style={{ opacity: "var(--text-muted)" }}>Sem mensagens.</div>
+                <div className="cmp-conversations__empty">Sem mensagens.</div>
               ) : null}
 
               {messages.map((m) => {
@@ -954,12 +895,14 @@ export default function ConversationsPage() {
               <div ref={bottomRef} />
             </div>
 
-            <ChatComposer
-              onSend={handleSend}
-              onAttach={handleAttach}
-              incomingFiles={incomingFiles}
-              onIncomingFilesHandled={() => setIncomingFiles([])}
-            />
+            <div className="cmp-conversations__composer">
+              <ChatComposer
+                onSend={handleSend}
+                onAttach={handleAttach}
+                incomingFiles={incomingFiles}
+                onIncomingFilesHandled={() => setIncomingFiles([])}
+              />
+            </div>
           </>
         )}
       </section>

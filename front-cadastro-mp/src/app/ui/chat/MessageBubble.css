@@ -1,0 +1,391 @@
+/* src/app/ui/chat/MessageBubble.css */
+
+/* =========================================
+   MESSAGE BUBBLE
+========================================= */
+
+.cmp-message-bubble-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 10px;
+}
+
+.cmp-message-bubble-row--mine {
+  justify-content: flex-end;
+}
+
+.cmp-message-bubble {
+  width: fit-content;
+  max-width: min(780px, 78%);
+  display: grid;
+  gap: 7px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.cmp-message-bubble--mine {
+  background: var(--surface-2);
+}
+
+.cmp-message-bubble--sending {
+  opacity: 0.75;
+}
+
+.cmp-message-bubble__sender {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-message-bubble__body {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cmp-message-bubble__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 3px;
+}
+
+.cmp-message-bubble__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+/* =========================================
+   MESSAGE ATTACHMENT
+========================================= */
+
+.cmp-message-attachment {
+  width: 176px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.cmp-message-attachment__preview {
+  height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+}
+
+.cmp-message-attachment__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cmp-message-attachment__label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.cmp-message-attachment__body {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+}
+
+.cmp-message-attachment__name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-message-attachment__download {
+  min-height: 28px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.cmp-message-attachment__download:hover:not(:disabled) {
+  color: var(--primary);
+  border-color: var(--border-2);
+  background: var(--surface-2);
+}
+
+/* =========================================
+   REQUEST READONLY STACK
+========================================= */
+
+.cmp-request-readonly-stack {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.cmp-request-readonly-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.cmp-request-readonly-card__header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cmp-request-readonly-card__title {
+  min-width: 0;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.cmp-request-readonly-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.cmp-request-readonly-card__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.cmp-request-readonly-card__fields {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.cmp-request-readonly-card__field {
+  min-width: 0;
+}
+
+.cmp-request-readonly-card__field--full {
+  grid-column: 1 / -1;
+}
+
+.cmp-request-readonly-card__suppliers {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.cmp-request-readonly-card__section-title {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.cmp-request-readonly-card__empty {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.cmp-request-readonly-card__table-wrap {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.cmp-request-readonly-card__table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.cmp-request-readonly-card__table th,
+.cmp-request-readonly-card__table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.cmp-request-readonly-card__table th {
+  color: var(--text-muted);
+  background: var(--surface-2);
+  font-weight: 850;
+}
+
+.cmp-request-readonly-card__table tr:last-child td {
+  border-bottom: 0;
+}
+
+/* =========================================
+   READONLY FIELD
+========================================= */
+
+.cmp-readonly-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cmp-readonly-field__label {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.cmp-readonly-field__value {
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cmp-readonly-field__empty {
+  color: var(--text-soft);
+}
+
+/* =========================================
+   LOW HEIGHT / LANDSCAPE
+========================================= */
+
+@media (max-height: 720px) {
+  .cmp-message-bubble-row {
+    margin-bottom: 8px;
+  }
+
+  .cmp-message-bubble {
+    gap: 5px;
+    padding: 8px 10px;
+    border-radius: var(--radius-md);
+  }
+
+  .cmp-message-bubble__body {
+    font-size: 13px;
+    line-height: 1.38;
+  }
+
+  .cmp-message-attachment {
+    width: 148px;
+  }
+
+  .cmp-message-attachment__preview {
+    height: 64px;
+  }
+
+  .cmp-request-readonly-card {
+    gap: 9px;
+    padding: 10px;
+    border-radius: var(--radius-md);
+  }
+
+  .cmp-request-readonly-card__fields {
+    gap: 8px;
+  }
+
+  .cmp-readonly-field__value {
+    min-height: 32px;
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .cmp-message-bubble {
+    max-width: min(720px, 82%);
+  }
+
+  .cmp-message-attachment {
+    width: 132px;
+  }
+
+  .cmp-message-attachment__preview {
+    height: 48px;
+  }
+
+  .cmp-message-attachment__body {
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .cmp-message-attachment__download {
+    min-height: 24px;
+    padding: 4px 8px;
+  }
+
+  .cmp-request-readonly-card__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .cmp-request-readonly-card__badges {
+    justify-content: flex-start;
+  }
+}
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 760px) {
+  .cmp-message-bubble {
+    max-width: 92%;
+  }
+
+  .cmp-request-readonly-card__fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cmp-request-readonly-card__field--full {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .cmp-message-bubble {
+    max-width: 96%;
+  }
+
+  .cmp-message-attachment {
+    width: 100%;
+  }
+}

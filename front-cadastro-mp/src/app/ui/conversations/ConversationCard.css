@@ -1,0 +1,156 @@
+/* src/app/ui/conversations/ConversationCard.css */
+
+.cmp-conversation-card {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.cmp-conversation-card:hover {
+  border-color: var(--border-2);
+  background: var(--surface-3);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 7%, transparent);
+}
+
+.cmp-conversation-card--selected {
+  border-color: var(--border-2);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.cmp-conversation-card__header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cmp-conversation-card__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-conversation-card__badge {
+  flex: 0 0 auto;
+  min-width: 21px;
+  height: 21px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger) 68%, transparent);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.cmp-conversation-card__delete {
+  flex: 0 0 auto;
+  min-height: 27px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.cmp-conversation-card__delete:hover {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.cmp-conversation-card__meta {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.cmp-conversation-card__line {
+  min-width: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-conversation-card__label {
+  color: var(--text-muted);
+  font-weight: 750;
+}
+
+.cmp-conversation-card__value {
+  color: var(--text-muted);
+}
+
+.cmp-conversation-card__date {
+  color: var(--text-soft);
+}
+
+/* Telas baixas / landscape */
+@media (max-height: 720px) {
+  .cmp-conversation-card {
+    gap: 5px;
+    padding: 10px;
+    border-radius: var(--radius-md);
+  }
+
+  .cmp-conversation-card__title {
+    font-size: 14px;
+  }
+
+  .cmp-conversation-card__meta {
+    font-size: 11.5px;
+  }
+
+  .cmp-conversation-card__delete {
+    min-height: 24px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .cmp-conversation-card {
+    gap: 4px;
+    padding: 8px 9px;
+  }
+
+  .cmp-conversation-card__meta {
+    gap: 0;
+  }
+
+  .cmp-conversation-card__line:nth-child(2) {
+    display: none;
+  }
+}

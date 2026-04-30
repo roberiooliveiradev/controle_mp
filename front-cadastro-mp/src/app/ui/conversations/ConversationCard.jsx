@@ -1,4 +1,5 @@
 // src/app/ui/conversations/ConversationCard.jsx
+import "./ConversationCard.css";
 
 export function ConversationCard({
   conversation,
@@ -12,108 +13,85 @@ export function ConversationCard({
   const lastActivity = conversation.updated_at ?? conversation.created_at;
   const createdAt = lastActivity ? new Date(lastActivity) : null;
 
-  function handleKeyDown(e) {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onClick?.();
-    }
-  }
-
   function handleDelete(e) {
-    e.preventDefault();
     e.stopPropagation();
-    onDelete?.(conversation);
+
+    if (deleting) return;
+
+    const title = conversation.title ?? `Conversa #${conversation.id}`;
+    const confirmed = window.confirm(
+      `Deseja excluir a conversa "${title}"?\n\nEssa ação não poderá ser desfeita.`
+    );
+
+    if (!confirmed) return;
+
+    onDelete?.(conversation.id);
   }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
       onClick={onClick}
-      onKeyDown={handleKeyDown}
-      style={{
-        width: "100%",
-        textAlign: "left",
-        padding: 12,
-        borderRadius: 12,
-        border: selected ? "1px solid var(--border-2)" : "1px solid var(--border)",
-        background: selected ? "var(--surface-2)" : "var(--surface)",
-        cursor: "pointer",
-        position: "relative",
-      }}
+      className={
+        selected
+          ? "cmp-conversation-card cmp-conversation-card--selected"
+          : "cmp-conversation-card"
+      }
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <strong
-          style={{
-            flex: 1,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-          title={conversation.title ?? `Conversa #${conversation.id}`}
-        >
+      <div className="cmp-conversation-card__header">
+        <strong className="cmp-conversation-card__title">
           {conversation.title ?? `Conversa #${conversation.id}`}
         </strong>
 
         {unreadCount > 0 && (
           <span
+            className="cmp-conversation-card__badge"
             title={`${unreadCount} não ${unreadCount > 1 ? "lidas" : "lida"}`}
-            style={{
-              minWidth: 20,
-              height: 20,
-              borderRadius: 999,
-              background: "var(--danger-bg)",
-              color: "var(--text)",
-              fontSize: 12,
-              fontWeight: 800,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "1px 6px",
-            }}
           >
             {unreadCount}
           </span>
         )}
 
         {canDelete && (
-          <button
-            type="button"
+          <span
+            role="button"
+            tabIndex={0}
             onClick={handleDelete}
-            disabled={deleting}
-            title="Excluir conversa"
-            aria-label="Excluir conversa"
-            style={{
-              border: "1px solid var(--border)",
-              background: deleting ? "var(--surface-2)" : "transparent",
-              color: "var(--danger, #b42318)",
-              borderRadius: 8,
-              cursor: deleting ? "not-allowed" : "pointer",
-              padding: "4px 8px",
-              fontSize: 12,
-              fontWeight: 700,
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") handleDelete(e);
             }}
+            className="cmp-conversation-card__delete"
+            aria-label="Excluir conversa"
+            title="Excluir conversa"
           >
             {deleting ? "..." : "Excluir"}
-          </button>
+          </span>
         )}
       </div>
 
-      <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-        <div>
-          <span style={{ fontWeight: 600 }}>De:</span>{" "}
-          {conversation.created_by?.full_name ?? conversation.created_by?.email ?? "-"}
+      <div className="cmp-conversation-card__meta">
+        <div className="cmp-conversation-card__line">
+          <span className="cmp-conversation-card__label">De:</span>{" "}
+          <span className="cmp-conversation-card__value">
+            {conversation.created_by?.full_name ??
+              conversation.created_by?.email ??
+              "-"}
+          </span>
         </div>
 
         {conversation.assigned_to ? (
-          <div>
-            <span style={{ fontWeight: 600 }}>Atribuída:</span>{" "}
-            {conversation.assigned_to?.full_name ?? "—"}
+          <div className="cmp-conversation-card__line">
+            <span className="cmp-conversation-card__label">Atribuída:</span>{" "}
+            <span className="cmp-conversation-card__value">
+              {conversation.assigned_to?.full_name ?? "—"}
+            </span>
           </div>
         ) : null}
 
-        <div>{createdAt ? createdAt.toLocaleString("pt-BR") : ""}</div>
+        <div className="cmp-conversation-card__date">
+          {createdAt ? createdAt.toLocaleString("pt-BR") : ""}
+        </div>
       </div>
-    </div>
+    </button>
   );
 }

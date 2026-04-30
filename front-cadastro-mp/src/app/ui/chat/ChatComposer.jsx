@@ -2,35 +2,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AttachmentTray } from "./AttachmentTray";
 import { RequestComposerModal } from "./RequestComposerModal";
+import "./ChatComposer.css";
 
-// ✅ mantenha alinhado com o backend (ALLOWED_MIME_TYPES)
 const ALLOWED_MIME_TYPES = new Set([
-  // PDFs
   "application/pdf",
-
-  // Imagens
   "image/png",
   "image/jpeg",
   "image/jpg",
-
-  // Texto
   "text/plain",
   "text/csv",
-
-  // Excel
-  "application/vnd.ms-excel", // .xls
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
-
-  // Word
-  "application/msword", // .doc
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
-
-  // PowerPoint
-  "application/vnd.ms-powerpoint", // .ppt
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ]);
 
-// ✅ fallback por extensão (quando o browser não fornece type)
 const EXT_TO_MIME = {
   pdf: "application/pdf",
   png: "image/png",
@@ -57,81 +45,92 @@ function getExt(name) {
 }
 
 function guessMimeFromFile(file) {
-  const t = (file?.type || "").trim();
-  if (t) return t;
+  const type = (file?.type || "").trim();
+  if (type) return type;
+
   const ext = getExt(file?.name);
   return EXT_TO_MIME[ext] || "";
 }
 
 function formatAllowedList() {
-  // lista amigável para o usuário
-  const exts = Object.keys(EXT_TO_MIME)
-    .map((x) => `.${x}`)
-    .sort();
-  return exts.join(", ");
+  return Object.keys(EXT_TO_MIME)
+    .map((ext) => `.${ext}`)
+    .sort()
+    .join(", ");
 }
 
 function validateFiles(files) {
   const accepted = [];
   const rejected = [];
 
-  for (const f of files || []) {
-    if (!f) continue;
+  for (const file of files || []) {
+    if (!file) continue;
 
-    const size = Number(f.size) || 0;
+    const size = Number(file.size) || 0;
+
     if (size > MAX_FILE_BYTES) {
       rejected.push({
-        file: f,
+        file,
         reason: `Arquivo muito grande (máx ${MAX_FILE_SIZE_MB}MB).`,
       });
       continue;
     }
 
-    const mime = guessMimeFromFile(f);
+    const mime = guessMimeFromFile(file);
+
     if (!mime || !ALLOWED_MIME_TYPES.has(mime)) {
       rejected.push({
-        file: f,
+        file,
         reason: `Tipo não permitido (${mime || "desconhecido"}). Permitidos: ${formatAllowedList()}`,
       });
       continue;
     }
 
-    accepted.push(f);
+    accepted.push(file);
   }
 
   return { accepted, rejected };
 }
 
-export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesHandled }) {
+export function ChatComposer({
+  onSend,
+  onAttach,
+  incomingFiles,
+  onIncomingFilesHandled,
+}) {
   const [text, setText] = useState("");
-  const [pendingFiles, setPendingFiles] = useState([]); // File[]
+  const [pendingFiles, setPendingFiles] = useState([]);
   const [fileError, setFileError] = useState("");
-  const fileRef = useRef(null);
+  const [sending, setSending] = useState(false);
 
-  // actions dropdown
-  const [actionsOpen, setActionsOpen] = useState(false);
+  const fileRef = useRef(null);
   const actionsBtnRef = useRef(null);
   const actionsMenuRef = useRef(null);
 
-  // request modal
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
 
   const previews = useMemo(() => {
     const map = {};
-    pendingFiles.forEach((f, idx) => {
-      if (f?.type?.startsWith("image/")) map[idx] = URL.createObjectURL(f);
+
+    pendingFiles.forEach((file, idx) => {
+      if (file?.type?.startsWith("image/")) {
+        map[idx] = URL.createObjectURL(file);
+      }
     });
+
     return map;
   }, [pendingFiles]);
 
   useEffect(() => {
-    return () => Object.values(previews).forEach((url) => URL.revokeObjectURL(url));
+    return () => {
+      Object.values(previews).forEach((url) => URL.revokeObjectURL(url));
+    };
   }, [previews]);
 
   useEffect(() => {
     if (!incomingFiles || incomingFiles.length === 0) return;
 
-    // ✅ valida incoming files (drag & drop)
     const { accepted, rejected } = validateFiles(incomingFiles);
 
     if (rejected.length) {
@@ -150,7 +149,6 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incomingFiles?.length]);
 
-  // fecha dropdown clicando fora
   useEffect(() => {
     function onDocClick(e) {
       if (!actionsOpen) return;
@@ -170,6 +168,7 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
 
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("keydown", onEsc);
+
     return () => {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onEsc);
@@ -209,14 +208,28 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
 
   async function submit(e) {
     e.preventDefault();
+
     const hasText = Boolean(text.trim());
     const hasFiles = pendingFiles.length > 0;
-    if (!hasText && !hasFiles) return;
 
-    await onSend({ text, files: pendingFiles, createRequest: false, requestItems: null });
-    setText("");
-    setPendingFiles([]);
-    setFileError("");
+    if (!hasText && !hasFiles) return;
+    if (sending) return;
+
+    try {
+      setSending(true);
+      await onSend({
+        text,
+        files: pendingFiles,
+        createRequest: false,
+        requestItems: null,
+      });
+
+      setText("");
+      setPendingFiles([]);
+      setFileError("");
+    } finally {
+      setSending(false);
+    }
   }
 
   function onKeyDown(e) {
@@ -227,58 +240,52 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
   }
 
   async function onSubmitRequestDraft(draft) {
-    await onSend({
-      text: null,
-      files: pendingFiles,
-      createRequest: true,
-      requestItems: draft.requestItems,
-    });
+    if (sending) return;
 
-    setRequestModalOpen(false);
-    setActionsOpen(false);
-    setText("");
-    setPendingFiles([]);
-    setFileError("");
+    try {
+      setSending(true);
+
+      await onSend({
+        text: null,
+        files: pendingFiles,
+        createRequest: true,
+        requestItems: draft.requestItems,
+      });
+
+      setRequestModalOpen(false);
+      setActionsOpen(false);
+      setText("");
+      setPendingFiles([]);
+      setFileError("");
+    } finally {
+      setSending(false);
+    }
   }
 
-  return (
-    <div style={{ borderTop: "1px solid var(--border-2)" }}>
-      <AttachmentTray files={pendingFiles} previews={previews} onRemove={removeFileAt} onClear={clearFiles} />
+  const canSend = Boolean(text.trim()) || pendingFiles.length > 0;
 
-      <form
-        onSubmit={submit}
-        style={{ padding: 12, display: "flex", gap: 10, alignItems: "flex-end", position: "relative" }}
-      >
-        <div style={{ flex: 1, display: "grid", gap: 8 }}>
+  return (
+    <div className="cmp-chat-composer">
+      <AttachmentTray
+        files={pendingFiles}
+        previews={previews}
+        onRemove={removeFileAt}
+        onClear={clearFiles}
+      />
+
+      <form onSubmit={submit} className="cmp-chat-composer__form">
+        <div className="cmp-chat-composer__input-area">
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={onKeyDown}
             placeholder="Digite sua mensagem... (Shift+Enter para quebrar linha)"
-            rows={5}
-            style={{
-              width: "100%",
-              padding: 12,
-              resize: "none",
-              borderRadius: 10,
-              border: "1px solid var(--border-2)",
-              lineHeight: 1.4,
-            }}
+            rows={4}
+            className="cmp-chat-composer__textarea"
           />
 
           {fileError ? (
-            <div
-              style={{
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid rgba(220, 20, 60, 0.35)",
-                background: "rgba(220, 20, 60, 0.08)",
-                color: "crimson",
-                fontSize: 12,
-              }}
-            >
-              {fileError}
-            </div>
+            <div className="cmp-chat-composer__error">{fileError}</div>
           ) : null}
         </div>
 
@@ -286,30 +293,32 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
           ref={fileRef}
           type="file"
           multiple
-          // ✅ dica pro picker (não é segurança, mas ajuda muito)
-          accept={Object.keys(EXT_TO_MIME).map((x) => `.${x}`).join(",")}
-          style={{ display: "none" }}
+          accept={Object.keys(EXT_TO_MIME).map((ext) => `.${ext}`).join(",")}
+          className="cmp-chat-composer__file-input"
           onChange={(e) => {
             const arr = Array.from(e.target.files || []);
             addFiles(arr);
-            // permite selecionar o mesmo arquivo de novo
             e.target.value = "";
           }}
         />
 
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button type="button" onClick={pickFiles}>
+        <div className="cmp-chat-composer__actions">
+          <button
+            type="button"
+            onClick={pickFiles}
+            className="cmp-chat-composer__button"
+          >
             Anexar
           </button>
 
-          {/* Botão Ações */}
-          <div style={{ position: "relative" }}>
+          <div className="cmp-chat-composer__menu-wrap">
             <button
               ref={actionsBtnRef}
               type="button"
-              onClick={() => setActionsOpen((v) => !v)}
+              onClick={() => setActionsOpen((value) => !value)}
               aria-haspopup="menu"
               aria-expanded={actionsOpen}
+              className="cmp-chat-composer__button"
             >
               Ações ▾
             </button>
@@ -318,44 +327,35 @@ export function ChatComposer({ onSend, onAttach, incomingFiles, onIncomingFilesH
               <div
                 ref={actionsMenuRef}
                 role="menu"
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  bottom: "calc(100% + 8px)",
-                  width: 240,
-                  background: "var(--suface)",
-                  border: "1px solid var(--border-2)",
-                  borderRadius: 12,
-                  boxShadow: "0 12px 30px var(--shadow)",
-                  padding: 6,
-                  zIndex: 50,
-                }}
+                className="cmp-chat-composer__menu"
               >
                 <button
                   type="button"
                   role="menuitem"
                   onClick={() => setRequestModalOpen(true)}
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "10px 10px",
-                    textAlignLast: "center",
-                    cursor: "pointer",
-                  }}
+                  className="cmp-chat-composer__menu-item"
                 >
-                  Abrir Solicitação
+                  Abrir solicitação
                 </button>
               </div>
             ) : null}
           </div>
 
-          <button type="submit">Enviar</button>
+          <button
+            type="submit"
+            disabled={!canSend || sending}
+            className="cmp-chat-composer__send"
+          >
+            {sending ? "Enviando..." : "Enviar"}
+          </button>
         </div>
       </form>
 
-      {/* Modal do carrinho */}
       {requestModalOpen ? (
-        <RequestComposerModal onClose={() => setRequestModalOpen(false)} onSubmit={onSubmitRequestDraft} />
+        <RequestComposerModal
+          onClose={() => setRequestModalOpen(false)}
+          onSubmit={onSubmitRequestDraft}
+        />
       ) : null}
     </div>
   );

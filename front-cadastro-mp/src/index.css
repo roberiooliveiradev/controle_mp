@@ -1,234 +1,222 @@
 /* src/index.css */
 
-* {
-	margin: 0;
-	padding: 0;
-	box-sizing: border-box; /* Boa prática para controle de tamanho */
-	transition: all 0.3s ease;
+/* =========================================
+   GLOBAL RESET
+========================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+html {
+  color-scheme: light dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Arial,
+    sans-serif;
+  line-height: 1.5;
+}
+
+/* =========================================
+   DESIGN TOKENS
+========================================= */
 
 :root {
-	/* Diz ao navegador que suportamos ambos (ajuda em inputs/scrollbars nativos) */
-	color-scheme: light dark;
+  color-scheme: light dark;
 
-	/* Tipografia base */
-	font-family:
-		system-ui,
-		-apple-system,
-		Segoe UI,
-		Roboto,
-		Arial,
-		sans-serif;
-	line-height: 1.5;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f7f7f7;
+  --surface-3: #fafafa;
+  --surface-elevated: #ffffff;
 
-	/* TOKENS (LIGHT default) */
-	--bg: #fff;
-	--surface: #fff;
-	--surface-2: #f7f7f7;
-	--surface-3: #fafafa;
+  --text: #111111;
+  --text-muted: rgba(17, 17, 17, 0.68);
+  --text-soft: rgba(17, 17, 17, 0.52);
 
-	--text: #111111;
-	--text-muted: rgba(17, 17, 17, 0.7);
+  --border: #e6e6e6;
+  --border-2: #d9d9d9;
 
-	--border: #e6e6e6;
-	--border-2: #d9d9d9;
+  --primary: #0099dc;
+  --primary-2: #646cff;
+  --primary-soft: rgba(0, 153, 220, 0.12);
 
-	--shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+  --danger: #b42318;
+  --danger-bg: #fee4e2;
+  --danger-border: #fecdca;
 
-	--primary: #0099dc;
-	--primary-2: #646cff;
-	--danger: #b42318;
-	--danger-bg: #fee4e2;
-	--danger-border: #fecdca;
+  --success: #027a48;
+  --warning: #b54708;
 
-	/* Estados de controle */
-	--control-bg: var(--surface);
-	--control-text: var(--text);
-	--control-border: var(--border-2);
-	--control-placeholder: rgba(17, 17, 17, 0.55);
-	--focus: 0 0 0 3px rgba(100, 108, 255, 0.25);
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+
+  --control-bg: var(--surface);
+  --control-text: var(--text);
+  --control-border: var(--border-2);
+  --control-placeholder: rgba(17, 17, 17, 0.55);
+  --focus: 0 0 0 3px rgba(0, 153, 220, 0.22);
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  --app-topbar-height: 76px;
+  --app-main-padding: 16px;
 }
 
-/* DARK via sistema (Windows/Chrome) */
 @media (prefers-color-scheme: dark) {
-	:root {
-		--bg: #0f1115;
-		--surface: #0f1115;
-		--surface-2: #1b2030;
-		--surface-3: #111521;
+  :root {
+    --bg: #0f1115;
+    --surface: #0f1115;
+    --surface-2: #151a26;
+    --surface-3: #111521;
+    --surface-elevated: #10141d;
 
-		--text: rgba(255, 255, 255, 0.85);
-		--text-muted: rgba(255, 255, 255, 0.7);
+    --text: rgba(255, 255, 255, 0.88);
+    --text-muted: rgba(255, 255, 255, 0.7);
+    --text-soft: rgba(255, 255, 255, 0.52);
 
-		--border: rgba(255, 255, 255, 0.1);
-		--border-2: rgba(255, 255, 255, 0.16);
+    --border: rgba(255, 255, 255, 0.1);
+    --border-2: rgba(255, 255, 255, 0.16);
 
-		--shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+    --primary-soft: rgba(0, 153, 220, 0.16);
 
-		/* --primary: #8b93ff; */
+    --danger: #ff6b6b;
+    --danger-bg: rgba(255, 107, 107, 0.16);
+    --danger-border: rgba(255, 107, 107, 0.32);
 
-		--danger: #ff6b6b;
-		--danger-bg: rgba(255, 107, 107, 0.5);
-		--danger-border: rgba(255, 107, 107, 0.28);
+    --shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
 
-		--control-placeholder: rgba(255, 255, 255, 0.55);
-		--focus: 0 0 0 3px rgba(139, 147, 255, 0.3);
-	}
+    --control-placeholder: rgba(255, 255, 255, 0.55);
+    --focus: 0 0 0 3px rgba(0, 153, 220, 0.3);
+  }
 }
 
-/* Base do app */
-html,
-body {
-	background: var(--bg);
-	color: var(--text);
-	margin: 0;
-	height: 100%;
-}
+/* =========================================
+   BASE ELEMENTS
+========================================= */
 
-#root {
-	width: 100%;
-	height: 100%;
-}
-
-/* Links */
 a {
-	color: var(--primary);
-	text-decoration: none;
-}
-a:hover {
-	text-decoration: underline;
+  color: inherit;
+  text-decoration: none;
 }
 
-/* Controles nativos (sem depender de inline style) */
 button,
 input,
 select,
 textarea {
-	color: var(--control-text);
-	background: var(--control-bg);
-	border: 1px solid var(--control-border);
-	border-radius: 10px;
-	padding: 12px;
+  min-width: 0;
+  font: inherit;
+  color: var(--control-text);
+}
+
+input,
+select,
+textarea {
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
 }
 
 input::placeholder,
 textarea::placeholder {
-	color: var(--control-placeholder);
-}
-
-/* Foco acessível */
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-	outline: none;
-	box-shadow: var(--focus);
-}
-
-:root {
-	line-height: 1.5;
-	font-weight: 400;
-
-	color-scheme: light dark;
-
-	font-synthesis: none;
-	text-rendering: optimizeLegibility;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
-}
-
-a {
-	font-weight: 500;
-	color: var(--primary);
-	border-radius: 10px;
-	padding: 8px 16px;
-	text-decoration: inherit;
-	border: 1px solid transparent;
-	transition: all 0.3s ease;
-	color: var(--primary);
-}
-a:hover {
-	color: var(--primary);
-	text-decoration: none;
-	background-color: var(--surface-3);
-}
-
-a.select {
-	background-color: var(--surface-2);
-	border-color: var(--border);
-}
-
-body {
-	margin: 0;
-	display: flex;
-	flex-direction: column;
-	place-items: center;
-	background-color: var(--bg);
-}
-
-#root {
-	width: 100%;
-}
-
-h1 {
-	font-size: 3.2em;
-	line-height: 1.1;
+  color: var(--control-placeholder);
 }
 
 button {
-	border-radius: 8px;
-	border: 1px solid transparent;
-	padding: 0.6em 1.2em;
-	font-size: 1em;
-	font-weight: 500;
-	font-family: inherit;
-	background-color: var(--surface-3);
-	cursor: pointer;
-	transition: border-color 0.25s;
-}
-button:hover {
-	border-color: var(--primary);
-}
-button:focus,
-button:focus-visible {
-	outline: 4px auto -webkit-focus-ring-color;
+  border: 0;
+  cursor: pointer;
 }
 
-#btn-logout {
-	background-color: var(--primary);
-	color: #eee;
-	min-width: 100px;
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
-#btn-logout:hover {
-	background-color: var(--danger-bg);
-	color: #000000;
-	transition: all 0.3s ease;
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
 }
 
-.topbar-badge {
-  margin-left: 6px;
-  background: #d32f2f;
-  color: #fff;
-  border: none;
+/* =========================================
+   SCROLLBAR
+========================================= */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-2) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-2);
   border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 12px;
-  font-weight: 600;
 }
 
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-/* 
-@media (prefers-color-scheme: light) {
-	:root {
-		color: #213547;
-		background-color: #ffffff;
-	}
-	a:hover {
-		color: #747bff;
-	}
-	button {
-		background-color: #f9f9f9;
-	}
-} 
-*/
+/* =========================================
+   RESPONSIVE GLOBAL TOKENS
+========================================= */
+
+@media (max-height: 720px) {
+  :root {
+    --app-topbar-height: 64px;
+    --app-main-padding: 10px;
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  :root {
+    --app-topbar-height: 56px;
+    --app-main-padding: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+  :root {
+    --app-topbar-height: auto;
+    --app-main-padding: 10px;
+  }
+
+  body {
+    overflow: auto;
+  }
+}

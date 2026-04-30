@@ -3,9 +3,9 @@
 import { useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-
 import { useRealtime } from "../realtime/RealtimeContext";
 import { toastSuccess, toastWarning, toastError } from "../ui/toast";
+import "./Topbar.css";
 
 function roleLabel(roleId) {
   if (roleId === 1) return "ADMIN";
@@ -34,11 +34,7 @@ export function EnableNotificationsButton() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={onEnable}
-      style={{ padding: "8px 10px", borderRadius: 10 }}
-    >
+    <button type="button" onClick={onEnable} className="cmp-topbar__notification-button">
       Ativar notificações
     </button>
   );
@@ -60,49 +56,33 @@ export function Topbar() {
   const profiles = useMemo(() => listProfiles(), [listProfiles]);
 
   const isActive = (path) => location.pathname.startsWith(path);
-  const linkClass = (path) => (isActive(path) ? "select" : "");
+  const linkClass = (path) =>
+    isActive(path) ? "cmp-topbar__link cmp-topbar__link--active" : "cmp-topbar__link";
 
-  const isAdmin = user?.role_id === 1;
+  const isAdmin = Number(user?.role_id) === 1;
 
   return (
-    <header
-      style={{
-        borderBottom: "1px solid var(--border, #eee)",
-        padding: "12px 0px",
-        display: "flex",
-        justifyContent: "space-around",
-        alignItems: "center",
-        gap: 12,
-        flexShrink: 0,
-      }}
-    >
-      <div>
+    <header className="cmp-topbar">
+      <div className="cmp-topbar__brand">
         <img
           src={`${import.meta.env.BASE_URL}logoTransformaMaisDelpi.svg`}
-          alt="Transforma mais DELPI"
-          style={{ maxHeight: "80px" }}
+          alt="Transforma Mais DELPI"
+          className="cmp-topbar__logo"
         />
       </div>
 
-      <nav
-        style={{
-          display: "flex",
-          gap: 20,
-          alignItems: "center",
-          justifyContent: "space-around",
-        }}
-      >
+      <nav className="cmp-topbar__nav" aria-label="Navegação principal">
         <Link to="/conversations" className={linkClass("/conversations")}>
-          Conversas
+          <span>Conversas</span>
           {totalUnreadMessages > 0 && (
-            <span className="topbar-badge">{totalUnreadMessages}</span>
+            <span className="cmp-topbar__badge">{totalUnreadMessages}</span>
           )}
         </Link>
 
         <Link to="/requests" className={linkClass("/requests")}>
-          Solicitações
+          <span>Solicitações</span>
           {createdRequestsCount > 0 && (
-            <span className="topbar-badge">{createdRequestsCount}</span>
+            <span className="cmp-topbar__badge">{createdRequestsCount}</span>
           )}
         </Link>
 
@@ -111,7 +91,7 @@ export function Topbar() {
         </Link>
 
         {isAdmin && (
-          <Link to="/audit" className={isActive("/audit") ? "select" : ""}>
+          <Link to="/audit" className={linkClass("/audit")}>
             Auditoria
           </Link>
         )}
@@ -123,12 +103,13 @@ export function Topbar() {
         )}
       </nav>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+      <div className="cmp-topbar__user-area">
         {profiles.length > 1 && (
           <select
             value={activeUserId ?? ""}
             onChange={(e) => setActiveUserId(Number(e.target.value))}
-            style={{ padding: 6 }}
+            className="cmp-topbar__profile-select"
+            title="Perfil ativo"
           >
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
@@ -143,12 +124,16 @@ export function Topbar() {
           className={linkClass("/account")}
           title="Editar meus dados"
         >
-          {user?.full_name ?? user?.email}
-          {user?.role_id ? ` (${roleLabel(user.role_id)})` : ""}
+          <span className="cmp-topbar__user-name">
+            {user?.full_name ?? user?.email}
+          </span>
+          {user?.role_id ? (
+            <span className="cmp-topbar__role">({roleLabel(user.role_id)})</span>
+          ) : null}
         </Link>
 
         {!isSsoSession && (
-          <button type="button" onClick={() => logout()} id="btn-logout">
+          <button type="button" onClick={() => logout()} className="cmp-topbar__logout">
             Sair
           </button>
         )}

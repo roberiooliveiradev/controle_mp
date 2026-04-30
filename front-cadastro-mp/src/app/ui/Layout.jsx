@@ -2,12 +2,13 @@
 
 import { Outlet } from "react-router-dom";
 import { Topbar } from "./Topbar";
+import "./Layout.css";
 
 export function Layout() {
   return (
-    <div style={{display:"flex", flexDirection:"column", height:"100%"}}>
+    <div className="cmp-shell">
       <Topbar />
-      <main style={{ Width: "calc(100vw)", height:"100%", flexShrink:1, padding: 16 }}>
+      <main className="cmp-shell__main">
         <Outlet />
       </main>
     </div>
