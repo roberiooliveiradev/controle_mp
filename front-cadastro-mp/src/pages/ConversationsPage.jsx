@@ -10,6 +10,7 @@ import {
   getConversationApi,
   createConversationApi,
   updateConversationApi,
+  deleteConversationApi,
 } from "../app/api/conversationsApi";
 import { listMessagesApi, createMessageApi, markReadApi } from "../app/api/messagesApi";
 import { uploadFilesApi } from "../app/api/filesApi";
@@ -59,7 +60,8 @@ export default function ConversationsPage() {
   const location = useLocation();
 
   const { user, activeUserId } = useAuth();
-
+  const isAdmin = Number(user?.role_id) === 1;
+  const [deleteBusyId, setDeleteBusyId] = useState(null);
   // 🔥 Fonte única global (conversas + unread) vem do contexto
   const {
     conversations,
@@ -466,6 +468,52 @@ export default function ConversationsPage() {
     navigate(`/conversations/${conversationId}`);
   }
 
+  async function handleDeleteConversation(conversation) {
+    if (!conversation?.id) return;
+    if (!isAdmin) return;
+
+    const title = conversation.title ?? `Conversa #${conversation.id}`;
+
+    const ok = window.confirm(
+      `Deseja realmente excluir a conversa "${title}"?\n\nEssa ação removerá a conversa da listagem.`
+    );
+
+    if (!ok) return;
+
+    try {
+      setDeleteBusyId(Number(conversation.id));
+
+      await deleteConversationApi(conversation.id);
+
+      setConversations((prev) =>
+        (Array.isArray(prev) ? prev : []).filter(
+          (item) => Number(item.id) !== Number(conversation.id)
+        )
+      );
+
+      setUnreadCounts((prev) => {
+        const next = { ...(prev ?? {}) };
+        delete next[conversation.id];
+        return next;
+      });
+
+      if (Number(selectedId) === Number(conversation.id)) {
+        setConv(null);
+        setMessages([]);
+        setChatError("");
+        navigate("/conversations", { replace: true });
+      }
+    } catch (err) {
+      alert(
+        err?.response?.data?.error ??
+          err?.response?.data?.message ??
+          "Erro ao excluir conversa."
+      );
+    } finally {
+      setDeleteBusyId(null);
+    }
+  }
+
   // -------------------------
   // Send message (inclui upload de anexos)
   // -------------------------
@@ -770,6 +818,9 @@ export default function ConversationsPage() {
               unreadCount={Number(unreadCounts?.[c.id] ?? 0)}
               selected={Number(c.id) === Number(selectedId)}
               onClick={() => openConversation(c.id)}
+              canDelete={isAdmin}
+              deleting={Number(deleteBusyId) === Number(c.id)}
+              onDelete={handleDeleteConversation}
             />
           ))}
         </div>

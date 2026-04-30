@@ -8,10 +8,14 @@ from typing import Any
 from app.core.exceptions import NotFoundError, ForbiddenError
 from app.infrastructure.database.models.conversation_model import ConversationModel
 from app.repositories.conversation_repository import ConversationRepository
-from app.core.interfaces.conversation_notifier import ConversationNotifier, ConversationCreatedEvent
+from app.core.interfaces.conversation_notifier import (
+    ConversationNotifier,
+    ConversationCreatedEvent,
+)
 from app.repositories.conversation_participant_repository import (
     ConversationParticipantRepository,
 )
+
 
 class Role(IntEnum):
     ADMIN = 1
@@ -37,10 +41,12 @@ class ConversationService:
         if role_id in (Role.ADMIN, Role.ANALYST):
             return True
         return created_by == user_id
-    
-    def _can_chage_title(self,*,user_id, created_by):
+
+    def _can_change_title(self, *, user_id: int, created_by: int) -> bool:
         return created_by == user_id
-        
+
+    def _can_delete(self, *, role_id: int) -> bool:
+        return role_id == Role.ADMIN
 
     def _pack_user_mini(self, u) -> dict[str, Any] | None:
         if u is None:
@@ -52,8 +58,12 @@ class ConversationService:
             "role_id": getattr(u, "role_id", None),
         }
 
-    def _pack_conversation_full(self, conv: ConversationModel, creator, assignee) -> dict[str, Any]:
-        # payload 100% JSON-safe (dicts/ints/strings/bools)
+    def _pack_conversation_full(
+        self,
+        conv: ConversationModel,
+        creator,
+        assignee,
+    ) -> dict[str, Any]:
         return {
             "id": int(conv.id),
             "title": str(conv.title),
@@ -69,16 +79,33 @@ class ConversationService:
 
     def list_conversations(self, *, user_id, role_id, limit=None, offset=None, title=""):
         if role_id in (Role.ADMIN, Role.ANALYST):
-            return self._repo.list_all_conversations_rows(limit=limit, offset=offset, title=title)
-        return self._repo.list_my_conversations_rows(user_id=user_id, limit=limit, offset=offset, title=title)
+            return self._repo.list_all_conversations_rows(
+                limit=limit,
+                offset=offset,
+                title=title,
+            )
+
+        return self._repo.list_my_conversations_rows(
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+            title=title,
+        )
 
     def get_conversation(self, *, conversation_id: int, user_id: int, role_id: int):
         row = self._repo.get_row_by_id(conversation_id)
         if row is None:
             raise NotFoundError("Conversa não encontrada.")
+
         conv, creator, assignee = row
-        if not self._can_access(role_id=role_id, user_id=user_id, created_by=conv.created_by):
+
+        if not self._can_access(
+            role_id=role_id,
+            user_id=user_id,
+            created_by=conv.created_by,
+        ):
             raise ForbiddenError("Acesso negado.")
+
         return row
 
     def create_conversation(
@@ -101,9 +128,14 @@ class ConversationService:
         row = self._repo.get_row_by_id(conv.id)
         if row is None:
             raise NotFoundError("Conversa não encontrada após criação.")
+
         conv2, creator, assignee = row
 
-        conversation_payload = self._pack_conversation_full(conv2, creator, assignee)
+        conversation_payload = self._pack_conversation_full(
+            conv2,
+            creator,
+            assignee,
+        )
 
         event = ConversationCreatedEvent(
             conversation_id=int(conv2.id),
@@ -132,11 +164,20 @@ class ConversationService:
         row = self._repo.get_row_by_id(conversation_id)
         if row is None:
             raise NotFoundError("Conversa não encontrada.")
+
         conv, _, _ = row
-        if not self._can_access(role_id=role_id, user_id=user_id, created_by=conv.created_by):
+
+        if not self._can_access(
+            role_id=role_id,
+            user_id=user_id,
+            created_by=conv.created_by,
+        ):
             raise ForbiddenError("Acesso negado.")
 
-        if not self._can_chage_title(user_id=user_id, created_by=conv.created_by):
+        if title is not None and not self._can_change_title(
+            user_id=user_id,
+            created_by=conv.created_by,
+        ):
             raise ForbiddenError("Somente o criador da conversa pode alterar o título.")
 
         ok = self._repo.update_fields(
@@ -145,35 +186,37 @@ class ConversationService:
             has_flag=has_flag,
             assigned_to=assigned_to,
         )
+
         if not ok:
             raise NotFoundError("Conversa não encontrada.")
 
-
-    def delete_conversation(self, *, conversation_id: int, user_id: int, role_id: int) -> None:
+    def delete_conversation(
+        self,
+        *,
+        conversation_id: int,
+        user_id: int,
+        role_id: int,
+    ) -> None:
         row = self._repo.get_row_by_id(conversation_id)
         if row is None:
             raise NotFoundError("Conversa não encontrada.")
-        conv, _, _ = row
-        if not self._can_access(role_id=role_id, user_id=user_id, created_by=conv.created_by):
-            raise ForbiddenError("Acesso negado.")
+
+        if not self._can_delete(role_id=role_id):
+            raise ForbiddenError("Somente administradores podem excluir conversas.")
 
         ok = self._repo.soft_delete(conversation_id)
         if not ok:
             raise NotFoundError("Conversa não encontrada.")
-    
+
     def get_unread_summary(self, *, user_id: int, role_id: int) -> dict[int, int]:
-        """
-        Retorna:
-        {
-            conversation_id: unread_count
-        }
-        """
         created_by_id = None
+
         if role_id == Role.USER:
             created_by_id = user_id
 
         participant_repo = ConversationParticipantRepository(self._repo._session)
 
         return participant_repo.get_unread_count_by_conversation(
-            user_id = user_id, created_by_id = created_by_id
+            user_id=user_id,
+            created_by_id=created_by_id,
         )
