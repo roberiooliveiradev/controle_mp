@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
 import { createUserApi } from "../app/api/usersApi";
+import "./AuthPages.css";
 
 export default function RegisterPage() {
   const { login } = useAuth();
@@ -40,15 +41,14 @@ export default function RegisterPage() {
     }
 
     setBusyCreate(true);
+
     try {
-      // ✅ cria usuário na API correta (/api/users via httpClient)
       await createUserApi({
         full_name: fullName,
         email,
         password,
       });
 
-      // ✅ login automático (já usa axios/httpClient por dentro)
       await login({ email, password });
       nav("/conversations");
     } catch (err) {
@@ -61,81 +61,101 @@ export default function RegisterPage() {
       setBusyCreate(false);
     }
   }
+
   const isPasswordValid = password.length >= 8;
+
   return (
-    <div style={{ minHeight: "100dvh", display: "flex", flexDirection:"column", justifyContent:"center", alignItems:"center" }}>
-      <div>
-        <img src={`${import.meta.env.BASE_URL}logoTransformaMaisDelpi.svg`} alt="Transforma mais DELPI" style={{maxHeight:"140px"}} />
-      </div>
-      <form
-        onSubmit={onCreate}
-        style={{
-          width: 360,
-          padding: 20,
-          border: "1px solid var(--border)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Criar conta</h2>
+    <main className="cmp-auth-page">
+      <section className="cmp-auth-card" aria-labelledby="register-title">
+        <div className="cmp-auth-card__brand">
+          <img
+            src={`${import.meta.env.BASE_URL}logoTransformaMaisDelpi.svg`}
+            alt="Transforma Mais DELPI"
+            className="cmp-auth-card__logo"
+          />
+        </div>
 
-        <label>Nome</label>
-        <input
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          autoComplete="name"
-        />
-
-        <label>Email</label>
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
-        />
-
-        <label>Senha</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="new-password"
-        />
-        {password && password.length < 8 && (
-          <div style={{ color: "var(--danger)", fontSize: 12 }}>
-            Mínimo de 8 caracteres.
+        <form onSubmit={onCreate} className="cmp-auth-card__form">
+          <div className="cmp-auth-card__heading">
+            <h1 id="register-title" className="cmp-auth-card__title">
+              Criar conta
+            </h1>
+            <p className="cmp-auth-card__subtitle">
+              Cadastre-se para acessar o Controle MP.
+            </p>
           </div>
-        )}
 
-        <label>Repetir Senha</label>
-        <input
-          type="password"
-          value={password2}
-          onChange={(e) => setPassword2(e.target.value)}
-          autoComplete="new-password"
-        />
+          <label className="cmp-auth-card__field">
+            <span>Nome</span>
+            <input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              autoComplete="name"
+              disabled={busyCreate}
+            />
+          </label>
 
-        {error && (
-          <div style={{ color: "var(--danger)", marginBottom: 12 }}>
-            {error}
+          <label className="cmp-auth-card__field">
+            <span>Email</span>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              inputMode="email"
+              disabled={busyCreate}
+            />
+          </label>
+
+          <label className="cmp-auth-card__field">
+            <span>Senha</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              disabled={busyCreate}
+            />
+          </label>
+
+          {password && password.length < 8 ? (
+            <div className="cmp-auth-card__hint cmp-auth-card__hint--danger">
+              Mínimo de 8 caracteres.
+            </div>
+          ) : null}
+
+          <label className="cmp-auth-card__field">
+            <span>Repetir senha</span>
+            <input
+              type="password"
+              value={password2}
+              onChange={(e) => setPassword2(e.target.value)}
+              autoComplete="new-password"
+              disabled={busyCreate}
+            />
+          </label>
+
+          {error ? <div className="cmp-auth-card__error">{error}</div> : null}
+
+          <div className="cmp-auth-card__actions">
+            <button
+              type="submit"
+              disabled={busyCreate || !isPasswordValid}
+              className="cmp-auth-card__button cmp-auth-card__button--primary"
+            >
+              {busyCreate ? "Criando..." : "Criar"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => nav("/login")}
+              disabled={busyCreate}
+              className="cmp-auth-card__button cmp-auth-card__button--secondary"
+            >
+              Voltar para login
+            </button>
           </div>
-        )}
-
-        <button disabled={busyCreate || !isPasswordValid}>
-          {busyCreate ? "Criando..." : "Criar"}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => nav("/login")}
-          style={{
-            background: "transparent",
-            border: "1px solid var(--border)",
-          }}
-        >
-          Voltar para login
-        </button>
-      </form>
-    </div>
+        </form>
+      </section>
+    </main>
   );
 }

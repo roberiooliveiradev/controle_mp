@@ -1,12 +1,17 @@
 // src/pages/ConversationDetailPage.jsx
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
 import { getConversationApi } from "../app/api/conversationsApi";
-import { createMessageApi, listMessagesApi, markReadApi } from "../app/api/messagesApi";
+import {
+  createMessageApi,
+  listMessagesApi,
+  markReadApi,
+} from "../app/api/messagesApi";
 import { MessageBubble } from "../app/ui/chat/MessageBubble";
 import { ChatComposer } from "../app/ui/chat/ChatComposer";
+import "./ConversationDetailPage.css";
 
 export default function ConversationDetailPage() {
   const { id } = useParams();
@@ -31,16 +36,30 @@ export default function ConversationDetailPage() {
     setError("");
 
     try {
-      const [c, m] = await Promise.all([getConversationApi(id), listMessagesApi(id)]);
-      setConv(c);
-      setMessages(Array.isArray(m) ? m : m?.items ?? []);
+      const [conversation, messageResponse] = await Promise.all([
+        getConversationApi(id),
+        listMessagesApi(id),
+      ]);
 
-      // marca como lidas (se houver)
-      const unread = (Array.isArray(m) ? m : m?.items ?? []).filter((x) => !x.is_read).map((x) => x.id);
+      const nextMessages = Array.isArray(messageResponse)
+        ? messageResponse
+        : messageResponse?.items ?? [];
+
+      setConv(conversation);
+      setMessages(nextMessages);
+
+      const unread = nextMessages.filter((m) => !m.is_read).map((m) => m.id);
+
       if (unread.length > 0) {
         await markReadApi(id, unread);
-        // atualiza localmente
-        setMessages((prev) => prev.map((x) => (unread.includes(x.id) ? { ...x, is_read: true } : x)));
+
+        setMessages((prev) =>
+          prev.map((message) =>
+            unread.includes(message.id)
+              ? { ...message, is_read: true }
+              : message
+          )
+        );
       }
     } catch (err) {
       setError(err?.response?.data?.error ?? "Erro ao carregar conversa.");
@@ -58,12 +77,21 @@ export default function ConversationDetailPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  async function handleSend(text) {
+  async function handleSend(payloadOrText) {
+    const isObjectPayload =
+      payloadOrText && typeof payloadOrText === "object" && !Array.isArray(payloadOrText);
+
+    const text = isObjectPayload ? payloadOrText.text : payloadOrText;
+    const files = isObjectPayload ? payloadOrText.files : null;
+    const createRequest = isObjectPayload ? payloadOrText.createRequest : false;
+    const requestItems = isObjectPayload ? payloadOrText.requestItems : null;
+
     const payload = {
-      message_type_id: 1, // TEXT (ajuste se seu tbMessageTypes for diferente)
+      message_type_id: 1,
       body: text,
-      files: null,
-      create_request: false,
+      files: files?.length ? files : null,
+      create_request: Boolean(createRequest),
+      request_items: requestItems,
     };
 
     const created = await createMessageApi(id, payload);
@@ -71,33 +99,76 @@ export default function ConversationDetailPage() {
   }
 
   function handleAttach(files) {
-    // UI pronta — mas depende de endpoint de upload binário ainda não existente
-    alert(
-      `Você selecionou ${files.length} arquivo(s). O upload ainda não está implementado no backend.`
+    if (!files?.length) return;
+  }
+
+  if (busy) {
+    return (
+      <section className="cmp-conversation-detail">
+        <div className="cmp-conversation-detail__state">Carregando...</div>
+      </section>
     );
   }
 
-  if (busy) return <div>Carregando...</div>;
-  if (error) return <div style={{ color: "crimson" }}>{error}</div>;
-  if (!conv) return <div>Conversa não encontrada.</div>;
+  if (error) {
+    return (
+      <section className="cmp-conversation-detail">
+        <div className="cmp-conversation-detail__error">{error}</div>
+      </section>
+    );
+  }
+
+  if (!conv) {
+    return (
+      <section className="cmp-conversation-detail">
+        <div className="cmp-conversation-detail__state">
+          Conversa não encontrada.
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 70px)", background:"red" }}>
-      <div style={{ padding: "12px 0" }}>
-        <h2 style={{ margin: 0 }}>{conv.title ?? `Conversa #${conv.id}`}</h2>
-        <div style={{ opacity: 0.7, marginTop: 4 }}>
-          {unreadIds.length > 0 ? `${unreadIds.length} não lida(s)` : "Tudo lido"}
-        </div>
-      </div>
+    <section className="cmp-conversation-detail">
+      <header className="cmp-conversation-detail__header">
+        <div className="cmp-conversation-detail__heading">
+          <Link to="/conversations" className="cmp-conversation-detail__back">
+            ← Conversas
+          </Link>
 
-      <div style={{ flex: 1, overflow: "auto", paddingRight: 6 }}>
-        {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} isMine={m.sender?.id === myUserId} />
+          <div className="cmp-conversation-detail__title-area">
+            <h2 className="cmp-conversation-detail__title">
+              {conv.title ?? `Conversa #${conv.id}`}
+            </h2>
+
+            <div className="cmp-conversation-detail__subtitle">
+              {unreadIds.length > 0
+                ? `${unreadIds.length} não lida(s)`
+                : "Tudo lido"}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="cmp-conversation-detail__messages">
+        {messages.length === 0 ? (
+          <div className="cmp-conversation-detail__state">Sem mensagens.</div>
+        ) : null}
+
+        {messages.map((message) => (
+          <MessageBubble
+            key={message.id}
+            message={message}
+            isMine={message.sender?.id === myUserId}
+          />
         ))}
+
         <div ref={bottomRef} />
       </div>
 
-      <ChatComposer onSend={handleSend} onAttach={handleAttach} />
-    </div>
+      <div className="cmp-conversation-detail__composer">
+        <ChatComposer onSend={handleSend} onAttach={handleAttach} />
+      </div>
+    </section>
   );
 }

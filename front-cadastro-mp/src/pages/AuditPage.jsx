@@ -1,8 +1,10 @@
 // src/pages/AuditPage.jsx
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../app/auth/AuthContext";
 import { listAuditLogsApi, getAuditSummaryApi } from "../app/api/auditApi";
 import { ROLES } from "../app/constants";
+import "./AuditPage.css";
 
 function fmt(iso) {
   if (!iso) return "-";
@@ -12,59 +14,88 @@ function fmt(iso) {
 }
 
 function isoFromDateInput(d, endOfDay = false) {
-  // input: "YYYY-MM-DD"
   if (!d) return null;
+
   const iso = endOfDay ? `${d}T23:59:59` : `${d}T00:00:00`;
   const dt = new Date(iso);
+
   if (Number.isNaN(dt.getTime())) return null;
-  // mantém sem timezone explícito (backend usa fromisoformat)
+
   return iso;
 }
 
 function Chip({ children }) {
-  return (
-    <span
-      style={{
-        fontSize: 12,
-        padding: "3px 8px",
-        borderRadius: 999,
-        border: "1px solid var(--border)",
-        background: "var(--surface-2)",
-      }}
-    >
-      {children}
-    </span>
-  );
+  return <span className="cmp-audit-page__chip">{children}</span>;
 }
 
 function Tabs({ tab, setTab }) {
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <div className="cmp-audit-page__tabs">
       <button
+        type="button"
         onClick={() => setTab("logs")}
-        style={{
-          borderRadius: 10,
-          padding: "8px 12px",
-          border: "1px solid var(--border)",
-          background: tab === "logs" ? "var(--surface-2)" : "var(--surface)",
-          fontWeight: tab === "logs" ? 800 : 600,
-        }}
+        className={
+          tab === "logs"
+            ? "cmp-audit-page__tab cmp-audit-page__tab--active"
+            : "cmp-audit-page__tab"
+        }
       >
         Logs
       </button>
+
       <button
+        type="button"
         onClick={() => setTab("reports")}
-        style={{
-          borderRadius: 10,
-          padding: "8px 12px",
-          border: "1px solid var(--border)",
-          background: tab === "reports" ? "var(--surface-2)" : "var(--surface)",
-          fontWeight: tab === "reports" ? 800 : 600,
-        }}
+        className={
+          tab === "reports"
+            ? "cmp-audit-page__tab cmp-audit-page__tab--active"
+            : "cmp-audit-page__tab"
+        }
       >
         Relatórios
       </button>
     </div>
+  );
+}
+
+function EmptyRow({ colSpan, children }) {
+  return (
+    <tr>
+      <td colSpan={colSpan} className="cmp-audit-page__empty-cell">
+        {children}
+      </td>
+    </tr>
+  );
+}
+
+function ReportTable({ title, columns, rows, renderRow, minWidth = 420 }) {
+  return (
+    <section className="cmp-audit-page__report-card">
+      <h3 className="cmp-audit-page__report-title">{title}</h3>
+
+      <div className="cmp-audit-page__table-card">
+        <table
+          className="cmp-audit-page__table"
+          style={{ "--cmp-audit-table-min-width": `${minWidth}px` }}
+        >
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column}>{column}</th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {rows.length === 0 ? (
+              <EmptyRow colSpan={columns.length}>—</EmptyRow>
+            ) : (
+              rows.map(renderRow)
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -74,7 +105,6 @@ export default function AuditPage() {
 
   const [tab, setTab] = useState("logs");
 
-  // logs
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [rows, setRows] = useState([]);
@@ -82,18 +112,16 @@ export default function AuditPage() {
   const [limit] = useState(50);
   const [offset, setOffset] = useState(0);
 
-  // filtros (logs + reports)
   const [entityName, setEntityName] = useState("");
   const [actionName, setActionName] = useState("");
   const [userName, setUserName] = useState("");
   const [entityId, setEntityId] = useState("");
   const [q, setQ] = useState("");
-  const [dateFrom, setDateFrom] = useState(""); // YYYY-MM-DD
-  const [dateTo, setDateTo] = useState("");     // YYYY-MM-DD
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const debounceRef = useRef(null);
 
-  // reports
   const [repBusy, setRepBusy] = useState(false);
   const [repError, setRepError] = useState("");
   const [summary, setSummary] = useState(null);
@@ -153,8 +181,6 @@ export default function AuditPage() {
     }
   }
 
-
-  // guard: admin-only
   useEffect(() => {
     if (!isAdmin) {
       setBusy(false);
@@ -162,20 +188,20 @@ export default function AuditPage() {
     }
   }, [isAdmin]);
 
-  // logs: recarrega quando offset muda
   useEffect(() => {
     if (!isAdmin) return;
     if (tab !== "logs") return;
+
     loadLogs({ resetOffset: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offset, tab]);
 
-  // logs: filtros (debounced)
   useEffect(() => {
     if (!isAdmin) return;
     if (tab !== "logs") return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
+
     debounceRef.current = setTimeout(() => {
       loadLogs({ resetOffset: true });
     }, 300);
@@ -184,12 +210,22 @@ export default function AuditPage() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityName, actionName, userName, entityId, q, dateFrom, dateTo, tab, isAdmin]);
+  }, [
+    entityName,
+    actionName,
+    userName,
+    entityId,
+    q,
+    dateFrom,
+    dateTo,
+    tab,
+    isAdmin,
+  ]);
 
-  // reports: carrega quando troca para aba
   useEffect(() => {
     if (!isAdmin) return;
     if (tab !== "reports") return;
+
     loadReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -217,107 +253,144 @@ export default function AuditPage() {
   }, [offset, limit, total]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 10  }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0 }}>Auditoria</h2>
-        <Tabs tab={tab} setTab={setTab} />
-      </div>
+    <section className="cmp-audit-page">
+      <header className="cmp-audit-page__header">
+        <div>
+          <h2 className="cmp-audit-page__title">Auditoria</h2>
+          <p className="cmp-audit-page__subtitle">
+            Consulte eventos registrados e relatórios de atividade.
+          </p>
+        </div>
 
-      {/* filtros */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <Tabs tab={tab} setTab={setTab} />
+      </header>
+
+      <div className="cmp-audit-page__filters">
         <input
           placeholder="entity_name (ex: tbRequestItem)"
           value={entityName}
           onChange={(e) => setEntityName(e.target.value)}
-          style={{ width: 230 }}
+          className="cmp-audit-page__control cmp-audit-page__control--entity"
         />
+
         <input
           placeholder="action_name (ex: UPDATED)"
           value={actionName}
           onChange={(e) => setActionName(e.target.value)}
-          style={{ width: 190 }}
+          className="cmp-audit-page__control cmp-audit-page__control--action"
         />
-        <input placeholder="usuário (nome)" value={userName} onChange={(e) => setUserName(e.target.value)} style={{ width: 180 }} />
+
+        <input
+          placeholder="usuário (nome)"
+          value={userName}
+          onChange={(e) => setUserName(e.target.value)}
+          className="cmp-audit-page__control cmp-audit-page__control--user"
+        />
+
         <input
           placeholder="entity_id"
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
-          style={{ width: 110 }}
+          className="cmp-audit-page__control cmp-audit-page__control--id"
         />
-        <input placeholder="buscar (details)" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 220 }} />
 
-        <span style={{ opacity: 0.7, fontSize: 12 }}>Período:</span>
-        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="De" />
-        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="Até" />
+        <input
+          placeholder="buscar (details)"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="cmp-audit-page__control cmp-audit-page__control--search"
+        />
 
-        <button onClick={clearFilters}>Limpar</button>
+        <div className="cmp-audit-page__period">
+          <span className="cmp-audit-page__period-label">Período</span>
+
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            title="De"
+            className="cmp-audit-page__control cmp-audit-page__control--date"
+          />
+
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            title="Até"
+            className="cmp-audit-page__control cmp-audit-page__control--date"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={clearFilters}
+          className="cmp-audit-page__button"
+        >
+          Limpar
+        </button>
 
         {tab === "reports" ? (
-          <button onClick={loadReports} disabled={repBusy}>
+          <button
+            type="button"
+            onClick={loadReports}
+            disabled={repBusy}
+            className="cmp-audit-page__button cmp-audit-page__button--primary"
+          >
             {repBusy ? "Atualizando..." : "Atualizar relatórios"}
           </button>
         ) : null}
       </div>
 
-      {/* erros */}
       {error && tab === "logs" ? (
-        <div style={{ padding: 10, border: "1px solid var(--danger-border)", background: "var(--danger-bg)", borderRadius: 8 }}>
-          {error}
-        </div>
+        <div className="cmp-audit-page__error">{error}</div>
       ) : null}
 
       {repError && tab === "reports" ? (
-        <div style={{ padding: 10, border: "1px solid var(--danger-border)", background: "var(--danger-bg)", borderRadius: 8 }}>
-          {repError}
-        </div>
+        <div className="cmp-audit-page__error">{repError}</div>
       ) : null}
 
-      {/* conteúdo */}
       {tab === "logs" ? (
         <>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>
-            Mostrando {pageInfo.start}-{pageInfo.end} de {total} • <Chip>limit={limit}</Chip>
+          <div className="cmp-audit-page__summary">
+            Mostrando {pageInfo.start}-{pageInfo.end} de {total} •{" "}
+            <Chip>limit={limit}</Chip>
           </div>
 
-          <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto"}}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <div className="cmp-audit-page__table-card cmp-audit-page__table-card--logs">
+            <table
+              className="cmp-audit-page__table"
+              style={{ "--cmp-audit-table-min-width": "1120px" }}
+            >
               <thead>
-                <tr style={{ background: "var(--surface-2)" }}>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Quando</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Entidade</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Ação</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>entity_id</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Usuário</th>
-                  <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Detalhes</th>
+                <tr>
+                  <th>Quando</th>
+                  <th>Entidade</th>
+                  <th>Ação</th>
+                  <th>entity_id</th>
+                  <th>Usuário</th>
+                  <th>Detalhes</th>
                 </tr>
               </thead>
+
               <tbody>
                 {busy ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 12 }}>
-                      Carregando...
-                    </td>
-                  </tr>
+                  <EmptyRow colSpan={6}>Carregando...</EmptyRow>
                 ) : rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 12 }}>
-                      Nenhum log encontrado.
-                    </td>
-                  </tr>
+                  <EmptyRow colSpan={6}>Nenhum log encontrado.</EmptyRow>
                 ) : (
                   rows.map((r) => (
                     <tr key={r.id}>
-                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
+                      <td className="cmp-audit-page__nowrap">
                         {fmt(r.occurred_at)}
                       </td>
-                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.entity_name}</td>
-                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                      <td>{r.entity_name}</td>
+                      <td>
                         <Chip>{r.action_name}</Chip>
                       </td>
-                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.entity_id ?? "—"}</td>
-                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.user_name ?? "—"}</td>
-                      <td style={{ padding: 10, borderBottom: "1px solid var(--border)", maxWidth: 520 }}>
-                        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{r.details || "—"}</div>
+                      <td>{r.entity_id ?? "—"}</td>
+                      <td>{r.user_name ?? "—"}</td>
+                      <td className="cmp-audit-page__details-cell">
+                        <div>{r.details || "—"}</div>
                       </td>
                     </tr>
                   ))
@@ -326,123 +399,89 @@ export default function AuditPage() {
             </table>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-            <span style={{ opacity: 0.8 }}>
+          <div className="cmp-audit-page__pagination">
+            <span className="cmp-audit-page__pagination-info">
               Mostrando {pageInfo.start}-{pageInfo.end} de {total}
             </span>
 
-            <div style={{ display: "flex", gap: 8 }}>
-              <button disabled={busy || offset <= 0} onClick={() => setOffset((v) => Math.max(0, v - limit))}>
+            <div className="cmp-audit-page__pagination-actions">
+              <button
+                type="button"
+                disabled={busy || offset <= 0}
+                onClick={() => setOffset((v) => Math.max(0, v - limit))}
+                className="cmp-audit-page__button"
+              >
                 Anterior
               </button>
-              <button disabled={busy || offset + limit >= total} onClick={() => setOffset((v) => v + limit)}>
+
+              <button
+                type="button"
+                disabled={busy || offset + limit >= total}
+                onClick={() => setOffset((v) => v + limit)}
+                className="cmp-audit-page__button"
+              >
                 Próxima
               </button>
             </div>
           </div>
         </>
       ) : (
-        <>
+        <div className="cmp-audit-page__reports">
           {repBusy ? (
-            <div>Carregando relatórios...</div>
-          ) : !summary ? (
-            <div style={{ opacity: 0.8 }}>Sem dados (ajuste filtros e clique “Atualizar relatórios”).</div>
-          ) : (
-            <div style={{ display: "grid", gap: 12}}>
-              <div style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontWeight: 800 }}>Eventos por dia</div>
-                <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ background: "var(--surface-2)" }}>
-                        <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Dia</th>
-                        <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Qtd</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(summary.by_day || []).map((r, idx) => (
-                        <tr key={idx}>
-                          <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{fmt(r.day)}</td>
-                          <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.count}</td>
-                        </tr>
-                      ))}
-                      {(summary.by_day || []).length === 0 ? (
-                        <tr>
-                          <td colSpan={2} style={{ padding: 10 }}>
-                            —
-                          </td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontWeight: 800 }}>Entidade × Ação</div>
-                <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ background: "var(--surface-2)" }}>
-                        <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Entidade</th>
-                        <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Ação</th>
-                        <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Qtd</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(summary.by_entity_action || []).slice(0, 50).map((r, idx) => (
-                        <tr key={idx}>
-                          <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.entity_name}</td>
-                          <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                            <Chip>{r.action_name}</Chip>
-                          </td>
-                          <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.count}</td>
-                        </tr>
-                      ))}
-                      {(summary.by_entity_action || []).length === 0 ? (
-                        <tr>
-                          <td colSpan={3} style={{ padding: 10 }}>
-                            —
-                          </td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontWeight: 800 }}>Top usuários</div>
-                <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ background: "var(--surface-2)" }}>
-                        <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Usuário</th>
-                        <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Qtd</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(summary.top_users || []).map((r, idx) => (
-                        <tr key={idx}>
-                          <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.user_name}</td>
-                          <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.count}</td>
-                        </tr>
-                      ))}
-                      {(summary.top_users || []).length === 0 ? (
-                        <tr>
-                          <td colSpan={2} style={{ padding: 10 }}>
-                            —
-                          </td>
-                        </tr>
-                      ) : null}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <div className="cmp-audit-page__inline-state">
+              Carregando relatórios...
             </div>
+          ) : !summary ? (
+            <div className="cmp-audit-page__inline-state">
+              Sem dados. Ajuste os filtros e clique em “Atualizar relatórios”.
+            </div>
+          ) : (
+            <>
+              <ReportTable
+                title="Eventos por dia"
+                columns={["Dia", "Qtd"]}
+                rows={summary.by_day || []}
+                minWidth={420}
+                renderRow={(r, idx) => (
+                  <tr key={idx}>
+                    <td>{fmt(r.day)}</td>
+                    <td>{r.count}</td>
+                  </tr>
+                )}
+              />
+
+              <ReportTable
+                title="Entidade × Ação"
+                columns={["Entidade", "Ação", "Qtd"]}
+                rows={(summary.by_entity_action || []).slice(0, 50)}
+                minWidth={620}
+                renderRow={(r, idx) => (
+                  <tr key={idx}>
+                    <td>{r.entity_name}</td>
+                    <td>
+                      <Chip>{r.action_name}</Chip>
+                    </td>
+                    <td>{r.count}</td>
+                  </tr>
+                )}
+              />
+
+              <ReportTable
+                title="Top usuários"
+                columns={["Usuário", "Qtd"]}
+                rows={summary.top_users || []}
+                minWidth={420}
+                renderRow={(r, idx) => (
+                  <tr key={idx}>
+                    <td>{r.user_name}</td>
+                    <td>{r.count}</td>
+                  </tr>
+                )}
+              />
+            </>
           )}
-        </>
+        </div>
       )}
-    </div>
+    </section>
   );
 }

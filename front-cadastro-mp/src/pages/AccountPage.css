@@ -1,0 +1,169 @@
+/* src/pages/AccountPage.css */
+
+.cmp-account-page {
+  width: min(100%, 620px);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px;
+  overflow: auto;
+}
+
+.cmp-account-page__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cmp-account-page__title {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.15;
+}
+
+.cmp-account-page__subtitle {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.cmp-account-page__card {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 52%, transparent);
+}
+
+.cmp-account-page__field {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.cmp-account-page__field input {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-md);
+  background: var(--control-bg);
+  color: var(--control-text);
+}
+
+.cmp-account-page__divider {
+  width: 100%;
+  height: 1px;
+  margin: 2px 0;
+  border: 0;
+  background: var(--border);
+}
+
+.cmp-account-page__alert {
+  padding: 10px 11px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.cmp-account-page__alert--error {
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.cmp-account-page__alert--success {
+  border: 1px solid color-mix(in srgb, var(--success) 26%, transparent);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+}
+
+.cmp-account-page__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cmp-account-page__button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  font-weight: 850;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.cmp-account-page__button--primary {
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.cmp-account-page__button--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 84%, #000000);
+}
+
+.cmp-account-page__button--secondary {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+.cmp-account-page__button--secondary:hover:not(:disabled) {
+  border-color: var(--border-2);
+  background: var(--surface-2);
+  color: var(--primary);
+}
+
+/* Telas baixas / landscape */
+@media (max-height: 720px) {
+  .cmp-account-page {
+    gap: 10px;
+  }
+
+  .cmp-account-page__subtitle {
+    display: none;
+  }
+
+  .cmp-account-page__card {
+    gap: 9px;
+    padding: 12px;
+  }
+
+  .cmp-account-page__field input,
+  .cmp-account-page__button {
+    min-height: 34px;
+    padding-block: 7px;
+  }
+}
+
+@media (max-width: 560px) {
+  .cmp-account-page {
+    width: 100%;
+    padding: 0;
+  }
+
+  .cmp-account-page__actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .cmp-account-page__button {
+    width: 100%;
+  }
+}

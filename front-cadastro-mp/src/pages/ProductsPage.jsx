@@ -1,88 +1,26 @@
 // src/pages/ProductsPage.jsx
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { listProductsApi, getProductApi, setProductFieldFlagApi } from "../app/api/productsApi";
+import {
+  listProductsApi,
+  getProductApi,
+  setProductFieldFlagApi,
+} from "../app/api/productsApi";
 import { RequestItemFields } from "../app/ui/requests/RequestItemFields";
+import { ModalShell } from "../app/ui/common/ModalShell";
 
 import { useAuth } from "../app/auth/AuthContext";
 import { isModerator } from "../app/constants";
 import { socket } from "../app/realtime/socket";
 
 import { fieldsToFormState, TAGS } from "../app/ui/requests/requestItemFields.logic";
+import "./ProductsPage.css";
 
 function fmt(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
   return d.toLocaleString();
-}
-
-function ModalShell({ title, onClose, children, footer }) {
-  return (
-    <div
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{
-          width: "min(1100px, 100%)",
-          maxHeight: "min(86vh, 900px)",
-          overflow: "hidden",
-          background: "var(--surface)",
-          borderRadius: 14,
-          border: "1px solid var(--border)",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
-          display: "grid",
-          gridTemplateRows: "auto 1fr auto",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            padding: 12,
-            borderBottom: "1px solid var(--border)",
-            background: "var(--surface-2)",
-          }}
-        >
-          <div style={{ fontWeight: 800 }}>{title}</div>
-          <button onClick={onClose}>Fechar</button>
-        </div>
-
-        <div style={{ overflow: "auto", padding: 12 }}>{children}</div>
-
-        {footer ? (
-          <div
-            style={{
-              padding: 12,
-              borderTop: "1px solid var(--border)",
-              background: "var(--surface-2)",
-              display: "flex",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
-              alignItems: "center",
-            }}
-          >
-            {footer}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 function ProductDetailsModal({ open, productId, onClose }) {
@@ -100,7 +38,6 @@ function ProductDetailsModal({ open, productId, onClose }) {
   async function handleSetProductFieldFlag(fieldId, nextFlag) {
     await setProductFieldFlagApi(fieldId, nextFlag);
 
-    // recarrega o produto pra refletir (simples e consistente)
     const p = await getProductApi(productId);
     setProduct(p);
     const st = fieldsToFormState(p?.fields || []);
@@ -114,9 +51,11 @@ function ProductDetailsModal({ open, productId, onClose }) {
 
     async function load() {
       if (!open || !productId) return;
+
       try {
         setBusy(true);
         setError("");
+
         const p = await getProductApi(productId);
         if (!alive) return;
 
@@ -135,6 +74,7 @@ function ProductDetailsModal({ open, productId, onClose }) {
     }
 
     load();
+
     return () => {
       alive = false;
     };
@@ -148,25 +88,23 @@ function ProductDetailsModal({ open, productId, onClose }) {
       onClose={onClose}
       footer={
         product ? (
-          <div style={{ fontSize: 12, opacity: 0.75 }}>
+          <div className="cmp-products-footer-meta">
             Criado em: {fmt(product.created_at)} • Atualizado em: {fmt(product.updated_at)}
           </div>
         ) : null
       }
     >
       {busy ? (
-        <div>Carregando...</div>
+        <div className="cmp-products-inline-state">Carregando...</div>
       ) : error ? (
-        <div style={{ padding: 10, border: "1px solid var(--danger-border)", background: "var(--danger-bg)", borderRadius: 8 }}>
-          {error}
-        </div>
+        <div className="cmp-products-error">{error}</div>
       ) : !product ? (
-        <div style={{ opacity: 0.8 }}>Produto não encontrado.</div>
+        <div className="cmp-products-inline-state">Produto não encontrado.</div>
       ) : (
-        <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <div style={{ fontWeight: 800 }}>Campos do Produto</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>
+        <div className="cmp-products-fields">
+          <div className="cmp-products-fields__header">
+            <div className="cmp-products-fields__title">Campos do Produto</div>
+            <div className="cmp-products-fields__meta">
               Código atual: {valuesByTag?.[TAGS.codigo_atual] || "—"} • Descrição: {valuesByTag?.[TAGS.descricao] || "—"}
             </div>
           </div>
@@ -175,12 +113,11 @@ function ProductDetailsModal({ open, productId, onClose }) {
             variant="fields"
             readOnly={true}
             isProduct={true}
-
-            // flags
             byTag={byTag}
             canEditFlags={canEditFlags}
-            onSetFieldFlag={(fieldId, nextFlag) => handleSetProductFieldFlag(fieldId, nextFlag)}
-
+            onSetFieldFlag={(fieldId, nextFlag) =>
+              handleSetProductFieldFlag(fieldId, nextFlag)
+            }
             valuesByTag={valuesByTag}
             onChangeTagValue={() => {}}
             fornecedoresRows={fornecedoresRows}
@@ -205,15 +142,15 @@ export default function ProductsPage() {
 
   const [q, setQ] = useState("");
   const [flagFilter, setFlagFilter] = useState("all");
-  const [dateFrom, setDateFrom] = useState(""); // YYYY-MM-DD
-  const [dateTo, setDateTo] = useState("");     // YYYY-MM-DD
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const filtersTimerRef = useRef(null);
 
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const reloadTimerRef = useRef(null);
-  
+
   async function load({ resetOffset = false, nextOffsetOverride = null } = {}) {
     try {
       setBusy(true);
@@ -242,18 +179,15 @@ export default function ProductsPage() {
     }
   }
 
-  // ✅ paginação (não debounce)
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [limit, offset]);
 
-  // ✅ filtros automáticos (com debounce)
   useEffect(() => {
     if (filtersTimerRef.current) clearTimeout(filtersTimerRef.current);
 
     filtersTimerRef.current = setTimeout(() => {
-      // sempre volta pra primeira página quando muda filtro
       load({ resetOffset: true, nextOffsetOverride: 0 });
     }, 350);
 
@@ -271,16 +205,8 @@ export default function ProductsPage() {
     setOffset(0);
   }
 
-  // Carregamento normal por paginação
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [limit, offset, flagFilter]);
-
-  // ✅ Recarregar listagem quando chegar evento realtime de produto
   useEffect(() => {
     function scheduleReload() {
-      // debounce simples (evita vários reloads em sequência)
       if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
       reloadTimerRef.current = setTimeout(() => {
         load({ resetOffset: false });
@@ -325,12 +251,16 @@ export default function ProductsPage() {
   }
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0 }}>Produtos</h2>
+    <div className="cmp-products-page">
+      <div className="cmp-products-page__header">
+        <h2 className="cmp-products-page__title">Produtos</h2>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <select value={flagFilter} onChange={(e) => setFlagFilter(e.target.value)}>
+        <div className="cmp-products-page__filters">
+          <select
+            value={flagFilter}
+            onChange={(e) => setFlagFilter(e.target.value)}
+            className="cmp-products-page__control"
+          >
             <option value="all">Flags: Todos</option>
             <option value="with">Flags: Com flag</option>
             <option value="without">Flags: Sem flag</option>
@@ -340,68 +270,89 @@ export default function ProductsPage() {
             placeholder="Buscar (código/descrição)"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            style={{ width: 260 }}
+            className="cmp-products-page__control cmp-products-page__control--search"
           />
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 12, opacity: 0.75 }}>De</span>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-            <span style={{ fontSize: 12, opacity: 0.75 }}>Até</span>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          <div className="cmp-products-page__date-group">
+            <span className="cmp-products-page__date-label">De</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="cmp-products-page__control cmp-products-page__control--date"
+            />
+            <span className="cmp-products-page__date-label">Até</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="cmp-products-page__control cmp-products-page__control--date"
+            />
           </div>
 
-          <button type="button" onClick={clearFilters} disabled={busy && rows.length === 0}>
+          <button
+            type="button"
+            onClick={clearFilters}
+            disabled={busy && rows.length === 0}
+            className="cmp-products-page__button"
+          >
             Limpar filtros
           </button>
         </div>
       </div>
 
-      {error ? (
-        <div style={{ padding: 10, border: "1px solid var(--danger-border)", background: "var(--danger-bg)", borderRadius: 8 }}>
-          {error}
-        </div>
-      ) : null}
+      {error ? <div className="cmp-products-error">{error}</div> : null}
 
-      <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 980 }}>
+      <div className="cmp-products-page__table-card">
+        <table className="cmp-products-page__table">
           <thead>
-            <tr style={{ background: "var(--surface-2)" }}>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>ID</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Código</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Descrição</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Atualizado</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Flags</th>
-              <th style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--border)" }}>Abrir</th>
+            <tr>
+              <th>ID</th>
+              <th>Código</th>
+              <th>Descrição</th>
+              <th>Atualizado</th>
+              <th>Flags</th>
+              <th>Abrir</th>
             </tr>
           </thead>
 
           <tbody>
             {busy ? (
               <tr>
-                <td colSpan={6} style={{ padding: 12 }}>
+                <td colSpan={6} className="cmp-products-page__empty-cell">
                   Carregando...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ padding: 12 }}>
+                <td colSpan={6} className="cmp-products-page__empty-cell">
                   Nenhum produto encontrado.
                 </td>
               </tr>
             ) : (
               rows.map((r) => (
                 <tr key={r.id}>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                    <b>{r.id}</b>
+                  <td>
+                    <span className="cmp-products-page__id">{r.id}</span>
                   </td>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.codigo_atual ?? "—"}</td>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{r.descricao ?? "—"}</td>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>{fmt(r.updated_at || r.created_at)}</td>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                    {Number(r.flags_count ?? 0) > 0 ? <b>🚩{Number(r.flags_count)}</b> : "—"}
+                  <td>{r.codigo_atual ?? "—"}</td>
+                  <td>{r.descricao ?? "—"}</td>
+                  <td>{fmt(r.updated_at || r.created_at)}</td>
+                  <td>
+                    {Number(r.flags_count ?? 0) > 0 ? (
+                      <b>🚩{Number(r.flags_count)}</b>
+                    ) : (
+                      "—"
+                    )}
                   </td>
-                  <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
-                    <button onClick={() => openDetails(r.id)}>Abrir</button>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => openDetails(r.id)}
+                      className="cmp-products-page__table-button"
+                    >
+                      Abrir
+                    </button>
                   </td>
                 </tr>
               ))
@@ -410,22 +361,36 @@ export default function ProductsPage() {
         </table>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-        <span style={{ opacity: 0.8 }}>
+      <div className="cmp-products-page__pagination">
+        <span className="cmp-products-page__pagination-info">
           Mostrando {pageInfo.start}-{pageInfo.end} de {total}
         </span>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button disabled={busy || offset <= 0} onClick={() => setOffset((v) => Math.max(0, v - limit))}>
+        <div className="cmp-products-page__pagination-actions">
+          <button
+            type="button"
+            disabled={busy || offset <= 0}
+            onClick={() => setOffset((v) => Math.max(0, v - limit))}
+            className="cmp-products-page__button"
+          >
             Anterior
           </button>
-          <button disabled={busy || offset + limit >= total} onClick={() => setOffset((v) => v + limit)}>
+          <button
+            type="button"
+            disabled={busy || offset + limit >= total}
+            onClick={() => setOffset((v) => v + limit)}
+            className="cmp-products-page__button"
+          >
             Próxima
           </button>
         </div>
       </div>
 
-      <ProductDetailsModal open={detailsOpen} productId={selectedId} onClose={closeDetails} />
+      <ProductDetailsModal
+        open={detailsOpen}
+        productId={selectedId}
+        onClose={closeDetails}
+      />
     </div>
   );
 }

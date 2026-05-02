@@ -20,42 +20,38 @@ import {
 } from "../../constants/productFields";
 
 import { SUPPLIER_COLUMNS } from "./requestItemFields.schema";
+import "./RequestItemFields.css";
 
-const styles = {
-  label: { display: "grid", gap: 6, fontSize: 13, color: "var(--text)" },
-  input: { padding: "8px 8px", borderRadius: 6, border: "1px solid var(--border-2)", outline: "none", width:"100%" },
-  select: {
-    padding: "8px 8px",
-    borderRadius: 6,
-    border: "1px solid var(--border-2)",
-    outline: "none",
-    background: "var(--surface)",
-  },
-  sectionTitle: { fontWeight: 800, marginBottom: 8 },
-  subtle: { fontSize: 12, opacity: "var(--text-muted)" },
-  errorText: { fontSize: 12, color: "var(--danger)", marginTop: 4, lineHeight: 1.2 },
-};
-
-function inputStyle(hasError) {
-  if (!hasError) return styles.input;
-  return {
-    ...styles.input,
-    background: "var(--danger-bg)",
-    border: "1px solid var(--danger-border)",
-    boxShadow: "0 0 0 3px var(--shadow)",
-  };
+function controlClass(hasError, extra = "") {
+  return [
+    "cmp-request-fields__control",
+    hasError ? "cmp-request-fields__control--error" : "",
+    extra,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
-function selectStyle(hasError) {
-  if (!hasError) return styles.select;
-  return {
-    ...styles.select,
-    background: "var(--danger-bg)",
-    border: "1px solid var(--danger-border)",
-    boxShadow: "0 0 0 3px var(--shadow)",
-  };
+function selectClass(hasError, extra = "") {
+  return [
+    "cmp-request-fields__control",
+    "cmp-request-fields__select",
+    hasError ? "cmp-request-fields__control--error" : "",
+    extra,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
+function FieldError({ children }) {
+  if (!children) return null;
+  return <span className="cmp-request-fields__error-text">{children}</span>;
+}
+
+function FieldHint({ children }) {
+  if (!children) return null;
+  return <div className="cmp-request-fields__hint">{children}</div>;
+}
 
 export function RequestItemFields({
   variant,
@@ -68,13 +64,13 @@ export function RequestItemFields({
   isProduct = false,
 
   // flags
-  byTag = null,                 // { [tag]: { id, field_flag, ... } }
-  canEditFlags = false,         // bool
-  onSetFieldFlag = null,        // (fieldId:number, nextFlag:string|null, tag:string)=>Promise|void
+  byTag = null,
+  canEditFlags = false,
+  onSetFieldFlag = null,
 
   // ---------- structured ----------
   item,
-  itemKey, 
+  itemKey,
   onItemChange,
   errors,
   onClearFieldError,
@@ -89,8 +85,7 @@ export function RequestItemFields({
   // usado no details (variant="fields")
   requestTypeId,
 }) {
-
-const [flagModal, setFlagModal] = useState({
+  const [flagModal, setFlagModal] = useState({
     open: false,
     tag: null,
     fieldId: null,
@@ -102,7 +97,13 @@ const [flagModal, setFlagModal] = useState({
   });
 
   function closeFlagModal() {
-    setFlagModal((s) => ({ ...s, open: false, tag: null, fieldId: null, error: "" }));
+    setFlagModal((s) => ({
+      ...s,
+      open: false,
+      tag: null,
+      fieldId: null,
+      error: "",
+    }));
   }
 
   const isStructured = variant === "structured";
@@ -122,17 +123,15 @@ const [flagModal, setFlagModal] = useState({
   const fieldErr = errors?.fields || {};
   const suppliersErr = errors?.suppliers || {};
 
-  // edição normal = readOnly false
   const canEditNormal = !readOnly;
 
-  // furo de readOnly SOMENTE pro novo_codigo quando CREATE (details)
-  const canEditNovoCodigoField = !isProduct && !!canEditNovoCodigo && !isStructured && isCreate;
+  const canEditNovoCodigoField =
+    !isProduct && !!canEditNovoCodigo && !isStructured && isCreate;
 
-  // Dados do TOTVS
   const [autoFillBusy, setAutoFillBusy] = useState(false);
   const [autoFillError, setAutoFillError] = useState("");
   const lastFetchedCodeRef = useRef("");
-  
+
   const TOTVS_DEPENDENT_TAGS = [
     TAGS.grupo,
     TAGS.tipo,
@@ -151,6 +150,7 @@ const [flagModal, setFlagModal] = useState({
         ? item.fornecedores
         : [newSupplierRow()];
     }
+
     return Array.isArray(fornecedoresRows) && fornecedoresRows.length
       ? fornecedoresRows
       : [newSupplierRow()];
@@ -161,19 +161,17 @@ const [flagModal, setFlagModal] = useState({
     return valuesByTag?.[tag] ?? fallback;
   }
 
-  function normalizeValue(value) {
-    if (typeof value === "string") {
-      return value.trim();
-    }
+  function normalizeValueForTyping(value) {
+    if (typeof value === "string") return value;
 
     if (Array.isArray(value)) {
-      return value.map((v) => normalizeValue(v));
+      return value.map(normalizeValueForTyping);
     }
 
     if (value && typeof value === "object") {
       const out = {};
       Object.keys(value).forEach((k) => {
-        out[k] = normalizeValue(value[k]);
+        out[k] = normalizeValueForTyping(value[k]);
       });
       return out;
     }
@@ -181,35 +179,24 @@ const [flagModal, setFlagModal] = useState({
     return value;
   }
 
-  function normalizeValueForTyping(value) {
-    if (typeof value === "string") return value; // ✅ não trim aqui
-    if (Array.isArray(value)) return value.map(normalizeValueForTyping);
-    if (value && typeof value === "object") {
-      const out = {};
-      Object.keys(value).forEach((k) => (out[k] = normalizeValueForTyping(value[k])));
-      return out;
-    }
-    return value;
-  }
-
   const key = String(itemKey ?? "default");
 
-  const lastFetchedByKeyRef = useRef(new Map()); // key -> code
-  const prevCodeByKeyRef = useRef(new Map());    // key -> code
-  const dirtyByKeyRef = useRef(new Map());       // key -> Set(tags)
+  const lastFetchedByKeyRef = useRef(new Map());
+  const prevCodeByKeyRef = useRef(new Map());
+  const dirtyByKeyRef = useRef(new Map());
   const isApplyingTotvsRef = useRef(false);
-
-  // ✅ marca que o usuário realmente digitou/colou o código (por item)
-  const codeUserIntentByKeyRef = useRef(new Map()); // key -> boolean
-
+  const codeUserIntentByKeyRef = useRef(new Map());
 
   function getDirtySet() {
-    if (!dirtyByKeyRef.current.has(key)) dirtyByKeyRef.current.set(key, new Set());
+    if (!dirtyByKeyRef.current.has(key)) {
+      dirtyByKeyRef.current.set(key, new Set());
+    }
+
     return dirtyByKeyRef.current.get(key);
   }
 
   function markDirty(tag) {
-    if (isApplyingTotvsRef.current) return; // não marcar dirty no auto-fill
+    if (isApplyingTotvsRef.current) return;
     getDirtySet().add(tag);
   }
 
@@ -220,25 +207,20 @@ const [flagModal, setFlagModal] = useState({
   function resetTotvsContextForThisItem(nextCode = "") {
     const dirtySet = getDirtySet();
 
-    // ✅ limpa dirty de tudo que o TOTVS controla
     TOTVS_DEPENDENT_TAGS.forEach((tag) => dirtySet.delete(tag));
-
-    // ✅ também limpa dirty do próprio código atual (pra não “travar”)
     dirtySet.delete(TAGS.codigo_atual);
 
-    // ✅ reseta cache por item (permite nova busca)
     lastFetchedByKeyRef.current.delete(key);
-
-    // ✅ atualiza o prevCode pra refletir o que o usuário acabou de digitar
     prevCodeByKeyRef.current.set(key, String(nextCode || "").trim());
   }
 
+  function setVal(tag, value) {
+    const isSpecialNovoCodigo =
+      tag === TAGS.novo_codigo && canEditNovoCodigoField;
 
-  function setVal(tag, v) {
-    const isSpecialNovoCodigo = tag === TAGS.novo_codigo && canEditNovoCodigoField;
     if (!canEditNormal && !isSpecialNovoCodigo) return;
 
-    const nextValue = normalizeValueForTyping(v); // 👈 SEM uppercase
+    const nextValue = normalizeValueForTyping(value);
 
     markDirty(tag);
 
@@ -252,26 +234,25 @@ const [flagModal, setFlagModal] = useState({
     onClearFieldError?.(tag);
   }
 
-  
   function setFornecedores(nextRows) {
-    // respeita readOnly
     if (!canEditNormal) return;
 
-    // fornecedores também contam como "dirty"
     markDirty(TAGS.fornecedores);
 
-    const safe = Array.isArray(nextRows) && nextRows.length ? nextRows : [newSupplierRow()];
+    const safe =
+      Array.isArray(nextRows) && nextRows.length ? nextRows : [newSupplierRow()];
 
-    if (isStructured) onItemChange?.(TAGS.fornecedores, safe);
-    else onChangeFornecedores?.(safe);
+    if (isStructured) {
+      onItemChange?.(TAGS.fornecedores, safe);
+    } else {
+      onChangeFornecedores?.(safe);
+    }
 
-    // ✅ limpa erro do campo fornecedores
     onClearFieldError?.(TAGS.fornecedores);
 
-    // ✅ limpa erros por célula (supplier_code/store/supplier_name/part_number)
     safe.forEach((_, idx) => {
-      SUPPLIER_COLUMNS.forEach((c) => {
-        onClearSupplierError?.(idx, c.key);
+      SUPPLIER_COLUMNS.forEach((column) => {
+        onClearSupplierError?.(idx, column.key);
       });
     });
   }
@@ -285,13 +266,12 @@ const [flagModal, setFlagModal] = useState({
 
     const userIntent = codeUserIntentByKeyRef.current.get(key) === true;
     if (!userIntent) return;
+
     codeUserIntentByKeyRef.current.set(key, false);
 
     if (!code) return;
 
     const lastFetched = lastFetchedByKeyRef.current.get(key) || "";
-
-    // se já buscou esse mesmo código para este item, não repete
     if (code === lastFetched) return;
 
     const handle = setTimeout(async () => {
@@ -299,31 +279,31 @@ const [flagModal, setFlagModal] = useState({
         setAutoFillBusy(true);
         setAutoFillError("");
 
-        // 1) LIMPA SOMENTE CAMPOS NÃO-EDITADOS (dirty = preserva)
         isApplyingTotvsRef.current = true;
+
         try {
           TOTVS_DEPENDENT_TAGS.forEach((tag) => {
             if (isDirty(tag)) return;
 
-            if (tag === TAGS.fornecedores) setFornecedores([newSupplierRow()]);
-            else setVal(tag, "");
+            if (tag === TAGS.fornecedores) {
+              setFornecedores([newSupplierRow()]);
+            } else {
+              setVal(tag, "");
+            }
           });
         } finally {
           isApplyingTotvsRef.current = false;
         }
 
         const totvs = await getTotvsByProductCodeApi(code);
+
         if (!totvs) {
           setAutoFillError("Produto não encontrado no TOTVS.");
           return;
         }
 
-        // marca que já buscou esse código (por item)
         lastFetchedByKeyRef.current.set(key, code);
 
-        // ✅ 2) PREENCHE SOMENTE SE:
-        // - campo NÃO estiver dirty, OU
-        // - campo estiver vazio (evita “sobrar” dado de outro produto)
         const applyIfAllowed = (tag, value) => {
           const v = value == null ? "" : String(value);
           if (!v.trim()) return;
@@ -334,6 +314,7 @@ const [flagModal, setFlagModal] = useState({
           if (!canOverwrite) return;
 
           isApplyingTotvsRef.current = true;
+
           try {
             setVal(tag, v);
           } finally {
@@ -350,8 +331,8 @@ const [flagModal, setFlagModal] = useState({
         applyIfAllowed(TAGS.cta_contabil, totvs.cta_contabil);
         applyIfAllowed(TAGS.ref_cliente, totvs.ref_cliente);
 
-        // fornecedores: só sobrescreve se não estiver dirty ou se estiver “vazio”
         const fornecedoresCur = Array.isArray(fornecedores) ? fornecedores : [];
+
         const fornecedoresVazios =
           fornecedoresCur.length === 0 ||
           (fornecedoresCur.length === 1 &&
@@ -360,10 +341,12 @@ const [flagModal, setFlagModal] = useState({
             !String(fornecedoresCur[0]?.supplier_name ?? "").trim() &&
             !String(fornecedoresCur[0]?.part_number ?? "").trim());
 
-        const canOverwriteSuppliers = !isDirty(TAGS.fornecedores) || fornecedoresVazios;
+        const canOverwriteSuppliers =
+          !isDirty(TAGS.fornecedores) || fornecedoresVazios;
 
         if (canOverwriteSuppliers) {
           isApplyingTotvsRef.current = true;
+
           try {
             if (Array.isArray(totvs.fornecedores) && totvs.fornecedores.length) {
               setFornecedores(totvs.fornecedores);
@@ -375,7 +358,9 @@ const [flagModal, setFlagModal] = useState({
           }
         }
       } catch (err) {
-        setAutoFillError(err?.response?.data?.error ?? "Falha ao buscar dados do TOTVS.");
+        setAutoFillError(
+          err?.response?.data?.error ?? "Falha ao buscar dados do TOTVS."
+        );
       } finally {
         setAutoFillBusy(false);
       }
@@ -383,10 +368,16 @@ const [flagModal, setFlagModal] = useState({
 
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, isUpdate, canEditNormal, isStructured, valuesByTag?.[TAGS.codigo_atual], item?.codigo_atual]);
+  }, [
+    key,
+    isUpdate,
+    canEditNormal,
+    isStructured,
+    valuesByTag?.[TAGS.codigo_atual],
+    item?.codigo_atual,
+  ]);
 
   function setRequestType(code) {
-    // somente no structured + edit normal
     if (!canEditNormal) return;
     if (!isStructured) return;
 
@@ -395,11 +386,9 @@ const [flagModal, setFlagModal] = useState({
 
       onItemChange?.("request_type_code", "CREATE");
 
-      // ✅ limpar campos de UPDATE
       onItemChange?.(TAGS.codigo_atual, "");
       onItemChange?.(TAGS.novo_codigo, "");
 
-      // ✅ restaurar padrões do CREATE
       onItemChange?.(TAGS.grupo, defaults.grupo ?? "");
       onItemChange?.(TAGS.descricao, defaults.descricao ?? "");
       onItemChange?.(TAGS.tipo, defaults.tipo ?? "");
@@ -409,15 +398,17 @@ const [flagModal, setFlagModal] = useState({
       onItemChange?.(TAGS.cta_contabil, defaults.cta_contabil ?? "");
       onItemChange?.(TAGS.ref_cliente, defaults.ref_cliente ?? "");
 
-      // ✅ fornecedores sempre volta ao padrão
-      onItemChange?.(TAGS.fornecedores, Array.isArray(defaults.fornecedores) ? defaults.fornecedores : [newSupplierRow()]);
+      onItemChange?.(
+        TAGS.fornecedores,
+        Array.isArray(defaults.fornecedores)
+          ? defaults.fornecedores
+          : [newSupplierRow()]
+      );
 
-      // ✅ evita “cache” do último código TOTVS
       lastFetchedCodeRef.current = "";
       setAutoFillError("");
     } else {
       onItemChange?.("request_type_code", "UPDATE");
-      // opcional: não mexe em nada, usuário vai preencher codigo_atual e disparar o TOTVS
       lastFetchedCodeRef.current = "";
       setAutoFillError("");
     }
@@ -427,14 +418,15 @@ const [flagModal, setFlagModal] = useState({
   }
 
   function addSupplierRow() {
-    // fornecedores seguem sempre o readOnly (ADMIN/ANALYST não mexe aqui)
     if (!canEditNormal) return;
 
     const next = [...fornecedores, newSupplierRow()];
+
     if (isStructured) {
       onItemChange?.(TAGS.fornecedores, next);
       return;
     }
+
     onChangeFornecedores?.(next);
   }
 
@@ -444,37 +436,36 @@ const [flagModal, setFlagModal] = useState({
     const next = fornecedores.filter((_, i) => i !== idx);
     const safe = next.length ? next : [newSupplierRow()];
 
-    if (isStructured) onItemChange?.(TAGS.fornecedores, safe);
-    else onChangeFornecedores?.(safe);
+    if (isStructured) {
+      onItemChange?.(TAGS.fornecedores, safe);
+    } else {
+      onChangeFornecedores?.(safe);
+    }
   }
 
-  function setSupplierCell(rowIndex, key, value) {
+  function setSupplierCell(rowIndex, columnKey, value) {
     if (!canEditNormal) return;
 
-    // ✅ REGRA: campos de fornecedor sempre em UPPERCASE
-    const nextValue = typeof value === "string" ? value.toUpperCase() : value;
+    const nextValue =
+      typeof value === "string" ? value.toUpperCase() : value;
 
-    const next = fornecedores.map((r, i) =>
-      i === rowIndex ? { ...r, [key]: nextValue } : r
+    const next = fornecedores.map((row, idx) =>
+      idx === rowIndex ? { ...row, [columnKey]: nextValue } : row
     );
 
     if (isStructured) {
       onItemChange?.(TAGS.fornecedores, next);
-      onClearSupplierError?.(rowIndex, key);
+      onClearSupplierError?.(rowIndex, columnKey);
       return;
     }
 
     onChangeFornecedores?.(next);
-    onClearSupplierError?.(rowIndex, key);
+    onClearSupplierError?.(rowIndex, columnKey);
   }
 
   async function saveFlagFromModal() {
     if (!flagModal.open) return;
-
-    if (!flagModal.fieldId) {
-      // não existe campo pra salvar flag
-      return;
-    }
+    if (!flagModal.fieldId) return;
 
     const next = String(flagModal.value || "").trim();
     const nextFlag = next ? next : null;
@@ -491,7 +482,7 @@ const [flagModal, setFlagModal] = useState({
   }
 
   function getFieldObj(tag) {
-    if (isStructured) return null; 
+    if (isStructured) return null;
     return byTag?.[tag] || null;
   }
 
@@ -499,27 +490,27 @@ const [flagModal, setFlagModal] = useState({
     return String(getFieldObj(tag)?.field_flag ?? "").trim();
   }
 
-  function safePreview(v) {
-    if (v === null || v === undefined) return "";
-    if (typeof v === "string") return v;
+  function safePreview(value) {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string") return value;
+
     try {
-      return JSON.stringify(v);
+      return JSON.stringify(value);
     } catch {
-      return String(v);
+      return String(value);
     }
   }
 
   function getFieldLabelFromTag(tag) {
-    // melhor: você pode mapear pelos labels reais se quiser.
-    // aqui fica um fallback aceitável.
     return String(tag || "").replaceAll("_", " ").toUpperCase();
   }
 
   function editFlag(tag) {
     if (!canEditFlags) return;
 
-    const f = getFieldObj(tag);
-    if (!f?.id) {
+    const field = getFieldObj(tag);
+
+    if (!field?.id) {
       setFlagModal({
         open: true,
         tag,
@@ -538,7 +529,7 @@ const [flagModal, setFlagModal] = useState({
     setFlagModal({
       open: true,
       tag,
-      fieldId: Number(f.id),
+      fieldId: Number(field.id),
       fieldLabel: getFieldLabelFromTag(tag),
       fieldValuePreview: safePreview(valuesByTag?.[tag] ?? ""),
       value: current || "",
@@ -548,39 +539,25 @@ const [flagModal, setFlagModal] = useState({
   }
 
   function FlagChip({ tag }) {
-    const v = getFlag(tag);
-    if (!v) return null;
+    const value = getFlag(tag);
+
+    if (!value) return null;
+
     return (
-      <span
-        style={{
-          fontSize: 11,
-          padding: "2px 8px",
-          borderRadius: 999,
-          border: "1px solid var(--border)",
-          background: "var(--surface-2)",
-          fontWeight: 800,
-        }}
-        title={`Flag: ${v}`}
-      >
-        🚩 {v}
+      <span className="cmp-request-fields__flag-chip" title={`Flag: ${value}`}>
+        🚩 {value}
       </span>
     );
   }
 
   function FlagButton({ tag }) {
     if (!canEditFlags) return null;
+
     return (
       <button
         type="button"
         onClick={() => editFlag(tag)}
-        style={{
-          padding: "4px 8px",
-          borderRadius: 10,
-          border: "1px solid var(--border)",
-          background: "var(--surface)",
-          fontSize: 12,
-          cursor: "pointer",
-        }}
+        className="cmp-request-fields__flag-button"
         title="Adicionar/remover flag"
       >
         {getFlag(tag) ? "Editar flag" : "Add flag"}
@@ -590,20 +567,19 @@ const [flagModal, setFlagModal] = useState({
 
   function LabelRow({ tag, children }) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center"}}>
+      <div className="cmp-request-fields__label-row">
+        <div className="cmp-request-fields__label-title-wrap">
           {children}
           <FlagChip tag={tag} />
         </div>
+
         <FlagButton tag={tag} />
       </div>
     );
   }
 
-  // ---------------------------------
   function tryParseJsonArray(value) {
     if (!value) return null;
-
     if (Array.isArray(value)) return value;
 
     if (typeof value === "string") {
@@ -614,6 +590,7 @@ const [flagModal, setFlagModal] = useState({
         return null;
       }
     }
+
     return null;
   }
 
@@ -623,49 +600,21 @@ const [flagModal, setFlagModal] = useState({
     const columns = Object.keys(data[0] || {});
 
     return (
-      <div
-        style={{
-          border: "1px solid var(--border)",
-          borderRadius: 12,
-          overflow: "auto",
-          background: "var(--surface-2)",
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+      <div className="cmp-request-fields__json-table-wrap">
+        <table className="cmp-request-fields__json-table">
           <thead>
             <tr>
-              {columns.map((col) => (
-                <th
-                  key={col}
-                  style={{
-                    textAlign: "left",
-                    padding: "6px 8px",
-                    borderBottom: "1px solid var(--border)",
-                    fontWeight: 800,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {col}
-                </th>
+              {columns.map((column) => (
+                <th key={column}>{column}</th>
               ))}
             </tr>
           </thead>
+
           <tbody>
             {data.map((row, idx) => (
               <tr key={idx}>
-                {columns.map((col) => (
-                  <td
-                    key={col}
-                    style={{
-                      padding: "6px 8px",
-                      borderBottom: "1px solid var(--border)",
-                      verticalAlign: "top",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {String(row[col] ?? "")}
-                  </td>
+                {columns.map((column) => (
+                  <td key={column}>{String(row[column] ?? "")}</td>
                 ))}
               </tr>
             ))}
@@ -679,113 +628,97 @@ const [flagModal, setFlagModal] = useState({
     if (!flagModal.open) return null;
 
     const canSave = !!flagModal.fieldId && !flagModal.saving;
+    const jsonArray = tryParseJsonArray(flagModal.fieldValuePreview);
 
     return (
       <div
         role="dialog"
         aria-modal="true"
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) closeFlagModal();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") closeFlagModal();
-          if (e.key === "Enter") saveFlagFromModal();
-        }}
         tabIndex={-1}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.45)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 16,
-          zIndex: 9999,
+        className="cmp-request-fields-flag-modal"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeFlagModal();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") closeFlagModal();
+          if (event.key === "Enter") saveFlagFromModal();
         }}
       >
-        <div
-          style={{
-            width: "min(560px, 100%)",
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: 14,
-            boxShadow: "0 20px 70px rgba(0,0,0,0.35)",
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ padding: 14, borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", gap: 10 }}>
-            <div style={{ fontWeight: 900 }}>🚩 Flag do campo</div>
-            <button type="button" onClick={closeFlagModal} style={{ borderRadius: 10, padding: "6px 10px" }}>
+        <div className="cmp-request-fields-flag-modal__panel">
+          <header className="cmp-request-fields-flag-modal__header">
+            <strong className="cmp-request-fields-flag-modal__title">
+              🚩 Flag do campo
+            </strong>
+
+            <button
+              type="button"
+              onClick={closeFlagModal}
+              className="cmp-request-fields-flag-modal__button"
+            >
               Fechar
             </button>
-          </div>
+          </header>
 
-          <div style={{ padding: 14, display: "grid", gap: 10 }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>Campo</div>
-              <div style={{ fontWeight: 800 }}>{flagModal.fieldLabel}</div>
+          <div className="cmp-request-fields-flag-modal__body">
+            <div className="cmp-request-fields-flag-modal__field">
+              <span className="cmp-request-fields-flag-modal__label">
+                Campo
+              </span>
+
+              <strong className="cmp-request-fields-flag-modal__field-name">
+                {flagModal.fieldLabel}
+              </strong>
             </div>
-            {(() => {
-              const jsonArray = tryParseJsonArray(flagModal.fieldValuePreview);
 
-              if (jsonArray) {
-                return <JsonTable data={jsonArray} />;
-              }
+            {jsonArray ? (
+              <JsonTable data={jsonArray} />
+            ) : (
+              <div className="cmp-request-fields-flag-modal__preview">
+                {flagModal.fieldValuePreview || (
+                  <span className="cmp-request-fields__empty">(vazio)</span>
+                )}
+              </div>
+            )}
 
-              return (
-                <div
-                  style={{
-                    padding: 10,
-                    border: "1px solid var(--border)",
-                    borderRadius: 12,
-                    background: "var(--surface-2)",
-                    maxHeight: 120,
-                    overflow: "auto",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    fontSize: 13,
-                  }}
-                >
-                  {flagModal.fieldValuePreview || <span style={{ opacity: 0.6 }}>(vazio)</span>}
-                </div>
-              );
-            })()}
-            <div style={{ display: "grid", gap: 6 }}>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>Flag (vazio remove)</div>
+            <label className="cmp-request-fields-flag-modal__field">
+              <span className="cmp-request-fields-flag-modal__label">
+                Flag (vazio remove)
+              </span>
+
               <input
                 value={flagModal.value}
-                onChange={(e) => setFlagModal((s) => ({ ...s, value: e.target.value }))}
+                onChange={(event) =>
+                  setFlagModal((s) => ({
+                    ...s,
+                    value: event.target.value,
+                  }))
+                }
                 placeholder="ex.: IMPORTANTE / VALIDAR / REVISAR..."
-                style={{
-                  padding: 10,
-                  borderRadius: 12,
-                  border: "1px solid var(--border)",
-                  outline: "none",
-                }}
+                className="cmp-request-fields-flag-modal__input"
                 autoFocus
               />
-            </div>
+            </label>
 
             {flagModal.error ? (
-              <div style={{ padding: 10, borderRadius: 12, border: "1px solid var(--border)", background: "var(--danger-weak, #2a0f0f)" }}>
+              <div className="cmp-request-fields-flag-modal__error">
                 {flagModal.error}
               </div>
             ) : null}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
-              <button type="button" onClick={closeFlagModal} style={{ borderRadius: 10, padding: "8px 12px" }}>
+            <div className="cmp-request-fields-flag-modal__actions">
+              <button
+                type="button"
+                onClick={closeFlagModal}
+                className="cmp-request-fields-flag-modal__button"
+              >
                 Cancelar
               </button>
+
               <button
                 type="button"
                 disabled={!canSave}
                 onClick={saveFlagFromModal}
-                style={{
-                  borderRadius: 10,
-                  padding: "8px 12px",
-                  opacity: canSave ? 1 : 0.6,
-                  cursor: canSave ? "pointer" : "not-allowed",
-                }}
+                className="cmp-request-fields-flag-modal__button cmp-request-fields-flag-modal__button--primary"
               >
                 {flagModal.saving ? "Salvando..." : "Salvar"}
               </button>
@@ -796,83 +729,83 @@ const [flagModal, setFlagModal] = useState({
     );
   }
 
-
-
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      {/* Tipo (só no structured) */}
+    <div className="cmp-request-fields">
       {isStructured ? (
-        <div style={{ display: "grid", gap: 8 }}>
-          <div style={styles.sectionTitle}>Tipo da solicitação</div>
-          <label style={styles.label}>
+        <section className="cmp-request-fields__section">
+          <div className="cmp-request-fields__section-title">
+            Tipo da solicitação
+          </div>
+
+          <label className="cmp-request-fields__field">
             <span>Tipo</span>
+
             <select
               value={item?.request_type_code ?? "CREATE"}
-              onChange={(e) => setRequestType(e.target.value)}
+              onChange={(event) => setRequestType(event.target.value)}
               disabled={!canEditNormal}
-              style={selectStyle(false)}
+              className={selectClass(false)}
             >
               <option value="CREATE">CRIAR</option>
               <option value="UPDATE">ALTERAR</option>
             </select>
           </label>
-          <div style={styles.subtle}>Se for “ALTERAR”, o código atual é obrigatório.</div>
-        </div>
+
+          <FieldHint>Se for “ALTERAR”, o código atual é obrigatório.</FieldHint>
+        </section>
       ) : null}
 
-      {/* Campos principais */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {/* PRODUTO: apenas um campo de código (codigo_atual) */}
+      <section className="cmp-request-fields__grid">
         {isProduct ? (
-          <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+          <label className="cmp-request-fields__field cmp-request-fields__field--full">
             <span>Código</span>
+
             <input
               value={getVal(TAGS.codigo_atual)}
               disabled={true}
-              style={inputStyle(false)}
+              className={controlClass(false)}
             />
           </label>
         ) : null}
-        {/* CREATE (details): só mostra novo_codigo quando estiver liberado para editar (ADMIN/ANALYST) */}
+
         {!isStructured && isCreate ? (
-          <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+          <label className="cmp-request-fields__field cmp-request-fields__field--full">
             <span>Novo código (obrigatório para finalizar CRIAR)</span>
+
             <input
               value={getVal(TAGS.novo_codigo)}
-              onChange={(e) => setVal(TAGS.novo_codigo, e.target.value)}
+              onChange={(event) => setVal(TAGS.novo_codigo, event.target.value)}
               disabled={!canEditNovoCodigoField}
-              style={inputStyle(!!fieldErr[TAGS.novo_codigo])}
+              className={controlClass(!!fieldErr[TAGS.novo_codigo])}
             />
-            {fieldErr[TAGS.novo_codigo] ? (
-              <span style={styles.errorText}>{fieldErr[TAGS.novo_codigo]}</span>
-            ) : null}
-            <div style={styles.subtle}>
+
+            <FieldError>{fieldErr[TAGS.novo_codigo]}</FieldError>
+
+            <FieldHint>
               {canEditNovoCodigoField
                 ? "Em CREATE, este campo é preenchido por ADMIN/ANALYST antes de rejeitar/finalizar."
                 : "Campo exibido para referência (somente leitura)."}
-            </div>
+            </FieldHint>
           </label>
         ) : null}
 
-
-        {/* UPDATE: codigo_atual/novo_codigo */}
         {isUpdate ? (
           <>
-            <label style={styles.label}>
+            <label className="cmp-request-fields__field">
               <LabelRow tag={TAGS.codigo_atual}>
                 <span>Código atual</span>
               </LabelRow>
+
               {autoFillBusy ? (
-                <div style={styles.subtle}>Buscando dados do TOTVS...</div>
+                <FieldHint>Buscando dados do TOTVS...</FieldHint>
               ) : null}
 
-              {autoFillError ? (
-                <div style={styles.errorText}>{autoFillError}</div>
-              ) : null}
+              <FieldError>{autoFillError}</FieldError>
+
               <input
                 value={getVal(TAGS.codigo_atual)}
-                onChange={(e) => {
-                  const next = e.target.value;
+                onChange={(event) => {
+                  const next = event.target.value;
                   codeUserIntentByKeyRef.current.set(key, true);
                   resetTotvsContextForThisItem(next);
                   setVal(TAGS.codigo_atual, next);
@@ -881,268 +814,268 @@ const [flagModal, setFlagModal] = useState({
                   codeUserIntentByKeyRef.current.set(key, true);
                 }}
                 disabled={!canEditNormal}
-                style={inputStyle(!!fieldErr[TAGS.codigo_atual])}
+                className={controlClass(!!fieldErr[TAGS.codigo_atual])}
               />
 
-              {fieldErr[TAGS.codigo_atual] ? (
-                <span style={styles.errorText}>{fieldErr[TAGS.codigo_atual]}</span>
-              ) : null}
+              <FieldError>{fieldErr[TAGS.codigo_atual]}</FieldError>
             </label>
 
-            <label style={styles.label}>
+            <label className="cmp-request-fields__field">
               <LabelRow tag={TAGS.novo_codigo}>
                 <span>Novo código (opcional)</span>
               </LabelRow>
+
               <input
                 value={getVal(TAGS.novo_codigo)}
-                onChange={(e) => setVal(TAGS.novo_codigo, e.target.value)}
+                onChange={(event) =>
+                  setVal(TAGS.novo_codigo, event.target.value)
+                }
                 disabled={!canEditNormal}
-                style={inputStyle(!!fieldErr[TAGS.novo_codigo])}
+                className={controlClass(!!fieldErr[TAGS.novo_codigo])}
               />
-              {fieldErr[TAGS.novo_codigo] ? (
-                <span style={styles.errorText}>{fieldErr[TAGS.novo_codigo]}</span>
-              ) : null}
+
+              <FieldError>{fieldErr[TAGS.novo_codigo]}</FieldError>
             </label>
           </>
         ) : null}
 
-        <label style={styles.label}>
+        <label className="cmp-request-fields__field">
           <LabelRow tag={TAGS.grupo}>
             <span>Grupo</span>
           </LabelRow>
+
           <select
             value={getVal(TAGS.grupo)}
-            onChange={(e) => setVal(TAGS.grupo, e.target.value)}
+            onChange={(event) => setVal(TAGS.grupo, event.target.value)}
             disabled={!canEditNormal}
-            style={selectStyle(!!fieldErr[TAGS.grupo])}
+            className={selectClass(!!fieldErr[TAGS.grupo])}
           >
             <option value="">Selecione</option>
-            {PRODUCT_GROUP_OPTIONS.map((g) => (
-              <option key={g.value} value={g.value}>
-                {g.text}
+            {PRODUCT_GROUP_OPTIONS.map((group) => (
+              <option key={group.value} value={group.value}>
+                {group.text}
               </option>
             ))}
           </select>
-          {fieldErr[TAGS.grupo] && <span style={styles.errorText}>{fieldErr[TAGS.grupo]}</span>}
+
+          <FieldError>{fieldErr[TAGS.grupo]}</FieldError>
         </label>
 
-        <label style={styles.label}>
+        <label className="cmp-request-fields__field">
           <LabelRow tag={TAGS.tipo}>
             <span>Tipo</span>
           </LabelRow>
+
           <input
             value={getVal(TAGS.tipo)}
-            onChange={(e) => setVal(TAGS.tipo, e.target.value)}
+            onChange={(event) => setVal(TAGS.tipo, event.target.value)}
             disabled={!canEditNormal}
-            style={inputStyle(!!fieldErr[TAGS.tipo])}
+            className={controlClass(!!fieldErr[TAGS.tipo])}
           />
-          {fieldErr[TAGS.tipo] && (
-            <span style={styles.errorText}>{fieldErr[TAGS.tipo]}</span>
-          )}
+
+          <FieldError>{fieldErr[TAGS.tipo]}</FieldError>
         </label>
 
-        <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+        <label className="cmp-request-fields__field cmp-request-fields__field--full">
           <LabelRow tag={TAGS.descricao}>
             <span>Descrição</span>
           </LabelRow>
+
           <input
             value={getVal(TAGS.descricao)}
-            onChange={(e) => setVal(TAGS.descricao, e.target.value)}
+            onChange={(event) => setVal(TAGS.descricao, event.target.value)}
             disabled={!canEditNormal}
-            style={inputStyle(!!fieldErr[TAGS.descricao])}
+            className={controlClass(!!fieldErr[TAGS.descricao])}
           />
-          {fieldErr[TAGS.descricao] ? <span style={styles.errorText}>{fieldErr[TAGS.descricao]}</span> : null}
+
+          <FieldError>{fieldErr[TAGS.descricao]}</FieldError>
         </label>
 
-        <label style={styles.label}>
+        <label className="cmp-request-fields__field">
           <LabelRow tag={TAGS.armazem_padrao}>
             <span>Armazém padrão</span>
           </LabelRow>
+
           <select
             value={getVal(TAGS.armazem_padrao)}
-            onChange={(e) => setVal(TAGS.armazem_padrao, e.target.value)}
+            onChange={(event) =>
+              setVal(TAGS.armazem_padrao, event.target.value)
+            }
             disabled={!canEditNormal}
-            style={selectStyle(!!fieldErr[TAGS.armazem_padrao])}
+            className={selectClass(!!fieldErr[TAGS.armazem_padrao])}
           >
             <option value="">Selecione</option>
-            {WAREHOUSE_OPTIONS.map((w) => (
-              <option key={w.value} value={w.value}>
-                {w.text}
+            {WAREHOUSE_OPTIONS.map((warehouse) => (
+              <option key={warehouse.value} value={warehouse.value}>
+                {warehouse.text}
               </option>
             ))}
           </select>
 
-          {fieldErr[TAGS.armazem_padrao] && (
-            <span style={styles.errorText}>{fieldErr[TAGS.armazem_padrao]}</span>
-          )}
+          <FieldError>{fieldErr[TAGS.armazem_padrao]}</FieldError>
         </label>
 
-        <label style={styles.label}>
+        <label className="cmp-request-fields__field">
           <LabelRow tag={TAGS.unidade}>
             <span>Unidade</span>
           </LabelRow>
+
           <select
             value={getVal(TAGS.unidade)}
-            onChange={(e) => setVal(TAGS.unidade, e.target.value)}
+            onChange={(event) => setVal(TAGS.unidade, event.target.value)}
             disabled={!canEditNormal}
-            style={selectStyle(!!fieldErr[TAGS.unidade])}
+            className={selectClass(!!fieldErr[TAGS.unidade])}
           >
             <option value="">Selecione</option>
-            {UNIT_OPTIONS.map((u, idx) => (
-              <option key={`${u.value}-${idx}`} value={u.value}>
-                {u.text}
+            {UNIT_OPTIONS.map((unit, idx) => (
+              <option key={`${unit.value}-${idx}`} value={unit.value}>
+                {unit.text}
               </option>
             ))}
           </select>
 
-          {fieldErr[TAGS.unidade] && (
-            <span style={styles.errorText}>{fieldErr[TAGS.unidade]}</span>
-          )}
+          <FieldError>{fieldErr[TAGS.unidade]}</FieldError>
         </label>
 
-        <label style={styles.label}>
+        <label className="cmp-request-fields__field">
           <LabelRow tag={TAGS.produto_terceiro}>
             <span>Produto terceiro</span>
           </LabelRow>
+
           <select
             value={getVal(TAGS.produto_terceiro)}
-            onChange={(e) => setVal(TAGS.produto_terceiro, e.target.value)}
+            onChange={(event) =>
+              setVal(TAGS.produto_terceiro, event.target.value)
+            }
             disabled={!canEditNormal}
-            style={selectStyle(!!fieldErr[TAGS.produto_terceiro])}
+            className={selectClass(!!fieldErr[TAGS.produto_terceiro])}
           >
-            {YES_NO_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.text}
+            {YES_NO_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.text}
               </option>
             ))}
           </select>
-          {fieldErr[TAGS.produto_terceiro] && <span style={styles.errorText}>{fieldErr[TAGS.produto_terceiro]}</span>}
+
+          <FieldError>{fieldErr[TAGS.produto_terceiro]}</FieldError>
         </label>
 
-        <label style={styles.label}>
+        <label className="cmp-request-fields__field">
           <LabelRow tag={TAGS.cta_contabil}>
             <span>CTA contábil</span>
           </LabelRow>
+
           <input
             value={getVal(TAGS.cta_contabil)}
-            onChange={(e) => setVal(TAGS.cta_contabil, e.target.value)}
+            onChange={(event) => setVal(TAGS.cta_contabil, event.target.value)}
             disabled={!canEditNormal}
-            style={inputStyle(!!fieldErr[TAGS.cta_contabil])}
+            className={controlClass(!!fieldErr[TAGS.cta_contabil])}
           />
-          {fieldErr[TAGS.cta_contabil] ? <span style={styles.errorText}>{fieldErr[TAGS.cta_contabil]}</span> : null}
+
+          <FieldError>{fieldErr[TAGS.cta_contabil]}</FieldError>
         </label>
 
-        <label style={{ ...styles.label, gridColumn: "1 / -1" }}>
+        <label className="cmp-request-fields__field cmp-request-fields__field--full">
           <LabelRow tag={TAGS.ref_cliente}>
             <span>Ref. cliente</span>
           </LabelRow>
+
           <input
             value={getVal(TAGS.ref_cliente)}
-            onChange={(e) => setVal(TAGS.ref_cliente, e.target.value)}
+            onChange={(event) => setVal(TAGS.ref_cliente, event.target.value)}
             disabled={!canEditNormal}
-            style={inputStyle(!!fieldErr[TAGS.ref_cliente])}
+            className={controlClass(!!fieldErr[TAGS.ref_cliente])}
           />
-          {fieldErr[TAGS.ref_cliente] ? <span style={styles.errorText}>{fieldErr[TAGS.ref_cliente]}</span> : null}
-        </label>
-      </div>
 
-      {/* Fornecedores */}
-      <div style={{ display: "grid", gap: 10 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 10,
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
-        >
+          <FieldError>{fieldErr[TAGS.ref_cliente]}</FieldError>
+        </label>
+      </section>
+
+      <section className="cmp-request-fields__section">
+        <div className="cmp-request-fields__section-header">
           <LabelRow tag={TAGS.fornecedores}>
-            <span style={styles.sectionTitle}>Fornecedores</span>
+            <span className="cmp-request-fields__section-title">
+              Fornecedores
+            </span>
           </LabelRow>
 
           {canEditNormal ? (
             <button
               type="button"
               onClick={addSupplierRow}
-              style={{ padding: "8px 10px", borderRadius: 10 }}
+              className="cmp-request-fields__secondary-button"
             >
               + Linha
             </button>
           ) : null}
         </div>
 
-        <div style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
+        <div className="cmp-request-fields__suppliers-table-wrap">
+          <table className="cmp-request-fields__suppliers-table">
             <thead>
-              <tr style={{ background: "var(--surface-2)" }}>
-                {SUPPLIER_COLUMNS.map((c) => (
+              <tr>
+                {SUPPLIER_COLUMNS.map((column) => (
                   <th
-                    key={c.key}
-                    style={{
-                      textAlign: "left",
-                      padding: 10,
-                      borderBottom: "1px solid var(--border)",
-                      width: c.width,
-                    }}
+                    key={column.key}
+                    style={{ width: column.width }}
                   >
-                    {c.header}
+                    {column.header}
                   </th>
                 ))}
 
-                <th style={{ width: 90, padding: 10, borderBottom: "1px solid var(--border)" }} />
+                <th className="cmp-request-fields__suppliers-action-col" />
               </tr>
             </thead>
 
             <tbody>
-              {fornecedores.map((r, idx) => {
-                const rowErr = suppliersErr?.[idx] || {};
+              {fornecedores.map((row, rowIdx) => {
+                const rowErr = suppliersErr?.[rowIdx] || {};
 
                 return (
-                  <tr key={idx}>
-                    {SUPPLIER_COLUMNS.map((c) => (
-                      <td key={c.key} style={{ padding: 10, borderBottom: "1px solid var(--border)"}}>
+                  <tr key={rowIdx}>
+                    {SUPPLIER_COLUMNS.map((column) => (
+                      <td key={column.key}>
                         {!canEditNormal ? (
-                          <div
-                            style={{
-                              padding: "8px 8px",
-                              border: "1px solid var(--border)",
-                              borderRadius: 8,
-                              background: "var(--surface)",
-                            }}
-                          >
-                            {String(r?.[c.key] ?? "").trim() ? (
-                              r[c.key]
+                          <div className="cmp-request-fields__readonly-cell">
+                            {String(row?.[column.key] ?? "").trim() ? (
+                              row[column.key]
                             ) : (
-                              <span style={{ opacity: 0.6 }}>—</span>
+                              <span className="cmp-request-fields__empty">—</span>
                             )}
                           </div>
                         ) : (
                           <>
                             <input
-                              type={c.inputType ?? "text"}
-                              value={r?.[c.key] ?? ""}
-                              placeholder={c.placeholder ?? ""}
-                              onChange={(e) => setSupplierCell(idx, c.key, e.target.value)}
-                              style={inputStyle(!!rowErr?.[c.key])}
+                              type={column.inputType ?? "text"}
+                              value={row?.[column.key] ?? ""}
+                              placeholder={column.placeholder ?? ""}
+                              onChange={(event) =>
+                                setSupplierCell(
+                                  rowIdx,
+                                  column.key,
+                                  event.target.value
+                                )
+                              }
+                              className={controlClass(!!rowErr?.[column.key])}
                             />
-                            {rowErr?.[c.key] ? <div style={styles.errorText}>{rowErr[c.key]}</div> : null}
+
+                            <FieldError>{rowErr?.[column.key]}</FieldError>
                           </>
                         )}
                       </td>
                     ))}
 
-                    <td style={{ padding: 10, borderBottom: "1px solid var(--border)" }}>
+                    <td>
                       {canEditNormal ? (
                         <button
                           type="button"
-                          onClick={() => removeSupplierRow(idx)}
-                          style={{ padding: "8px 10px", borderRadius: 10 }}
+                          onClick={() => removeSupplierRow(rowIdx)}
+                          className="cmp-request-fields__secondary-button cmp-request-fields__secondary-button--danger"
                         >
                           Remover
                         </button>
                       ) : (
-                        <span style={{ opacity: 0.6 }}>—</span>
+                        <span className="cmp-request-fields__empty">—</span>
                       )}
                     </td>
                   </tr>
@@ -1152,11 +1085,12 @@ const [flagModal, setFlagModal] = useState({
           </table>
         </div>
 
-        <div style={styles.subtle}>
+        <FieldHint>
           Os fornecedores são armazenados em um field JSON (tag: fornecedores).
-        </div>
-      </div>
-     <FlagModal />
+        </FieldHint>
+      </section>
+
+      <FlagModal />
     </div>
   );
 }

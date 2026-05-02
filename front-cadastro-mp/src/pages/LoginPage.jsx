@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
+import "./AuthPages.css";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -34,58 +35,70 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{ minHeight: "100dvh", display: "flex", flexDirection:"column", justifyContent:"center", alignItems:"center" }}>
-      <div>
-        <img src={`${import.meta.env.BASE_URL}logoTransformaMaisDelpi.svg`} alt="Transforma mais DELPI" style={{maxHeight:"140px"}} />
-      </div>
-      <form
-        onSubmit={onLogin}
-        style={{
-          width: 360,
-          padding: 20,
-          border: "1px solid var(--border)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Entrar</h2>
+    <main className="cmp-auth-page">
+      <section className="cmp-auth-card" aria-labelledby="login-title">
+        <div className="cmp-auth-card__brand">
+          <img
+            src={`${import.meta.env.BASE_URL}logoTransformaMaisDelpi.svg`}
+            alt="Transforma Mais DELPI"
+            className="cmp-auth-card__logo"
+          />
+        </div>
 
-        <label>Email</label>
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          autoComplete="username"
-        />
-
-        <label>Senha</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-        />
-
-        {error && (
-          <div style={{ color: "var(--danger)", marginBottom: 12 }}>
-            {error}
+        <form onSubmit={onLogin} className="cmp-auth-card__form">
+          <div className="cmp-auth-card__heading">
+            <h1 id="login-title" className="cmp-auth-card__title">
+              Entrar
+            </h1>
+            <p className="cmp-auth-card__subtitle">
+              Acesse o Controle MP com suas credenciais.
+            </p>
           </div>
-        )}
 
-        <button disabled={busyLogin}>
-          {busyLogin ? "Entrando..." : "Entrar"}
-        </button>
-        <button
-          type="button"
-          onClick={() => nav("/register")}
-          style={{
-            background: "transparent",
-            border: "1px solid var(--border)",
-          }}
-        >
-          Criar conta
-        </button>
-      </form>
-    </div>
+          <label className="cmp-auth-card__field">
+            <span>Email</span>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
+              inputMode="email"
+              disabled={busyLogin}
+            />
+          </label>
+
+          <label className="cmp-auth-card__field">
+            <span>Senha</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              disabled={busyLogin}
+            />
+          </label>
+
+          {error ? <div className="cmp-auth-card__error">{error}</div> : null}
+
+          <div className="cmp-auth-card__actions">
+            <button
+              type="submit"
+              disabled={busyLogin}
+              className="cmp-auth-card__button cmp-auth-card__button--primary"
+            >
+              {busyLogin ? "Entrando..." : "Entrar"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => nav("/register")}
+              disabled={busyLogin}
+              className="cmp-auth-card__button cmp-auth-card__button--secondary"
+            >
+              Criar conta
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
   );
 }

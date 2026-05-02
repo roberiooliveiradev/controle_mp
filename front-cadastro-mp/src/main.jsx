@@ -1,4 +1,5 @@
 // src/main.jsx
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
@@ -13,7 +14,20 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <AuthProvider>
       <RealtimeProvider>
         <AppRouter />
-        <Toaster position="top-center" />
+
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            duration: 3500,
+            style: {
+              background: "var(--surface-elevated)",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
+              boxShadow: "var(--shadow)",
+              borderRadius: "var(--radius-md)",
+            },
+          }}
+        />
       </RealtimeProvider>
     </AuthProvider>
   </React.StrictMode>

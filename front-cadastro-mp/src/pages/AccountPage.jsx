@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
 import { updateUserApi } from "../app/api/usersApi";
+import "./AccountPage.css";
 
 export default function AccountPage() {
   const nav = useNavigate();
@@ -19,7 +20,7 @@ export default function AccountPage() {
   const [fullName, setFullName] = useState(initial.full_name);
   const [email, setEmail] = useState(initial.email);
 
-  const [currentPassword, setCurrentPassword] = useState(""); 
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
 
@@ -36,6 +37,7 @@ export default function AccountPage() {
     if (pwd.length < 8) {
       return "A nova senha deve ter no mínimo 8 caracteres.";
     }
+
     return "";
   }
 
@@ -50,6 +52,7 @@ export default function AccountPage() {
     }
 
     const cp = currentPassword.trim();
+
     if (!cp) {
       setError("Informe a senha atual para salvar alterações.");
       return;
@@ -57,6 +60,7 @@ export default function AccountPage() {
 
     if (password || password2) {
       const pwdError = validatePassword(password);
+
       if (pwdError) {
         setError(pwdError);
         return;
@@ -68,39 +72,45 @@ export default function AccountPage() {
       }
     }
 
-    const full_name_to_send = fullName.trim();
-    const email_to_send = email.trim();
+    const fullNameToSend = fullName.trim();
+    const emailToSend = email.trim();
 
-    if (!full_name_to_send) {
+    if (!fullNameToSend) {
       setError("Nome é obrigatório.");
       return;
     }
-    if (!email_to_send) {
+
+    if (!emailToSend) {
       setError("Email é obrigatório.");
       return;
     }
 
     setBusy(true);
+
     try {
       const payload = {
         user_id: activeUserId,
-        current_password: cp, 
-        full_name: full_name_to_send,
-        email: email_to_send,
+        current_password: cp,
+        full_name: fullNameToSend,
+        email: emailToSend,
       };
 
-      // só envia senha se foi preenchida
-      if (password.trim()) payload.password = password;
+      if (password.trim()) {
+        payload.password = password;
+      }
 
       const updated = await updateUserApi(payload);
       updateActiveUserProfile(updated);
 
       setPassword("");
       setPassword2("");
-      setCurrentPassword(""); // limpa por segurança
+      setCurrentPassword("");
       setOk("Dados atualizados com sucesso.");
     } catch (err) {
-      const msg = err?.response?.data?.error ?? err?.message ?? "Falha ao atualizar usuário.";
+      const msg =
+        err?.response?.data?.error ??
+        err?.message ??
+        "Falha ao atualizar usuário.";
       setError(msg);
     } finally {
       setBusy(false);
@@ -108,34 +118,41 @@ export default function AccountPage() {
   }
 
   return (
-    <div style={{ padding: 16, maxWidth: 520 }}>
-      <h2 style={{ marginTop: 0 }}>Minha conta</h2>
+    <section className="cmp-account-page">
+      <header className="cmp-account-page__header">
+        <div>
+          <h2 className="cmp-account-page__title">Minha conta</h2>
+          <p className="cmp-account-page__subtitle">
+            Atualize seus dados de acesso ao Controle MP.
+          </p>
+        </div>
+      </header>
 
-      <form
-        onSubmit={onSave}
-        style={{
-          padding: 16,
-          border: "1px solid var(--border)",
-          borderRadius: 12,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        <div style={{ display: "grid", gap: 6 }}>
+      <form onSubmit={onSave} className="cmp-account-page__card">
+        <div className="cmp-account-page__field">
           <label>Nome</label>
-          <input value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" />
+          <input
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            autoComplete="name"
+            disabled={busy}
+          />
         </div>
 
-        <div style={{ display: "grid", gap: 6 }}>
+        <div className="cmp-account-page__field">
           <label>Email</label>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            inputMode="email"
+            disabled={busy}
+          />
         </div>
 
-        <hr style={{ width: "100%", border: 0, borderTop: "1px solid var(--border)" }} />
+        <hr className="cmp-account-page__divider" />
 
-        {/* obrigatório */}
-        <div style={{ display: "grid", gap: 6 }}>
+        <div className="cmp-account-page__field">
           <label>Senha atual (obrigatória para salvar)</label>
           <input
             type="password"
@@ -143,10 +160,11 @@ export default function AccountPage() {
             onChange={(e) => setCurrentPassword(e.target.value)}
             autoComplete="current-password"
             placeholder="Digite sua senha atual"
+            disabled={busy}
           />
         </div>
 
-        <div style={{ display: "grid", gap: 6 }}>
+        <div className="cmp-account-page__field">
           <label>Nova senha (opcional)</label>
           <input
             type="password"
@@ -154,35 +172,43 @@ export default function AccountPage() {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
             placeholder="Deixe em branco para não alterar"
+            disabled={busy}
           />
         </div>
 
-        <div style={{ display: "grid", gap: 6 }}>
+        <div className="cmp-account-page__field">
           <label>Repetir nova senha</label>
           <input
             type="password"
             value={password2}
             onChange={(e) => setPassword2(e.target.value)}
             autoComplete="new-password"
+            disabled={busy}
           />
         </div>
 
-        {error && <div style={{ color: "var(--danger)" }}>{error}</div>}
-        {ok && <div style={{ color: "var(--success)" }}>{ok}</div>}
+        {error ? <div className="cmp-account-page__alert cmp-account-page__alert--error">{error}</div> : null}
+        {ok ? <div className="cmp-account-page__alert cmp-account-page__alert--success">{ok}</div> : null}
 
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+        <div className="cmp-account-page__actions">
           <button
             type="button"
             onClick={() => nav(-1)}
-            style={{ background: "transparent", border: "1px solid var(--border)" }}
             disabled={busy}
+            className="cmp-account-page__button cmp-account-page__button--secondary"
           >
             Voltar
           </button>
 
-          <button disabled={busy}>{busy ? "Salvando..." : "Salvar"}</button>
+          <button
+            type="submit"
+            disabled={busy}
+            className="cmp-account-page__button cmp-account-page__button--primary"
+          >
+            {busy ? "Salvando..." : "Salvar"}
+          </button>
         </div>
       </form>
-    </div>
+    </section>
   );
 }

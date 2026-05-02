@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
 import { adminListUsersApi, adminUpdateUserApi } from "../app/api/usersApi";
+import "./AdminUsersPage.css";
 
 const ROLE = {
   ADMIN: 1,
@@ -34,22 +35,34 @@ export default function AdminUsersPage() {
   const [error, setError] = useState("");
 
   const page = useMemo(() => Math.floor(offset / limit) + 1, [offset, limit]);
-  const pages = useMemo(() => Math.max(1, Math.ceil(total / limit)), [total, limit]);
+  const pages = useMemo(
+    () => Math.max(1, Math.ceil(total / limit)),
+    [total, limit]
+  );
 
   useEffect(() => {
     if (!user) return;
-    if (!isAdmin) nav("/"); // bloqueia no front
+    if (!isAdmin) nav("/");
   }, [user, isAdmin, nav]);
 
   async function load() {
     setError("");
     setBusy(true);
+
     try {
-      const data = await adminListUsersApi({ limit, offset, include_deleted: includeDeleted });
+      const data = await adminListUsersApi({
+        limit,
+        offset,
+        include_deleted: includeDeleted,
+      });
+
       setItems(data.items ?? []);
       setTotal(data.total ?? 0);
     } catch (err) {
-      const msg = err?.response?.data?.error ?? err?.message ?? "Falha ao listar usuários.";
+      const msg =
+        err?.response?.data?.error ??
+        err?.message ??
+        "Falha ao listar usuários.";
       setError(msg);
     } finally {
       setBusy(false);
@@ -64,22 +77,42 @@ export default function AdminUsersPage() {
 
   async function onChangeRole(u, nextRoleId) {
     setError("");
+
     try {
-      const updated = await adminUpdateUserApi({ user_id: u.id, role_id: nextRoleId });
-      setItems((prev) => prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)));
+      const updated = await adminUpdateUserApi({
+        user_id: u.id,
+        role_id: nextRoleId,
+      });
+
+      setItems((prev) =>
+        prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
+      );
     } catch (err) {
-      const msg = err?.response?.data?.error ?? err?.message ?? "Falha ao atualizar role.";
+      const msg =
+        err?.response?.data?.error ??
+        err?.message ??
+        "Falha ao atualizar role.";
       setError(msg);
     }
   }
 
   async function onToggleDeleted(u) {
     setError("");
+
     try {
-      const updated = await adminUpdateUserApi({ user_id: u.id, is_deleted: !u.is_deleted });
-      setItems((prev) => prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)));
+      const updated = await adminUpdateUserApi({
+        user_id: u.id,
+        is_deleted: !u.is_deleted,
+      });
+
+      setItems((prev) =>
+        prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x))
+      );
     } catch (err) {
-      const msg = err?.response?.data?.error ?? err?.message ?? "Falha ao atualizar status.";
+      const msg =
+        err?.response?.data?.error ??
+        err?.message ??
+        "Falha ao atualizar status.";
       setError(msg);
     }
   }
@@ -87,11 +120,18 @@ export default function AdminUsersPage() {
   if (!isAdmin) return null;
 
   return (
-    <div style={{ padding: 16 }}>
-      <h2 style={{ marginTop: 0 }}>Admin · Usuários</h2>
+    <section className="cmp-admin-users-page">
+      <header className="cmp-admin-users-page__header">
+        <div>
+          <h2 className="cmp-admin-users-page__title">Admin · Usuários</h2>
+          <p className="cmp-admin-users-page__subtitle">
+            Gerencie papéis e ativação dos usuários do Controle MP.
+          </p>
+        </div>
+      </header>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <div className="cmp-admin-users-page__toolbar">
+        <label className="cmp-admin-users-page__check">
           <input
             type="checkbox"
             checked={includeDeleted}
@@ -100,17 +140,19 @@ export default function AdminUsersPage() {
               setIncludeDeleted(e.target.checked);
             }}
           />
-          Incluir desativados
+          <span>Incluir desativados</span>
         </label>
 
-        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          Itens por página:
+        <label className="cmp-admin-users-page__limit">
+          <span>Itens por página</span>
+
           <select
             value={limit}
             onChange={(e) => {
               setOffset(0);
               setLimit(Number(e.target.value));
             }}
+            className="cmp-admin-users-page__select"
           >
             {[10, 20, 30, 50, 100].map((n) => (
               <option key={n} value={n}>
@@ -120,93 +162,137 @@ export default function AdminUsersPage() {
           </select>
         </label>
 
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="cmp-admin-users-page__pager">
           <button
+            type="button"
             onClick={() => setOffset((o) => Math.max(0, o - limit))}
             disabled={busy || offset === 0}
+            className="cmp-admin-users-page__button cmp-admin-users-page__button--icon"
+            title="Página anterior"
           >
             ◀
           </button>
-          <span>
+
+          <span className="cmp-admin-users-page__pager-label">
             Página {page} / {pages} · Total {total}
           </span>
+
           <button
+            type="button"
             onClick={() => setOffset((o) => (o + limit < total ? o + limit : o))}
             disabled={busy || offset + limit >= total}
+            className="cmp-admin-users-page__button cmp-admin-users-page__button--icon"
+            title="Próxima página"
           >
             ▶
           </button>
 
-          <button onClick={load} disabled={busy}>
+          <button
+            type="button"
+            onClick={load}
+            disabled={busy}
+            className="cmp-admin-users-page__button"
+          >
             {busy ? "Carregando..." : "Recarregar"}
           </button>
         </div>
       </div>
 
-      {error && <div style={{ marginTop: 12, color: "var(--danger)" }}>{error}</div>}
+      {error ? <div className="cmp-admin-users-page__error">{error}</div> : null}
 
-      <div
-        style={{
-          marginTop: 12,
-          border: "1px solid var(--border)",
-          borderRadius: 12,
-          overflow: "hidden",
-        }}
-      >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div className="cmp-admin-users-page__table-card">
+        <table className="cmp-admin-users-page__table">
           <thead>
-            <tr style={{ textAlign: "left", background: "rgba(0,0,0,0.03)" }}>
-              <th style={{ padding: 10 }}>ID</th>
-              <th style={{ padding: 10 }}>Nome</th>
-              <th style={{ padding: 10 }}>Email</th>
-              <th style={{ padding: 10 }}>Role</th>
-              <th style={{ padding: 10 }}>Status</th>
-              <th style={{ padding: 10 }} />
+            <tr>
+              <th>ID</th>
+              <th>Nome</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Ação</th>
             </tr>
           </thead>
+
           <tbody>
-            {items.map((u) => (
-              <tr key={u.id} style={{ borderTop: "1px solid var(--border)" }}>
-                <td style={{ padding: 10, width: 70 }}>{u.id}</td>
-                <td style={{ padding: 10 }}>{u.full_name}</td>
-                <td style={{ padding: 10 }}>{u.email}</td>
-
-                <td style={{ padding: 10, width: 160 }}>
-                  <select
-                    value={u.role_id}
-                    onChange={(e) => onChangeRole(u, Number(e.target.value))}
-                    disabled={busy}
-                  >
-                    {[ROLE.ADMIN, ROLE.ANALYST, ROLE.USER].map((rid) => (
-                      <option key={rid} value={rid}>
-                        {roleLabel(rid)}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                <td style={{ padding: 10, width: 140 }}>
-                  {u.is_deleted ? "DESATIVADO" : "ATIVO"}
-                </td>
-
-                <td style={{ padding: 10, width: 200 }}>
-                  <button onClick={() => onToggleDeleted(u)} disabled={busy}>
-                    {u.is_deleted ? "Ativar" : "Desativar"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-
-            {items.length === 0 && (
+            {items.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ padding: 14, opacity: 0.8 }}>
-                  Nenhum usuário encontrado.
+                <td colSpan={6} className="cmp-admin-users-page__empty-cell">
+                  {busy ? "Carregando..." : "Nenhum usuário encontrado."}
                 </td>
               </tr>
+            ) : (
+              items.map((u) => (
+                <tr
+                  key={u.id}
+                  className={
+                    u.is_deleted
+                      ? "cmp-admin-users-page__row cmp-admin-users-page__row--deleted"
+                      : "cmp-admin-users-page__row"
+                  }
+                >
+                  <td>
+                    <span className="cmp-admin-users-page__id">{u.id}</span>
+                  </td>
+
+                  <td>
+                    <span className="cmp-admin-users-page__name">
+                      {u.full_name || "—"}
+                    </span>
+                  </td>
+
+                  <td>
+                    <span className="cmp-admin-users-page__email">
+                      {u.email || "—"}
+                    </span>
+                  </td>
+
+                  <td>
+                    <select
+                      value={u.role_id}
+                      onChange={(e) => onChangeRole(u, Number(e.target.value))}
+                      disabled={busy}
+                      className="cmp-admin-users-page__role-select"
+                    >
+                      {[ROLE.ADMIN, ROLE.ANALYST, ROLE.USER].map((rid) => (
+                        <option key={rid} value={rid}>
+                          {roleLabel(rid)}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+
+                  <td>
+                    <span
+                      className={
+                        u.is_deleted
+                          ? "cmp-admin-users-page__status cmp-admin-users-page__status--deleted"
+                          : "cmp-admin-users-page__status cmp-admin-users-page__status--active"
+                      }
+                    >
+                      {u.is_deleted ? "DESATIVADO" : "ATIVO"}
+                    </span>
+                  </td>
+
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() => onToggleDeleted(u)}
+                      disabled={busy}
+                      className={
+                        u.is_deleted
+                          ? "cmp-admin-users-page__action"
+                          : "cmp-admin-users-page__action cmp-admin-users-page__action--danger"
+                      }
+                    >
+                      {u.is_deleted ? "Ativar" : "Desativar"}
+                    </button>
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
 }
