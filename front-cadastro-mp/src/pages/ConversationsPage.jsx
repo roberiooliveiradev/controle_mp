@@ -1,7 +1,9 @@
 // src/pages/ConversationsPage.jsx
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import "./ConversationsPage.css";
+
 import { useAuth } from "../app/auth/AuthContext";
 import { useRealtime } from "../app/realtime/RealtimeContext";
 
@@ -39,15 +41,16 @@ function hasFiles(e) {
   return types && Array.from(types).includes("Files");
 }
 
-// Ordenação por last activity (updated_at se existir, senão created_at)
 function convLastActivityIso(conv) {
   return conv?.updated_at ?? conv?.created_at ?? null;
 }
+
 function convLastActivityTs(conv) {
   const iso = convLastActivityIso(conv);
   const ts = iso ? new Date(iso).getTime() : 0;
   return Number.isFinite(ts) ? ts : 0;
 }
+
 function sortConversationsByLastActivity(list) {
   const arr = Array.isArray(list) ? [...list] : [];
   arr.sort((a, b) => convLastActivityTs(b) - convLastActivityTs(a));
@@ -59,20 +62,19 @@ export default function ConversationsPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { user, activeUserId } = useAuth();
+  const { user } = useAuth();
   const isAdmin = Number(user?.role_id) === 1;
   const [deleteBusyId, setDeleteBusyId] = useState(null);
-  // 🔥 Fonte única global (conversas + unread) vem do contexto
+
   const {
     conversations,
     setConversations,
     unreadCounts,
     setUnreadCounts,
     activeConvRef,
-    updateConversationTitle, 
+    updateConversationTitle,
   } = useRealtime();
 
-  // lê messageId para rolar
   const targetMessageId = useMemo(() => {
     const sp = new URLSearchParams(location.search || "");
     const v = sp.get("messageId");
@@ -84,13 +86,13 @@ export default function ConversationsPage() {
   const myUserId = user?.id;
 
   const selectedConversation = useMemo(
-    () => (selectedId ? conversations.find((c) => Number(c.id) === Number(selectedId)) : null),
+    () =>
+      selectedId
+        ? conversations.find((c) => Number(c.id) === Number(selectedId))
+        : null,
     [conversations, selectedId]
   );
 
-  // -------------------------
-  // Splitter
-  // -------------------------
   const containerRef = useRef(null);
   const draggingRef = useRef(false);
   const [isDividerHover, setIsDividerHover] = useState(false);
@@ -110,6 +112,7 @@ export default function ConversationsPage() {
 
   function stopDrag() {
     if (!draggingRef.current) return;
+
     draggingRef.current = false;
     document.body.style.cursor = "";
     document.body.style.userSelect = "";
@@ -119,14 +122,17 @@ export default function ConversationsPage() {
   useEffect(() => {
     function onMove(e) {
       if (!draggingRef.current) return;
+
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
+
       const next = clamp(e.clientX - rect.left, MIN_LEFT, MAX_LEFT);
       setLeftWidth(next);
     }
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", stopDrag);
+
     return () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", stopDrag);
@@ -139,9 +145,6 @@ export default function ConversationsPage() {
     localStorage.setItem(SPLIT_KEY, String(DEFAULT_LEFT));
   }
 
-  // -------------------------
-  // Refs anti-closure
-  // -------------------------
   const selectedIdRef = useRef(null);
   const myUserIdRef = useRef(null);
 
@@ -153,48 +156,50 @@ export default function ConversationsPage() {
     myUserIdRef.current = myUserId;
   }, [myUserId]);
 
-  // -------------------------
-  // Active conversation (Fonte ÚNICA p/ evitar duplicação de unread)
-  // -------------------------
   useEffect(() => {
     activeConvRef.current = selectedId ?? null;
+
     return () => {
       activeConvRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  // -------------------------
-  // Join/leave room on conversation select
-  // -------------------------
   const prevSelectedIdRef = useRef(null);
+
   useEffect(() => {
     const prev = prevSelectedIdRef.current;
-    if (prev && prev !== selectedId) leaveConversationRoom(prev);
-    if (selectedId) joinConversationRoom(selectedId);
+
+    if (prev && prev !== selectedId) {
+      leaveConversationRoom(prev);
+    }
+
+    if (selectedId) {
+      joinConversationRoom(selectedId);
+    }
+
     prevSelectedIdRef.current = selectedId;
   }, [selectedId]);
 
-  // -------------------------
-  // Helpers: bump conversation (apenas ordenação/updated_at; NÃO mexe em unread)
-  // -------------------------
   function bumpConversation(conversationId, activityIso) {
     const cid = Number(conversationId);
     if (!cid) return;
+
     const iso = activityIso || new Date().toISOString();
 
     setConversations((prev) => {
       const list = Array.isArray(prev) ? [...prev] : [];
       const idx = list.findIndex((c) => Number(c.id) === cid);
-      if (idx < 0) return sortConversationsByLastActivity(list);
+
+      if (idx < 0) {
+        return sortConversationsByLastActivity(list);
+      }
+
       list[idx] = { ...list[idx], updated_at: iso };
       return sortConversationsByLastActivity(list);
     });
   }
 
-  // -------------------------
-  // Load chat when selecting conversation
-  // -------------------------
   const [conv, setConv] = useState(null);
   const [messages, setMessages] = useState([]);
   const [chatBusy, setChatBusy] = useState(false);
@@ -207,26 +212,25 @@ export default function ConversationsPage() {
   const messagesContainerRef = useRef(null);
   const bottomRef = useRef(null);
 
-  // -------------------------
-  // Editar título (inline)
-  // -------------------------
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
 
-  // sempre que trocar a conversa, fecha o modo edição
   useEffect(() => {
     setEditingTitle(false);
   }, [selectedId]);
 
-  // mantém o draft sincronizado com o título carregado
   useEffect(() => {
     if (conv?.title) setTitleDraft(conv.title);
   }, [conv?.title]);
 
   async function saveTitle() {
-    if (!conv?.id) return setEditingTitle(false);
+    if (!conv?.id) {
+      setEditingTitle(false);
+      return;
+    }
 
     const value = titleDraft.trim();
+
     if (!value || value === conv.title) {
       setEditingTitle(false);
       return;
@@ -235,26 +239,24 @@ export default function ConversationsPage() {
     try {
       const updated = await updateConversationApi(conv.id, { title: value });
 
-      setConv(updated); // header do chat
-      updateConversationTitle(updated.id, updated.title); 
+      setConv(updated);
+      updateConversationTitle(updated.id, updated.title);
     } catch (err) {
       alert(err?.response?.data?.error ?? "Erro ao atualizar título");
     } finally {
       setEditingTitle(false);
     }
   }
-  
-  //----------------------------------------------------
-  // carregar conversas (com filtro)
-  //----------------------------------------------------
+
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   async function handleSearch(forcedTitle) {
-    const raw = typeof forcedTitle === "string"
-      ? forcedTitle
-      : typeof newTitle === "string"
-        ? newTitle
-        : "";
+    const raw =
+      typeof forcedTitle === "string"
+        ? forcedTitle
+        : typeof newTitle === "string"
+          ? newTitle
+          : "";
 
     const value = raw.trim();
 
@@ -288,8 +290,12 @@ export default function ConversationsPage() {
   function scrollToMessage(messageId) {
     requestAnimationFrame(() => {
       const el = document.getElementById(`msg-${messageId}`);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-      else scrollToBottom();
+
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      } else {
+        scrollToBottom();
+      }
     });
   }
 
@@ -336,7 +342,6 @@ export default function ConversationsPage() {
         const items = Array.isArray(m) ? m : m?.items ?? [];
         setMessages(items);
 
-        // ✅ sincroniza unread do contexto com a verdade do servidor
         const unreadCount = items.filter(isUnreadFromOthers).length;
         setUnreadCounts((prev) => ({ ...(prev ?? {}), [selectedId]: unreadCount }));
 
@@ -349,6 +354,7 @@ export default function ConversationsPage() {
           }
 
           const hasUnread = items.some(isUnreadFromOthers);
+
           if (hasUnread) {
             const did = scrollToFirstUnread(items);
             if (!did) scrollToBottom();
@@ -368,22 +374,25 @@ export default function ConversationsPage() {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, activeUserId, targetMessageId]);
+  }, [selectedId, targetMessageId]);
 
-  // -------------------------
-  // Realtime: atualizar mensagens da conversa ativa (SEM contar unread aqui)
-  // -------------------------
   useEffect(() => {
-    if (!activeUserId) return;
+    if (!selectedId) return;
 
     const onMessageNew = async (payload) => {
       const cid = Number(payload?.conversation_id);
       if (!cid) return;
 
-      bumpConversation(cid, payload?.created_at_iso ?? new Date().toISOString());
+      bumpConversation(
+        cid,
+        payload?.created_at_iso ??
+          payload?.created_at ??
+          new Date().toISOString()
+      );
 
       const currentSelected = selectedIdRef.current;
-      if (!currentSelected || cid !== currentSelected) {
+
+      if (!currentSelected || cid !== Number(currentSelected)) {
         return;
       }
 
@@ -393,11 +402,9 @@ export default function ConversationsPage() {
 
         const m = await listMessagesApi(currentSelected);
         const items = Array.isArray(m) ? m : m?.items ?? [];
+
         setMessages(items);
-
         setUnreadCounts((prev) => ({ ...(prev ?? {}), [cid]: 0 }));
-
-        if (shouldAutoScroll) scrollToBottom();
 
         const me = myUserIdRef.current;
         const unreadIds = items
@@ -406,32 +413,39 @@ export default function ConversationsPage() {
 
         if (unreadIds.length) {
           await markReadApi(currentSelected, unreadIds);
+
           setMessages((prev) =>
-            prev.map((x) => (unreadIds.includes(x.id) ? { ...x, is_read: true } : x))
+            prev.map((x) =>
+              unreadIds.includes(x.id) ? { ...x, is_read: true } : x
+            )
           );
+
           setUnreadCounts((prev) => ({ ...(prev ?? {}), [cid]: 0 }));
         }
+
+        if (shouldAutoScroll) {
+          scrollToBottom();
+        }
       } catch {
-        // ignore
+        // não quebra a tela se falhar uma sincronização pontual
       }
     };
 
     socket.on("message:new", onMessageNew);
+
     return () => {
       socket.off("message:new", onMessageNew);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeUserId]);
+  }, [selectedId]);
 
-  // -------------------------
-  // Create conversation
-  // -------------------------
   const [newTitle, setNewTitle] = useState("");
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
 
   async function handleCreateConversation(e) {
     e.preventDefault();
+
     const title = newTitle.trim();
     if (!title) return;
 
@@ -447,13 +461,14 @@ export default function ConversationsPage() {
 
       setNewTitle("");
 
-      // atualiza lista global
       try {
         const data = await listConversationsApi();
         const arr = Array.isArray(data) ? data : data?.items ?? [];
         setConversations(sortConversationsByLastActivity(arr));
       } catch {
-        setConversations((prev) => sortConversationsByLastActivity([created, ...(prev ?? [])]));
+        setConversations((prev) =>
+          sortConversationsByLastActivity([created, ...(prev ?? [])])
+        );
       }
 
       navigate(`/conversations/${created.id}`);
@@ -514,9 +529,6 @@ export default function ConversationsPage() {
     }
   }
 
-  // -------------------------
-  // Send message (inclui upload de anexos)
-  // -------------------------
   async function handleSend({ text, files, createRequest, requestItems }) {
     if (!selectedId) return;
 
@@ -558,26 +570,29 @@ export default function ConversationsPage() {
     bumpConversation(selectedId, optimistic.created_at);
 
     try {
-      // 1) upload binário (se houver)
       let uploadedMeta = null;
+
       if (hasFilesArr) {
         uploadedMeta = await uploadFilesApi(files);
 
-        // marca anexos como "uploaded" (ainda falta criar a mensagem)
         setMessages((prev) =>
           prev.map((m) => {
             if (m.id !== tempId) return m;
-            const nextFiles = (m.files || []).map((x) => ({ ...x, _status: "uploaded" }));
+
+            const nextFiles = (m.files || []).map((x) => ({
+              ...x,
+              _status: "uploaded",
+            }));
+
             return { ...m, files: nextFiles };
           })
         );
       }
 
-      // 2) cria mensagem com metadata
       const payload = {
         message_type_id: hasRequest ? MESSAGE_TYPE_REQUEST : MESSAGE_TYPE_TEXT,
         body: hasRequest ? null : (text ?? null),
-        files: uploadedMeta, // ✅ agora vai populated
+        files: uploadedMeta,
         create_request: hasRequest,
         request_items: hasRequest ? (requestItems ?? []) : null,
       };
@@ -585,10 +600,11 @@ export default function ConversationsPage() {
       const created = await createMessageApi(selectedId, payload);
       bumpConversation(selectedId, created?.created_at);
 
-      // 3) mescla resposta do servidor + mantém preview local (imagem) até reload
       const createdFiles = Array.isArray(created?.files) ? created.files : [];
+
       const mergedFiles = createdFiles.map((srv, idx) => {
         const opt = optimisticFiles[idx];
+
         return {
           ...srv,
           _local_preview_url: opt?._local_preview_url ?? null,
@@ -607,7 +623,6 @@ export default function ConversationsPage() {
 
       if (shouldAutoScroll) scrollToBottom();
     } catch (err) {
-      // remove a mensagem otimista
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       throw err;
     }
@@ -617,14 +632,12 @@ export default function ConversationsPage() {
     // opcional
   }
 
-  // -------------------------
-  // mark read ao chegar no fim do scroll
-  // -------------------------
   async function handleScrollMarkRead(e) {
     if (!selectedId) return;
 
     const el = e.currentTarget;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+
     if (!nearBottom) return;
 
     const unreadIds = messages
@@ -635,21 +648,21 @@ export default function ConversationsPage() {
 
     try {
       await markReadApi(selectedId, unreadIds);
+
       setMessages((prev) =>
         prev.map((x) => (unreadIds.includes(x.id) ? { ...x, is_read: true } : x))
       );
+
       setUnreadCounts((prev) => ({ ...(prev ?? {}), [selectedId]: 0 }));
     } catch {
       // ignore
     }
   }
 
-  // -------------------------
-  // Drag & Drop handlers no painel do chat
-  // -------------------------
   function onDragEnterChat(e) {
     if (!selectedId) return;
     if (!hasFiles(e)) return;
+
     e.preventDefault();
     dragDepthRef.current += 1;
     setIsDraggingFiles(true);
@@ -658,6 +671,7 @@ export default function ConversationsPage() {
   function onDragOverChat(e) {
     if (!selectedId) return;
     if (!hasFiles(e)) return;
+
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
   }
@@ -665,8 +679,10 @@ export default function ConversationsPage() {
   function onDragLeaveChat(e) {
     if (!selectedId) return;
     if (!hasFiles(e)) return;
+
     e.preventDefault();
     dragDepthRef.current -= 1;
+
     if (dragDepthRef.current <= 0) {
       dragDepthRef.current = 0;
       setIsDraggingFiles(false);
@@ -678,6 +694,7 @@ export default function ConversationsPage() {
     if (!hasFiles(e)) return;
 
     e.preventDefault();
+
     dragDepthRef.current = 0;
     setIsDraggingFiles(false);
 
@@ -700,6 +717,7 @@ export default function ConversationsPage() {
       <aside className="cmp-conversations__sidebar">
         <div className="cmp-conversations__sidebar-header">
           <strong className="cmp-conversations__title">Conversas</strong>
+
           <div className="cmp-conversations__subtitle">
             Clique para abrir o chat
           </div>
@@ -725,7 +743,7 @@ export default function ConversationsPage() {
                 disabled={createBusy}
               />
 
-              {newTitle.trim() && (
+              {newTitle.trim() ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -737,7 +755,7 @@ export default function ConversationsPage() {
                 >
                   ✕
                 </button>
-              )}
+              ) : null}
 
               <button
                 type="button"
@@ -843,6 +861,7 @@ export default function ConversationsPage() {
                     onBlur={saveTitle}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") saveTitle();
+
                       if (e.key === "Escape") {
                         setTitleDraft(conv?.title ?? "");
                         setEditingTitle(false);
@@ -871,13 +890,13 @@ export default function ConversationsPage() {
               onScroll={handleScrollMarkRead}
               className="cmp-conversations__messages"
             >
-              {chatBusy && (
+              {chatBusy ? (
                 <div className="cmp-conversations__state">Carregando chat...</div>
-              )}
+              ) : null}
 
-              {chatError && (
+              {chatError ? (
                 <div className="cmp-conversations__error">{chatError}</div>
-              )}
+              ) : null}
 
               {!chatBusy && !chatError && messages.length === 0 ? (
                 <div className="cmp-conversations__empty">Sem mensagens.</div>
@@ -885,6 +904,7 @@ export default function ConversationsPage() {
 
               {messages.map((m) => {
                 const isMine = m.sender?.id === myUserId;
+
                 return (
                   <div key={m.id} id={`msg-${m.id}`} data-message-id={m.id}>
                     <MessageBubble message={m} isMine={isMine} />

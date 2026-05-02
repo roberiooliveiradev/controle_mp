@@ -8,7 +8,6 @@ import { DelpiSsoBridge } from "../sso/DelpiSsoBridge";
 import LoginPage from "../../pages/LoginPage";
 import ConversationsPage from "../../pages/ConversationsPage";
 import RequestsPage from "../../pages/RequestsPage";
-import { RealtimeProvider } from "../realtime/RealtimeContext";
 import RegisterPage from "../../pages/RegisterPage";
 import ProductsPage from "../../pages/ProductsPage";
 import AccountPage from "../../pages/AccountPage";
@@ -28,9 +27,7 @@ export function AppRouter() {
           path="/"
           element={
             <ProtectedRoute>
-              <RealtimeProvider>
-                <Layout />
-              </RealtimeProvider>
+              <Layout />
             </ProtectedRoute>
           }
         >
