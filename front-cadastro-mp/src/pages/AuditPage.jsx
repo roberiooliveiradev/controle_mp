@@ -1,6 +1,16 @@
 // src/pages/AuditPage.jsx
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  AreaChart,
+  Area,
+} from "recharts";
+
 import { useAuth } from "../app/auth/AuthContext";
 import { listAuditLogsApi, getAuditSummaryApi } from "../app/api/auditApi";
 import { ROLES } from "../app/constants";
@@ -8,9 +18,27 @@ import "./AuditPage.css";
 
 function fmt(iso) {
   if (!iso) return "-";
+
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleString();
+
+  return d.toLocaleString("pt-BR");
+}
+
+function fmtDay(value) {
+  if (!value) return "-";
+
+  const raw = String(value);
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [year, month, day] = raw.split("-");
+    return `${day}/${month}/${year}`;
+  }
+
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+
+  return d.toLocaleDateString("pt-BR");
 }
 
 function isoFromDateInput(d, endOfDay = false) {
@@ -22,6 +50,11 @@ function isoFromDateInput(d, endOfDay = false) {
   if (Number.isNaN(dt.getTime())) return null;
 
   return iso;
+}
+
+function num(value) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function Chip({ children }) {
@@ -68,33 +101,162 @@ function EmptyRow({ colSpan, children }) {
   );
 }
 
-function ReportTable({ title, columns, rows, renderRow, minWidth = 420 }) {
+function MetricCard({ label, value, hint }) {
   return (
-    <section className="cmp-audit-page__report-card">
-      <h3 className="cmp-audit-page__report-title">{title}</h3>
+    <article className="cmp-audit-page__metric-card">
+      <span className="cmp-audit-page__metric-label">{label}</span>
+      <strong className="cmp-audit-page__metric-value">{value}</strong>
+      {hint ? <span className="cmp-audit-page__metric-hint">{hint}</span> : null}
+    </article>
+  );
+}
 
-      <div className="cmp-audit-page__table-card">
-        <table
-          className="cmp-audit-page__table"
-          style={{ "--cmp-audit-table-min-width": `${minWidth}px` }}
-        >
-          <thead>
-            <tr>
-              {columns.map((column) => (
-                <th key={column}>{column}</th>
-              ))}
-            </tr>
-          </thead>
+function AuditTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
 
-          <tbody>
-            {rows.length === 0 ? (
-              <EmptyRow colSpan={columns.length}>—</EmptyRow>
-            ) : (
-              rows.map(renderRow)
-            )}
-          </tbody>
-        </table>
+  return (
+    <div className="cmp-audit-page__chart-tooltip">
+      <strong>{label}</strong>
+
+      {payload.map((item) => (
+        <div key={item.dataKey} className="cmp-audit-page__chart-tooltip-row">
+          <span>{item.name || item.dataKey}</span>
+          <b>{item.value}</b>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TimelineChart({ rows }) {
+  const data = (Array.isArray(rows) ? rows : []).map((row) => ({
+    dia: fmtDay(row.day),
+    eventos: num(row.count),
+  }));
+
+  return (
+    <section className="cmp-audit-page__chart-card cmp-audit-page__chart-card--timeline">
+      <div className="cmp-audit-page__chart-header">
+        <div>
+          <h3 className="cmp-audit-page__chart-title">Eventos por dia</h3>
+          <p className="cmp-audit-page__chart-subtitle">
+            Evolução do volume de eventos no período filtrado.
+          </p>
+        </div>
       </div>
+
+      {data.length === 0 ? (
+        <div className="cmp-audit-page__inline-state">Sem eventos no período.</div>
+      ) : (
+        <div className="cmp-audit-page__recharts-wrap cmp-audit-page__recharts-wrap--large">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 12, right: 18, left: -18, bottom: 0 }}>
+              <defs>
+                <linearGradient id="auditEventsGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.55} />
+                  <stop offset="95%" stopColor="var(--primary)" stopOpacity={0.04} />
+                </linearGradient>
+              </defs>
+
+              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+
+              <XAxis
+                dataKey="dia"
+                tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+                axisLine={{ stroke: "var(--border)" }}
+                tickLine={false}
+              />
+
+              <YAxis
+                allowDecimals={false}
+                tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+
+              <Tooltip content={<AuditTooltip />} />
+
+              <Area
+                type="monotone"
+                dataKey="eventos"
+                name="Eventos"
+                stroke="var(--primary)"
+                strokeWidth={3}
+                fill="url(#auditEventsGradient)"
+                activeDot={{ r: 5 }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HorizontalBarList({
+  title,
+  subtitle,
+  rows,
+  getLabel,
+  getMeta,
+  getValue,
+  emptyText,
+}) {
+  const data = Array.isArray(rows) ? rows : [];
+  const max = Math.max(1, ...data.map((r) => num(getValue(r))));
+
+  function widthFor(value) {
+    const n = num(value);
+    return `${Math.max(4, Math.round((n / max) * 100))}%`;
+  }
+
+  return (
+    <section className="cmp-audit-page__chart-card">
+      <div className="cmp-audit-page__chart-header">
+        <div>
+          <h3 className="cmp-audit-page__chart-title">{title}</h3>
+          {subtitle ? (
+            <p className="cmp-audit-page__chart-subtitle">{subtitle}</p>
+          ) : null}
+        </div>
+      </div>
+
+      {data.length === 0 ? (
+        <div className="cmp-audit-page__inline-state">
+          {emptyText || "Sem dados."}
+        </div>
+      ) : (
+        <div className="cmp-audit-page__bar-list">
+          {data.map((row, idx) => {
+            const value = num(getValue(row));
+
+            return (
+              <div className="cmp-audit-page__bar-row" key={idx}>
+                <div className="cmp-audit-page__bar-row-header">
+                  <div className="cmp-audit-page__bar-label">
+                    {getLabel(row)}
+
+                    {getMeta ? (
+                      <span className="cmp-audit-page__bar-meta">
+                        {getMeta(row)}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <strong className="cmp-audit-page__bar-value">{value}</strong>
+                </div>
+
+                <div className="cmp-audit-page__bar-track">
+                  <div
+                    className="cmp-audit-page__bar-fill"
+                    style={{ "--cmp-audit-bar-width": widthFor(value) }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
@@ -128,6 +290,34 @@ export default function AuditPage() {
 
   const fromIso = useMemo(() => isoFromDateInput(dateFrom, false), [dateFrom]);
   const toIso = useMemo(() => isoFromDateInput(dateTo, true), [dateTo]);
+
+  const byDay = useMemo(() => summary?.by_day || [], [summary]);
+  const byEntityAction = useMemo(
+    () => summary?.by_entity_action || [],
+    [summary]
+  );
+  const topUsers = useMemo(() => summary?.top_users || [], [summary]);
+
+  const reportStats = useMemo(() => {
+    const totalEvents = byDay.reduce((acc, row) => acc + num(row.count), 0);
+
+    const uniqueEntities = new Set(
+      byEntityAction.map((row) => row.entity_name).filter(Boolean)
+    ).size;
+
+    const uniqueActions = new Set(
+      byEntityAction.map((row) => row.action_name).filter(Boolean)
+    ).size;
+
+    const activeUsers = topUsers.length;
+
+    return {
+      totalEvents,
+      uniqueEntities,
+      uniqueActions,
+      activeUsers,
+    };
+  }, [byDay, byEntityAction, topUsers]);
 
   async function loadLogs({ resetOffset = false } = {}) {
     try {
@@ -239,16 +429,13 @@ export default function AuditPage() {
     setDateFrom("");
     setDateTo("");
     setOffset(0);
-
-    if (tab === "reports") {
-      setSummary(null);
-      loadReports();
-    }
+    setSummary(null);
   }
 
   const pageInfo = useMemo(() => {
     const start = total === 0 ? 0 : offset + 1;
     const end = Math.min(offset + limit, total);
+
     return { start, end };
   }, [offset, limit, total]);
 
@@ -258,7 +445,8 @@ export default function AuditPage() {
         <div>
           <h2 className="cmp-audit-page__title">Auditoria</h2>
           <p className="cmp-audit-page__subtitle">
-            Consulte eventos registrados e relatórios de atividade.
+            Consulte eventos registrados, rastreie alterações e acompanhe a
+            atividade do sistema.
           </p>
         </div>
 
@@ -267,35 +455,35 @@ export default function AuditPage() {
 
       <div className="cmp-audit-page__filters">
         <input
-          placeholder="entity_name (ex: tbRequestItem)"
+          placeholder="Entidade, ex: auth, user, message"
           value={entityName}
           onChange={(e) => setEntityName(e.target.value)}
           className="cmp-audit-page__control cmp-audit-page__control--entity"
         />
 
         <input
-          placeholder="action_name (ex: UPDATED)"
+          placeholder="Ação, ex: LOGIN, UPDATED"
           value={actionName}
           onChange={(e) => setActionName(e.target.value)}
           className="cmp-audit-page__control cmp-audit-page__control--action"
         />
 
         <input
-          placeholder="usuário (nome)"
+          placeholder="Usuário"
           value={userName}
           onChange={(e) => setUserName(e.target.value)}
           className="cmp-audit-page__control cmp-audit-page__control--user"
         />
 
         <input
-          placeholder="entity_id"
+          placeholder="ID da entidade"
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
           className="cmp-audit-page__control cmp-audit-page__control--id"
         />
 
         <input
-          placeholder="buscar (details)"
+          placeholder="Buscar nos detalhes"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           className="cmp-audit-page__control cmp-audit-page__control--search"
@@ -353,7 +541,7 @@ export default function AuditPage() {
         <>
           <div className="cmp-audit-page__summary">
             Mostrando {pageInfo.start}-{pageInfo.end} de {total} •{" "}
-            <Chip>limit={limit}</Chip>
+            <Chip>limite={limit}</Chip>
           </div>
 
           <div className="cmp-audit-page__table-card cmp-audit-page__table-card--logs">
@@ -383,12 +571,20 @@ export default function AuditPage() {
                       <td className="cmp-audit-page__nowrap">
                         {fmt(r.occurred_at)}
                       </td>
-                      <td>{r.entity_name}</td>
+
+                      <td>
+                        <span className="cmp-audit-page__entity-name">
+                          {r.entity_name}
+                        </span>
+                      </td>
+
                       <td>
                         <Chip>{r.action_name}</Chip>
                       </td>
+
                       <td>{r.entity_id ?? "—"}</td>
                       <td>{r.user_name ?? "—"}</td>
+
                       <td className="cmp-audit-page__details-cell">
                         <div>{r.details || "—"}</div>
                       </td>
@@ -437,47 +633,54 @@ export default function AuditPage() {
             </div>
           ) : (
             <>
-              <ReportTable
-                title="Eventos por dia"
-                columns={["Dia", "Qtd"]}
-                rows={summary.by_day || []}
-                minWidth={420}
-                renderRow={(r, idx) => (
-                  <tr key={idx}>
-                    <td>{fmt(r.day)}</td>
-                    <td>{r.count}</td>
-                  </tr>
-                )}
-              />
+              <div className="cmp-audit-page__metrics-grid">
+                <MetricCard
+                  label="Eventos"
+                  value={reportStats.totalEvents}
+                  hint="Total no período"
+                />
 
-              <ReportTable
-                title="Entidade × Ação"
-                columns={["Entidade", "Ação", "Qtd"]}
-                rows={(summary.by_entity_action || []).slice(0, 50)}
-                minWidth={620}
-                renderRow={(r, idx) => (
-                  <tr key={idx}>
-                    <td>{r.entity_name}</td>
-                    <td>
-                      <Chip>{r.action_name}</Chip>
-                    </td>
-                    <td>{r.count}</td>
-                  </tr>
-                )}
-              />
+                <MetricCard
+                  label="Entidades"
+                  value={reportStats.uniqueEntities}
+                  hint="Áreas afetadas"
+                />
 
-              <ReportTable
-                title="Top usuários"
-                columns={["Usuário", "Qtd"]}
-                rows={summary.top_users || []}
-                minWidth={420}
-                renderRow={(r, idx) => (
-                  <tr key={idx}>
-                    <td>{r.user_name}</td>
-                    <td>{r.count}</td>
-                  </tr>
-                )}
-              />
+                <MetricCard
+                  label="Ações"
+                  value={reportStats.uniqueActions}
+                  hint="Tipos de evento"
+                />
+
+                <MetricCard
+                  label="Usuários"
+                  value={reportStats.activeUsers}
+                  hint="Com atividade"
+                />
+              </div>
+
+              <div className="cmp-audit-page__charts-grid">
+                <TimelineChart rows={byDay} />
+
+                <HorizontalBarList
+                  title="Entidade × Ação"
+                  subtitle="Eventos mais frequentes por tipo de entidade e ação."
+                  rows={byEntityAction.slice(0, 10)}
+                  getLabel={(row) => row.entity_name || "—"}
+                  getMeta={(row) => row.action_name || "—"}
+                  getValue={(row) => row.count}
+                  emptyText="Sem eventos por entidade/ação."
+                />
+
+                <HorizontalBarList
+                  title="Top usuários"
+                  subtitle="Usuários com maior volume de eventos no período."
+                  rows={topUsers.slice(0, 10)}
+                  getLabel={(row) => row.user_name || "—"}
+                  getValue={(row) => row.count}
+                  emptyText="Sem usuários no período."
+                />
+              </div>
             </>
           )}
         </div>
