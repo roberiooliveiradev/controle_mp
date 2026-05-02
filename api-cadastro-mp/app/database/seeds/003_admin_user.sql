@@ -1,24 +1,12 @@
-BEGIN;
+-- ========================================================
+-- CONTROLE MP — ADMIN LOCAL
+--
+-- O admin local NÃO é mais criado diretamente por SQL,
+-- porque a senha deve vir da .env e o hash deve ser gerado
+-- pelo PasswordHasher oficial da aplicação.
+--
+-- Ver:
+-- scripts/ensure_local_admin.py
+-- ========================================================
 
-INSERT INTO "tbUsers" (
-    full_name,
-    email,
-    password_algo,
-    password_iterations,
-    password_hash,
-    password_salt,
-    role_id
-)
-SELECT
-    'Administrador do Sistema',
-    'admin@controlemp.local',
-    'pbkdf2_sha256',
-    260000,
-    'HASH_EXEMPLO',
-    'SALT_EXEMPLO',
-    r.id
-FROM "tbRoles" r
-WHERE r.role_name = 'ADMIN'
-ON CONFLICT (email) DO NOTHING;
-
-COMMIT;
+SELECT 1;
