@@ -217,6 +217,6 @@ textarea:focus-visible {
   }
 
   body {
-    overflow: auto;
+    overflow: hidden;
   }
 }

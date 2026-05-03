@@ -2,7 +2,9 @@
 
 .cmp-topbar {
   flex: 0 0 auto;
-  height: var(--app-topbar-height);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: var(--app-topbar-height);
   display: grid;
   grid-template-columns: minmax(140px, 210px) minmax(0, 1fr) minmax(210px, auto);
@@ -31,12 +33,12 @@
 
 .cmp-topbar__nav {
   min-width: 0;
+  max-width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: clamp(6px, 1.1vw, 20px);
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   padding: 2px;
 }
 
@@ -90,10 +92,12 @@
 
 .cmp-topbar__user-area {
   min-width: 0;
+  max-width: 100%;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+  overflow: hidden;
 }
 
 .cmp-topbar__profile-select {
@@ -119,6 +123,7 @@
 
 .cmp-topbar__logout,
 .cmp-topbar__notification-button {
+  flex: 0 0 auto;
   min-height: 38px;
   padding: 8px 14px;
   border-radius: var(--radius-md);
@@ -136,10 +141,15 @@
   background: color-mix(in srgb, var(--primary) 84%, #000000);
 }
 
+/* =========================================
+   NOTEBOOK / TABLET LARGO
+   Evita corte entre 901px e 1180px.
+========================================= */
+
 @media (max-width: 1180px) {
   .cmp-topbar {
-    grid-template-columns: 150px minmax(0, 1fr) auto;
-    gap: 12px;
+    grid-template-columns: minmax(112px, 150px) minmax(0, 1fr) auto;
+    gap: 10px;
     padding-inline: 14px;
   }
 
@@ -147,8 +157,19 @@
     max-height: 46px;
   }
 
+  .cmp-topbar__nav {
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
   .cmp-topbar__link {
-    padding-inline: 10px;
+    min-height: 36px;
+    padding: 7px 9px;
+    font-size: 13px;
+  }
+
+  .cmp-topbar__user-name {
+    max-width: 180px;
   }
 
   .cmp-topbar__role {
@@ -156,34 +177,108 @@
   }
 }
 
-@media (max-width: 900px) {
+/* =========================================
+   QUEBRA CONTROLADA EM DUAS LINHAS
+   Este é o ajuste principal do corte no print.
+========================================= */
+
+@media (max-width: 1050px) {
   .cmp-topbar {
-    height: auto;
-    min-height: 70px;
-    grid-template-columns: 128px minmax(0, 1fr);
+    min-height: auto;
+    grid-template-columns: minmax(112px, 160px) minmax(0, 1fr);
     grid-template-areas:
       "brand user"
       "nav nav";
     align-items: center;
-    gap: 6px 10px;
-    padding: 8px 10px;
+    gap: 7px 10px;
+    padding: 8px 12px;
   }
 
   .cmp-topbar__brand {
     grid-area: brand;
   }
 
-  .cmp-topbar__nav {
-    grid-area: nav;
-    justify-content: flex-start;
-  }
-
   .cmp-topbar__user-area {
     grid-area: user;
   }
 
+  .cmp-topbar__nav {
+    grid-area: nav;
+    width: 100%;
+    max-width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
+    overflow: hidden;
+    padding: 2px 0;
+  }
+
   .cmp-topbar__logo {
+    width: min(142px, 100%);
     max-height: 42px;
+  }
+
+  .cmp-topbar__link {
+    flex: 0 1 auto;
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+
+  .cmp-topbar__user-name {
+    max-width: min(260px, 44vw);
+  }
+
+  .cmp-topbar__logout,
+  .cmp-topbar__notification-button {
+    min-height: 38px;
+    padding: 8px 13px;
+  }
+}
+
+/* =========================================
+   TOPO COMPACTO
+========================================= */
+
+@media (max-width: 760px) {
+  .cmp-topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand user"
+      "nav nav";
+    gap: 8px 10px;
+    padding: 8px 10px;
+    overflow: hidden;
+  }
+
+  .cmp-topbar__brand {
+    justify-content: flex-start;
+  }
+
+  .cmp-topbar__logo {
+    width: min(132px, 100%);
+    max-height: 42px;
+  }
+
+  .cmp-topbar__user-area {
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .cmp-topbar__user-name {
+    max-width: min(230px, 46vw);
+  }
+
+  .cmp-topbar__logout {
+    min-height: 42px;
+    padding: 9px 14px;
+    border-radius: var(--radius-lg);
+  }
+
+  .cmp-topbar__nav {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
   .cmp-topbar__link {
@@ -193,12 +288,33 @@
   }
 }
 
-@media (max-height: 620px) and (orientation: landscape) {
+/* =========================================
+   BAIXA ALTURA / LANDSCAPE
+   Mantém uma linha quando a altura é crítica,
+   mas reduz tudo para não cortar.
+========================================= */
+
+@media (max-height: 620px) and (orientation: landscape) and (min-width: 1051px) {
   .cmp-topbar {
-    height: var(--app-topbar-height);
     min-height: var(--app-topbar-height);
     grid-template-columns: 130px minmax(0, 1fr) auto;
+    grid-template-areas: "brand nav user";
     padding-block: 4px;
+  }
+
+  .cmp-topbar__brand {
+    grid-area: brand;
+  }
+
+  .cmp-topbar__nav {
+    grid-area: nav;
+    justify-content: center;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+
+  .cmp-topbar__user-area {
+    grid-area: user;
   }
 
   .cmp-topbar__logo {
@@ -207,7 +323,7 @@
 
   .cmp-topbar__link {
     min-height: 32px;
-    padding: 6px 10px;
+    padding: 6px 9px;
     font-size: 13px;
   }
 
@@ -220,7 +336,37 @@
   }
 }
 
+/* =========================================
+   MOBILE
+========================================= */
+
 @media (max-width: 560px) {
+  .cmp-topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand user"
+      "nav nav";
+  }
+
+  .cmp-topbar__brand {
+    justify-content: flex-start;
+  }
+
+  .cmp-topbar__user-area {
+    justify-content: flex-end;
+  }
+
+  .cmp-topbar__user-name {
+    max-width: 46vw;
+  }
+
+  .cmp-topbar__nav {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 430px) {
   .cmp-topbar {
     grid-template-columns: 1fr;
     grid-template-areas:
@@ -234,11 +380,43 @@
     justify-content: center;
   }
 
-  .cmp-topbar__nav {
+  .cmp-topbar__user-area {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .cmp-topbar__user-name {
-    max-width: 180px;
+    max-width: min(100%, 280px);
+  }
+
+  .cmp-topbar__logout {
+    min-height: 40px;
+  }
+
+  .cmp-topbar__nav {
+    justify-content: center;
+  }
+
+  .cmp-topbar__link {
+    flex: 0 1 auto;
+  }
+}
+
+@media (max-width: 360px) {
+  .cmp-topbar__nav {
+    gap: 5px;
+  }
+
+  .cmp-topbar__link {
+    min-height: 32px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .cmp-topbar__badge {
+    min-width: 18px;
+    height: 18px;
+    padding-inline: 6px;
+    font-size: 11px;
   }
 }

@@ -8,6 +8,7 @@ export function Layout() {
   return (
     <div className="cmp-shell">
       <Topbar />
+
       <main className="cmp-shell__main">
         <Outlet />
       </main>

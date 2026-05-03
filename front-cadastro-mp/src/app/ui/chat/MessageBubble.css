@@ -5,9 +5,10 @@
 ========================================= */
 
 .cmp-message-bubble-row {
+  min-width: 0;
   display: flex;
   justify-content: flex-start;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .cmp-message-bubble-row--mine {
@@ -15,43 +16,73 @@
 }
 
 .cmp-message-bubble {
+  position: relative;
   width: fit-content;
   max-width: min(780px, 78%);
+  min-width: 0;
   display: grid;
-  gap: 7px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 11px 13px;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--surface);
+  border-top-left-radius: var(--radius-sm, 8px);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--surface-2) 45%, transparent),
+      transparent 58%
+    ),
+    var(--surface);
   color: var(--text);
+  box-shadow: 0 8px 20px color-mix(in srgb, #000000 14%, transparent);
+}
+
+.cmp-message-bubble:has(.cmp-request-readonly-stack) {
+  width: min(760px, 100%);
+  max-width: min(760px, 96%);
 }
 
 .cmp-message-bubble--mine {
-  background: var(--surface-2);
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-sm, 8px);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--primary) 12%, transparent),
+      transparent 58%
+    ),
+    var(--surface-2);
 }
 
 .cmp-message-bubble--sending {
-  opacity: 0.75;
+  opacity: 0.74;
 }
 
 .cmp-message-bubble__sender {
+  max-width: 100%;
   overflow: hidden;
-  color: var(--text-muted);
+  color: var(--primary);
   font-size: 12px;
+  font-weight: 850;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .cmp-message-bubble__body {
+  min-width: 0;
   color: var(--text);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.48;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .cmp-message-bubble__attachments {
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -59,7 +90,9 @@
 }
 
 .cmp-message-bubble__footer {
+  min-width: 0;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
   color: var(--text-soft);
@@ -67,24 +100,49 @@
   line-height: 1.2;
 }
 
+.cmp-message-bubble__footer time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-message-bubble__status {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--primary) 72%, var(--text-muted));
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.cmp-message-bubble__status--sending {
+  color: var(--text-muted);
+}
+
 /* =========================================
    MESSAGE ATTACHMENT
 ========================================= */
 
 .cmp-message-attachment {
-  width: 176px;
+  width: 184px;
+  max-width: 100%;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
+  box-shadow: 0 6px 14px color-mix(in srgb, #000000 12%, transparent);
 }
 
 .cmp-message-attachment__preview {
-  height: 92px;
+  height: 94px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-2);
+  background:
+    radial-gradient(
+      circle at top,
+      color-mix(in srgb, var(--primary) 12%, transparent),
+      transparent 64%
+    ),
+    var(--surface-2);
 }
 
 .cmp-message-attachment__image {
@@ -94,6 +152,15 @@
 }
 
 .cmp-message-attachment__label {
+  min-width: 46px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 900;
@@ -102,27 +169,54 @@
 .cmp-message-attachment__body {
   display: grid;
   gap: 7px;
-  padding: 8px;
+  padding: 9px;
 }
 
 .cmp-message-attachment__name {
   overflow: hidden;
   color: var(--text);
   font-size: 12px;
+  font-weight: 850;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.cmp-message-attachment__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.cmp-message-attachment__meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
 .cmp-message-attachment__download {
-  min-height: 28px;
+  min-height: 30px;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 850;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .cmp-message-attachment__download:hover:not(:disabled) {
@@ -131,23 +225,39 @@
   background: var(--surface-2);
 }
 
+.cmp-message-attachment__download:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
 /* =========================================
    REQUEST READONLY STACK
 ========================================= */
 
 .cmp-request-readonly-stack {
+  width: 100%;
+  min-width: 0;
   display: grid;
   gap: 10px;
   margin-top: 4px;
 }
 
 .cmp-request-readonly-card {
+  width: 100%;
+  min-width: 0;
   display: grid;
   gap: 12px;
   padding: 12px;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--surface);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--primary) 7%, transparent),
+      transparent 54%
+    ),
+    var(--surface);
 }
 
 .cmp-request-readonly-card__header {
@@ -162,10 +272,12 @@
   min-width: 0;
   color: var(--text);
   font-size: 14px;
+  font-weight: 900;
   line-height: 1.25;
 }
 
 .cmp-request-readonly-card__badges {
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -182,12 +294,13 @@
   background: var(--surface-2);
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 850;
   line-height: 1;
   white-space: nowrap;
 }
 
 .cmp-request-readonly-card__fields {
+  min-width: 0;
   display: grid;
   grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
   gap: 10px;
@@ -202,6 +315,7 @@
 }
 
 .cmp-request-readonly-card__suppliers {
+  min-width: 0;
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
@@ -220,14 +334,16 @@
 
 .cmp-request-readonly-card__table-wrap {
   max-width: 100%;
-  overflow: auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
 
 .cmp-request-readonly-card__table {
   width: 100%;
-  min-width: 720px;
+  min-width: 640px;
   border-collapse: collapse;
   font-size: 12px;
 }
@@ -255,9 +371,9 @@
 ========================================= */
 
 .cmp-readonly-field {
+  min-width: 0;
   display: grid;
   gap: 4px;
-  min-width: 0;
 }
 
 .cmp-readonly-field__label {
@@ -267,6 +383,7 @@
 }
 
 .cmp-readonly-field__value {
+  min-width: 0;
   min-height: 38px;
   padding: 9px 10px;
   border: 1px solid var(--border);
@@ -277,6 +394,7 @@
   line-height: 1.35;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .cmp-readonly-field__empty {
@@ -298,13 +416,17 @@
     border-radius: var(--radius-md);
   }
 
+  .cmp-message-bubble--mine {
+    border-top-right-radius: var(--radius-sm, 8px);
+  }
+
   .cmp-message-bubble__body {
     font-size: 13px;
     line-height: 1.38;
   }
 
   .cmp-message-attachment {
-    width: 148px;
+    width: 152px;
   }
 
   .cmp-message-attachment__preview {
@@ -334,7 +456,7 @@
   }
 
   .cmp-message-attachment {
-    width: 132px;
+    width: 136px;
   }
 
   .cmp-message-attachment__preview {
@@ -344,6 +466,10 @@
   .cmp-message-attachment__body {
     gap: 5px;
     padding: 6px;
+  }
+
+  .cmp-message-attachment__meta {
+    display: none;
   }
 
   .cmp-message-attachment__download {
@@ -368,7 +494,27 @@
 
 @media (max-width: 760px) {
   .cmp-message-bubble {
-    max-width: 92%;
+    max-width: 94%;
+  }
+
+  .cmp-message-bubble:has(.cmp-request-readonly-stack) {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .cmp-request-readonly-card {
+    padding: 10px;
+    border-radius: var(--radius-md);
+  }
+
+  .cmp-request-readonly-card__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .cmp-request-readonly-card__badges {
+    justify-content: flex-start;
   }
 
   .cmp-request-readonly-card__fields {
@@ -378,14 +524,38 @@
   .cmp-request-readonly-card__field--full {
     grid-column: auto;
   }
+
+  .cmp-request-readonly-card__table {
+    min-width: 560px;
+  }
 }
 
 @media (max-width: 420px) {
   .cmp-message-bubble {
     max-width: 96%;
+    padding: 10px;
+  }
+
+  .cmp-message-bubble:has(.cmp-request-readonly-stack) {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .cmp-message-bubble__footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .cmp-message-attachment {
     width: 100%;
+  }
+
+  .cmp-request-readonly-card {
+    padding: 9px;
+  }
+
+  .cmp-request-readonly-card__table {
+    min-width: 520px;
   }
 }

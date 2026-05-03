@@ -1,5 +1,7 @@
 // src/app/ui/chat/ChatComposer.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
+
 import { AttachmentTray } from "./AttachmentTray";
 import { RequestComposerModal } from "./RequestComposerModal";
 import "./ChatComposer.css";
@@ -39,8 +41,10 @@ const MAX_FILE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 function getExt(name) {
   if (!name) return "";
+
   const parts = String(name).split(".");
   if (parts.length < 2) return "";
+
   return parts[parts.length - 1].toLowerCase().trim();
 }
 
@@ -92,6 +96,13 @@ function validateFiles(files) {
   return { accepted, rejected };
 }
 
+function resizeTextarea(textarea) {
+  if (!textarea) return;
+
+  textarea.style.height = "auto";
+  textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
+}
+
 export function ChatComposer({
   onSend,
   onAttach,
@@ -104,10 +115,14 @@ export function ChatComposer({
   const [sending, setSending] = useState(false);
 
   const fileRef = useRef(null);
+  const textareaRef = useRef(null);
   const actionsBtnRef = useRef(null);
   const actionsMenuRef = useRef(null);
+  const emojiBtnRef = useRef(null);
+  const emojiMenuRef = useRef(null);
 
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
 
   const previews = useMemo(() => {
@@ -127,6 +142,10 @@ export function ChatComposer({
       Object.values(previews).forEach((url) => URL.revokeObjectURL(url));
     };
   }, [previews]);
+
+  useEffect(() => {
+    resizeTextarea(textareaRef.current);
+  }, [text]);
 
   useEffect(() => {
     if (!incomingFiles || incomingFiles.length === 0) return;
@@ -151,19 +170,32 @@ export function ChatComposer({
 
   useEffect(() => {
     function onDocClick(e) {
-      if (!actionsOpen) return;
+      const target = e.target;
 
-      const btn = actionsBtnRef.current;
-      const menu = actionsMenuRef.current;
+      if (actionsOpen) {
+        const btn = actionsBtnRef.current;
+        const menu = actionsMenuRef.current;
 
-      if (btn && btn.contains(e.target)) return;
-      if (menu && menu.contains(e.target)) return;
+        if (!(btn && btn.contains(target)) && !(menu && menu.contains(target))) {
+          setActionsOpen(false);
+        }
+      }
 
-      setActionsOpen(false);
+      if (emojiOpen) {
+        const btn = emojiBtnRef.current;
+        const menu = emojiMenuRef.current;
+
+        if (!(btn && btn.contains(target)) && !(menu && menu.contains(target))) {
+          setEmojiOpen(false);
+        }
+      }
     }
 
     function onEsc(e) {
-      if (e.key === "Escape") setActionsOpen(false);
+      if (e.key === "Escape") {
+        setActionsOpen(false);
+        setEmojiOpen(false);
+      }
     }
 
     document.addEventListener("mousedown", onDocClick);
@@ -173,9 +205,11 @@ export function ChatComposer({
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onEsc);
     };
-  }, [actionsOpen]);
+  }, [actionsOpen, emojiOpen]);
 
   function pickFiles() {
+    if (sending) return;
+
     setFileError("");
     fileRef.current?.click();
   }
@@ -199,15 +233,42 @@ export function ChatComposer({
   }
 
   function removeFileAt(index) {
+    if (sending) return;
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   function clearFiles() {
+    if (sending) return;
     setPendingFiles([]);
   }
 
+  function insertEmoji(emoji) {
+    if (sending || !emoji) return;
+
+    const textarea = textareaRef.current;
+    const current = text || "";
+
+    if (!textarea) {
+      setText(`${current}${emoji}`);
+      return;
+    }
+
+    const start = textarea.selectionStart ?? current.length;
+    const end = textarea.selectionEnd ?? current.length;
+    const next = `${current.slice(0, start)}${emoji}${current.slice(end)}`;
+
+    setText(next);
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const pos = start + emoji.length;
+      textarea.setSelectionRange(pos, pos);
+      resizeTextarea(textarea);
+    });
+  }
+
   async function submit(e) {
-    e.preventDefault();
+    e?.preventDefault?.();
 
     const hasText = Boolean(text.trim());
     const hasFiles = pendingFiles.length > 0;
@@ -217,6 +278,7 @@ export function ChatComposer({
 
     try {
       setSending(true);
+
       await onSend({
         text,
         files: pendingFiles,
@@ -227,16 +289,33 @@ export function ChatComposer({
       setText("");
       setPendingFiles([]);
       setFileError("");
+      setActionsOpen(false);
+      setEmojiOpen(false);
+
+      requestAnimationFrame(() => {
+        resizeTextarea(textareaRef.current);
+        textareaRef.current?.focus();
+      });
     } finally {
       setSending(false);
     }
   }
 
   function onKeyDown(e) {
+    if (e.nativeEvent?.isComposing) return;
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submit(e);
     }
+  }
+
+  function openRequestModal() {
+    if (sending) return;
+
+    setActionsOpen(false);
+    setEmojiOpen(false);
+    setRequestModalOpen(true);
   }
 
   async function onSubmitRequestDraft(draft) {
@@ -254,15 +333,25 @@ export function ChatComposer({
 
       setRequestModalOpen(false);
       setActionsOpen(false);
+      setEmojiOpen(false);
       setText("");
       setPendingFiles([]);
       setFileError("");
+
+      requestAnimationFrame(() => {
+        resizeTextarea(textareaRef.current);
+        textareaRef.current?.focus();
+      });
     } finally {
       setSending(false);
     }
   }
 
-  const canSend = Boolean(text.trim()) || pendingFiles.length > 0;
+  const hasText = Boolean(text.trim());
+  const hasFiles = pendingFiles.length > 0;
+  const canSend = hasText || hasFiles;
+  const fileCount = pendingFiles.length;
+  const textLength = text.length;
 
   return (
     <div className="cmp-chat-composer">
@@ -273,16 +362,37 @@ export function ChatComposer({
         onClear={clearFiles}
       />
 
-      <form onSubmit={submit} className="cmp-chat-composer__form">
+      <form
+        onSubmit={submit}
+        className={
+          sending
+            ? "cmp-chat-composer__form cmp-chat-composer__form--sending"
+            : "cmp-chat-composer__form"
+        }
+      >
         <div className="cmp-chat-composer__input-area">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Digite sua mensagem... (Shift+Enter para quebrar linha)"
-            rows={4}
-            className="cmp-chat-composer__textarea"
-          />
+          <div className="cmp-chat-composer__textarea-shell">
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Digite sua mensagem..."
+              rows={2}
+              disabled={sending}
+              className="cmp-chat-composer__textarea"
+            />
+
+            <div className="cmp-chat-composer__hint-row">
+              <span>Enter envia · Shift+Enter quebra linha</span>
+
+              {textLength > 0 ? (
+                <span className="cmp-chat-composer__counter">
+                  {textLength}
+                </span>
+              ) : null}
+            </div>
+          </div>
 
           {fileError ? (
             <div className="cmp-chat-composer__error">{fileError}</div>
@@ -306,21 +416,95 @@ export function ChatComposer({
           <button
             type="button"
             onClick={pickFiles}
-            className="cmp-chat-composer__button"
+            disabled={sending}
+            className="cmp-chat-composer__button cmp-chat-composer__button--attach"
+            title="Anexar arquivos"
           >
-            Anexar
+            <span className="cmp-chat-composer__button-icon" aria-hidden="true">
+              📎
+            </span>
+
+            <span>Anexar</span>
+
+            {fileCount > 0 ? (
+              <span className="cmp-chat-composer__button-count">{fileCount}</span>
+            ) : null}
           </button>
+
+          <div className="cmp-chat-composer__menu-wrap">
+            <button
+              ref={emojiBtnRef}
+              type="button"
+              onClick={() => {
+                setEmojiOpen((value) => !value);
+                setActionsOpen(false);
+              }}
+              disabled={sending}
+              aria-haspopup="dialog"
+              aria-expanded={emojiOpen}
+              className={
+                emojiOpen
+                  ? "cmp-chat-composer__button cmp-chat-composer__button--emoji cmp-chat-composer__button--active"
+                  : "cmp-chat-composer__button cmp-chat-composer__button--emoji"
+              }
+              title="Inserir emoji"
+            >
+              <span className="cmp-chat-composer__button-icon" aria-hidden="true">
+                🙂
+              </span>
+
+              <span>Emoji</span>
+            </button>
+
+            {emojiOpen ? (
+              <div
+                ref={emojiMenuRef}
+                role="dialog"
+                aria-label="Selecionar emoji"
+                className="cmp-chat-composer__emoji-menu"
+              >
+                <EmojiPicker
+                  theme={Theme.AUTO}
+                  emojiStyle={EmojiStyle.NATIVE}
+                  searchPlaceholder="Buscar emoji"
+                  previewConfig={{ showPreview: false }}
+                  lazyLoadEmojis
+                  width="100%"
+                  height={360}
+                  onEmojiClick={(emojiData) => {
+                    insertEmoji(emojiData?.emoji);
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
 
           <div className="cmp-chat-composer__menu-wrap">
             <button
               ref={actionsBtnRef}
               type="button"
-              onClick={() => setActionsOpen((value) => !value)}
+              onClick={() => {
+                setActionsOpen((value) => !value);
+                setEmojiOpen(false);
+              }}
+              disabled={sending}
               aria-haspopup="menu"
               aria-expanded={actionsOpen}
-              className="cmp-chat-composer__button"
+              className={
+                actionsOpen
+                  ? "cmp-chat-composer__button cmp-chat-composer__button--actions cmp-chat-composer__button--active"
+                  : "cmp-chat-composer__button cmp-chat-composer__button--actions"
+              }
             >
-              Ações ▾
+              <span className="cmp-chat-composer__button-icon" aria-hidden="true">
+                ⚙
+              </span>
+
+              <span>Ações</span>
+
+              <span className="cmp-chat-composer__chevron" aria-hidden="true">
+                ▾
+              </span>
             </button>
 
             {actionsOpen ? (
@@ -332,10 +516,17 @@ export function ChatComposer({
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => setRequestModalOpen(true)}
+                  onClick={openRequestModal}
                   className="cmp-chat-composer__menu-item"
                 >
-                  Abrir solicitação
+                  <span className="cmp-chat-composer__menu-item-icon" aria-hidden="true">
+                    🧾
+                  </span>
+
+                  <span>
+                    <strong>Abrir solicitação</strong>
+                    <small>Cria uma solicitação vinculada a esta conversa.</small>
+                  </span>
                 </button>
               </div>
             ) : null}

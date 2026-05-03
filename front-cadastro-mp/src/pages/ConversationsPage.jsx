@@ -24,10 +24,10 @@ import { ChatComposer } from "../app/ui/chat/ChatComposer";
 import { joinConversationRoom, leaveConversationRoom, socket } from "../app/realtime/socket";
 
 const SPLIT_KEY = "cadmp_split_left_width";
-const DEFAULT_LEFT = 360;
-const MIN_LEFT = 260;
+const DEFAULT_LEFT = 370;
+const MIN_LEFT = 280;
 const MAX_LEFT = 620;
-const DIVIDER_W = 8;
+const DIVIDER_W = 10;
 
 const MESSAGE_TYPE_TEXT = 1;
 const MESSAGE_TYPE_REQUEST = 2;
@@ -55,6 +55,13 @@ function sortConversationsByLastActivity(list) {
   const arr = Array.isArray(list) ? [...list] : [];
   arr.sort((a, b) => convLastActivityTs(b) - convLastActivityTs(a));
   return arr;
+}
+
+function formatDateTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("pt-BR");
 }
 
 export default function ConversationsPage() {
@@ -85,13 +92,17 @@ export default function ConversationsPage() {
   const selectedId = id ? Number(id) : null;
   const myUserId = user?.id;
 
-  const selectedConversation = useMemo(
-    () =>
-      selectedId
-        ? conversations.find((c) => Number(c.id) === Number(selectedId))
-        : null,
-    [conversations, selectedId]
+  const orderedConversations = useMemo(
+    () => sortConversationsByLastActivity(conversations),
+    [conversations]
   );
+
+  const totalUnread = useMemo(() => {
+    return Object.values(unreadCounts || {}).reduce(
+      (acc, value) => acc + (Number(value) || 0),
+      0
+    );
+  }, [unreadCounts]);
 
   const containerRef = useRef(null);
   const draggingRef = useRef(false);
@@ -248,7 +259,10 @@ export default function ConversationsPage() {
     }
   }
 
+  const [newTitle, setNewTitle] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   async function handleSearch(forcedTitle) {
     const raw =
@@ -427,7 +441,7 @@ export default function ConversationsPage() {
           scrollToBottom();
         }
       } catch {
-        // não quebra a tela se falhar uma sincronização pontual
+        // Não quebra a tela se falhar uma sincronização pontual.
       }
     };
 
@@ -438,10 +452,6 @@ export default function ConversationsPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
-
-  const [newTitle, setNewTitle] = useState("");
-  const [createBusy, setCreateBusy] = useState(false);
-  const [createError, setCreateError] = useState("");
 
   async function handleCreateConversation(e) {
     e.preventDefault();
@@ -704,6 +714,9 @@ export default function ConversationsPage() {
     setIncomingFiles(files);
   }
 
+  const chatOwner = conv?.created_by?.full_name ?? conv?.created_by?.email ?? "";
+  const lastActivity = convLastActivityIso(conv);
+
   return (
     <div
       ref={containerRef}
@@ -712,14 +725,26 @@ export default function ConversationsPage() {
           ? "cmp-conversations cmp-conversations--chat-open"
           : "cmp-conversations"
       }
-      style={{ "--cmp-conversations-sidebar-width": `${leftWidth}px` }}
+      style={{
+        "--cmp-conversations-sidebar-width": `${leftWidth}px`,
+        "--cmp-conversations-divider-width": `${DIVIDER_W}px`,
+      }}
     >
       <aside className="cmp-conversations__sidebar">
         <div className="cmp-conversations__sidebar-header">
-          <strong className="cmp-conversations__title">Conversas</strong>
+          <div className="cmp-conversations__sidebar-title-row">
+            <div>
+              <strong className="cmp-conversations__title">Conversas</strong>
+              <div className="cmp-conversations__subtitle">
+                Crie, pesquise e acompanhe seus chats.
+              </div>
+            </div>
 
-          <div className="cmp-conversations__subtitle">
-            Clique para abrir o chat
+            {totalUnread > 0 ? (
+              <span className="cmp-conversations__total-unread">
+                {totalUnread}
+              </span>
+            ) : null}
           </div>
 
           <form
@@ -753,7 +778,7 @@ export default function ConversationsPage() {
                   title="Limpar filtro"
                   className="cmp-conversations__field-action cmp-conversations__field-action--clear"
                 >
-                  ✕
+                  ×
                 </button>
               ) : null}
 
@@ -786,13 +811,14 @@ export default function ConversationsPage() {
         </div>
 
         <div className="cmp-conversations__list">
-          {conversations.length === 0 ? (
-            <div className="cmp-conversations__empty">
-              Nenhuma conversa encontrada.
+          {orderedConversations.length === 0 ? (
+            <div className="cmp-conversations__empty-list">
+              <strong>Nenhuma conversa encontrada.</strong>
+              <span>Digite um título acima para criar uma nova conversa.</span>
             </div>
           ) : null}
 
-          {sortConversationsByLastActivity(conversations).map((c) => (
+          {orderedConversations.map((c) => (
             <ConversationCard
               key={c.id}
               conversation={c}
@@ -833,13 +859,18 @@ export default function ConversationsPage() {
       >
         {isDraggingFiles ? (
           <div className="cmp-conversations__dropzone">
-            Solte os arquivos para anexar
+            <div className="cmp-conversations__dropzone-card">
+              <strong>Solte os arquivos para anexar</strong>
+              <span>Os arquivos serão adicionados à mensagem atual.</span>
+            </div>
           </div>
         ) : null}
 
         {!selectedId ? (
           <div className="cmp-conversations__placeholder">
-            Selecione uma conversa à esquerda para abrir o chat.
+            <div className="cmp-conversations__placeholder-icon">💬</div>
+            <h2>Selecione uma conversa</h2>
+            <p>Escolha uma conversa à esquerda para abrir o chat.</p>
           </div>
         ) : (
           <>
@@ -870,19 +901,40 @@ export default function ConversationsPage() {
                     className="cmp-conversations__title-input"
                   />
                 ) : (
-                  <strong
+                  <button
+                    type="button"
                     className="cmp-conversations__chat-title"
                     title="Clique para editar"
                     onClick={() => setEditingTitle(true)}
                   >
                     {conv?.title ?? `Conversa #${selectedId}`}
-                  </strong>
+                  </button>
                 )}
 
                 <div className="cmp-conversations__chat-subtitle">
-                  {conv?.created_by?.full_name ?? conv?.created_by?.email ?? ""}
+                  {chatOwner ? <span>{chatOwner}</span> : null}
+
+                  {messages.length > 0 ? (
+                    <>
+                      <span aria-hidden="true">•</span>
+                      <span>
+                        {messages.length} mensagem{messages.length === 1 ? "" : "s"}
+                      </span>
+                    </>
+                  ) : null}
+
+                  {lastActivity ? (
+                    <>
+                      <span aria-hidden="true">•</span>
+                      <span>Última atividade: {formatDateTime(lastActivity)}</span>
+                    </>
+                  ) : null}
                 </div>
               </div>
+
+              <span className="cmp-conversations__chat-status">
+                {chatBusy ? "Carregando" : "Ativo"}
+              </span>
             </div>
 
             <div
@@ -899,7 +951,11 @@ export default function ConversationsPage() {
               ) : null}
 
               {!chatBusy && !chatError && messages.length === 0 ? (
-                <div className="cmp-conversations__empty">Sem mensagens.</div>
+                <div className="cmp-conversations__empty-chat">
+                  <div className="cmp-conversations__placeholder-icon">✉️</div>
+                  <h3>Nenhuma mensagem ainda</h3>
+                  <p>Envie a primeira mensagem para iniciar a conversa.</p>
+                </div>
               ) : null}
 
               {messages.map((m) => {

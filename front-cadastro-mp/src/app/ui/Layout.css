@@ -3,6 +3,8 @@
 .cmp-shell {
   width: 100%;
   height: 100dvh;
+  max-height: 100dvh;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -12,24 +14,38 @@
 }
 
 .cmp-shell__main {
+  width: 100%;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  height: calc(100dvh - var(--app-topbar-height));
+  max-width: 100%;
   padding: var(--app-main-padding);
   overflow: hidden;
 }
 
+/*
+  Importante:
+  Não usar height:auto nem overflow:visible no mobile.
+  A página inteira não deve rolar; cada página/componente decide seu scroll interno.
+*/
+
 @media (max-width: 720px) {
   .cmp-shell {
-    min-height: 100dvh;
-    height: auto;
-    overflow: visible;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
   }
 
   .cmp-shell__main {
-    height: auto;
-    min-height: calc(100dvh - 96px);
-    overflow: visible;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: var(--app-main-padding);
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .cmp-shell__main {
+    padding: var(--app-main-padding);
   }
 }

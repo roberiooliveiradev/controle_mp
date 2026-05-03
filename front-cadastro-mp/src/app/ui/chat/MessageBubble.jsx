@@ -1,4 +1,5 @@
 // src/app/ui/chat/MessageBubble.jsx
+
 import { downloadFileApi } from "../../api/filesApi";
 
 import { REQUEST_ITEM_FIELD_META } from "../requests/requestItemFields.schema";
@@ -10,8 +11,8 @@ import "./MessageBubble.css";
 /* -------------------------------------------------------------------------- */
 
 function myStatusLabel(status) {
-  if (status === "sending") return "🕓 Enviando";
-  if (status === "sent") return "✓ Enviado";
+  if (status === "sending") return "Enviando";
+  if (status === "sent") return "Enviado";
   return "";
 }
 
@@ -21,6 +22,20 @@ function fileLabel(originalName) {
   if (!ext || ext === originalName) return "ARQ";
 
   return String(ext).toUpperCase();
+}
+
+function formatFileSize(bytes) {
+  const value = Number(bytes);
+
+  if (!Number.isFinite(value) || value <= 0) return "";
+
+  if (value < 1024) return `${value} B`;
+
+  const kb = value / 1024;
+  if (kb < 1024) return `${kb.toFixed(kb >= 100 ? 0 : 1)} KB`;
+
+  const mb = kb / 1024;
+  return `${mb.toFixed(mb >= 100 ? 0 : 1)} MB`;
 }
 
 function buildFieldMap(fields) {
@@ -42,6 +57,15 @@ function parseSuppliers(jsonStr) {
   } catch {
     return [];
   }
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+
+  return d.toLocaleString("pt-BR");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -145,8 +169,8 @@ function RequestItemReadonlyCard({ item, index }) {
               </thead>
 
               <tbody>
-                {suppliers.map((row, index) => (
-                  <tr key={index}>
+                {suppliers.map((row, supplierIndex) => (
+                  <tr key={supplierIndex}>
                     <td>{row.supplier_code || "—"}</td>
                     <td>{row.store || "—"}</td>
                     <td>{row.supplier_name || "—"}</td>
@@ -189,9 +213,11 @@ function RequestReadonlyStack({ requestFull }) {
 /* Message Attachments                                                        */
 /* -------------------------------------------------------------------------- */
 
-function MessageAttachment({ file, index, onDownload }) {
+function MessageAttachment({ file, onDownload }) {
   const isImage = (file.content_type || "").startsWith("image/");
   const preview = file._local_preview_url;
+  const extensionLabel = fileLabel(file.original_name);
+  const fileSize = formatFileSize(file.size_bytes);
 
   return (
     <article className="cmp-message-attachment">
@@ -204,14 +230,19 @@ function MessageAttachment({ file, index, onDownload }) {
           />
         ) : (
           <span className="cmp-message-attachment__label">
-            {fileLabel(file.original_name)}
+            {extensionLabel}
           </span>
         )}
       </div>
 
       <div className="cmp-message-attachment__body">
         <div className="cmp-message-attachment__name" title={file.original_name}>
-          {file.original_name}
+          {file.original_name || "Arquivo"}
+        </div>
+
+        <div className="cmp-message-attachment__meta">
+          <span>{extensionLabel}</span>
+          {fileSize ? <span>{fileSize}</span> : null}
         </div>
 
         <button
@@ -232,9 +263,11 @@ function MessageAttachment({ file, index, onDownload }) {
 /* -------------------------------------------------------------------------- */
 
 export function MessageBubble({ message, isMine }) {
-  const date = message.created_at ? new Date(message.created_at) : null;
   const status = message._status ?? (isMine ? "sent" : "received");
   const files = Array.isArray(message.files) ? message.files : [];
+  const senderName = message.sender?.full_name ?? message.sender?.email ?? "";
+  const createdAt = formatDateTime(message.created_at);
+  const statusLabel = myStatusLabel(status);
 
   async function handleDownload(file) {
     if (!file?.id) return;
@@ -256,19 +289,17 @@ export function MessageBubble({ message, isMine }) {
       }
     >
       <article
-        className={
-          status === "sending"
-            ? "cmp-message-bubble cmp-message-bubble--sending"
-            : isMine
-              ? "cmp-message-bubble cmp-message-bubble--mine"
-              : "cmp-message-bubble"
-        }
+        className={[
+          "cmp-message-bubble",
+          isMine ? "cmp-message-bubble--mine" : "",
+          status === "sending" ? "cmp-message-bubble--sending" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
       >
-        {!isMine && (
-          <div className="cmp-message-bubble__sender">
-            {message.sender?.full_name ?? message.sender?.email}
-          </div>
-        )}
+        {!isMine && senderName ? (
+          <div className="cmp-message-bubble__sender">{senderName}</div>
+        ) : null}
 
         {message.body ? (
           <div className="cmp-message-bubble__body">{message.body}</div>
@@ -278,22 +309,33 @@ export function MessageBubble({ message, isMine }) {
           <RequestReadonlyStack requestFull={message.request_full} />
         ) : null}
 
-        {files.length > 0 && (
+        {files.length > 0 ? (
           <div className="cmp-message-bubble__attachments">
             {files.map((file, index) => (
               <MessageAttachment
                 key={file.id ?? `${file.original_name}-${index}`}
                 file={file}
-                index={index}
                 onDownload={handleDownload}
               />
             ))}
           </div>
-        )}
+        ) : null}
 
         <footer className="cmp-message-bubble__footer">
-          <span>{date ? date.toLocaleString("pt-BR") : ""}</span>
-          {isMine && <span>{myStatusLabel(status)}</span>}
+          <time dateTime={message.created_at || undefined}>{createdAt}</time>
+
+          {isMine && statusLabel ? (
+            <span
+              className={
+                status === "sending"
+                  ? "cmp-message-bubble__status cmp-message-bubble__status--sending"
+                  : "cmp-message-bubble__status"
+              }
+            >
+              {status === "sending" ? "🕓 " : "✓ "}
+              {statusLabel}
+            </span>
+          ) : null}
         </footer>
       </article>
     </div>
