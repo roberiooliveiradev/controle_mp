@@ -347,6 +347,16 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
+.cmp-conversations__chat-status-group {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .cmp-conversations__chat-status {
   flex: 0 0 auto;
   min-height: 28px;
@@ -361,11 +371,70 @@
   font-weight: 850;
 }
 
+.cmp-conversations__realtime {
+  flex: 0 0 auto;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.cmp-conversations__realtime-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--text-muted);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--text-muted) 12%, transparent);
+}
+
+.cmp-conversations__realtime--online {
+  border-color: color-mix(in srgb, var(--success, #22c55e) 34%, var(--border));
+  background: color-mix(in srgb, var(--success, #22c55e) 9%, var(--surface-2));
+  color: var(--success, #22c55e);
+}
+
+.cmp-conversations__realtime--online .cmp-conversations__realtime-dot {
+  background: var(--success, #22c55e);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success, #22c55e) 14%, transparent);
+}
+
+.cmp-conversations__realtime--reconnecting {
+  border-color: color-mix(in srgb, var(--warning, #f59e0b) 38%, var(--border));
+  background: color-mix(in srgb, var(--warning, #f59e0b) 10%, var(--surface-2));
+  color: var(--warning, #f59e0b);
+}
+
+.cmp-conversations__realtime--reconnecting .cmp-conversations__realtime-dot {
+  background: var(--warning, #f59e0b);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning, #f59e0b) 14%, transparent);
+}
+
+.cmp-conversations__realtime--offline {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.cmp-conversations__realtime--offline .cmp-conversations__realtime-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
 /* =========================================
    CHAT BODY
 ========================================= */
 
 .cmp-conversations__messages {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
@@ -627,13 +696,6 @@
     margin-top: 10px;
     gap: 7px;
   }
-  
-  .cmp-conversations__jump-button {
-    bottom: 8px;
-    min-height: 30px;
-    padding: 6px 11px;
-    font-size: 11px;
-  }
 
   .cmp-conversations__search-input,
   .cmp-conversations__create-button {
@@ -660,6 +722,18 @@
     font-size: 11.5px;
   }
 
+  .cmp-conversations__chat-status,
+  .cmp-conversations__realtime {
+    min-height: 24px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .cmp-conversations__realtime-dot {
+    width: 7px;
+    height: 7px;
+  }
+
   .cmp-conversations__messages {
     padding: 10px;
   }
@@ -672,6 +746,13 @@
     min-height: 24px;
     padding: 4px 10px;
     font-size: 10px;
+  }
+
+  .cmp-conversations__jump-button {
+    bottom: 8px;
+    min-height: 30px;
+    padding: 6px 11px;
+    font-size: 11px;
   }
 }
 
@@ -690,6 +771,12 @@
     display: none;
   }
 
+  .cmp-conversations__realtime {
+    min-height: 22px;
+    padding: 4px 7px;
+    font-size: 10.5px;
+  }
+
   .cmp-conversations__messages {
     padding: 8px;
   }
@@ -704,16 +791,16 @@
     font-size: 9.5px;
   }
 
-  .cmp-conversations__placeholder,
-  .cmp-conversations__empty-chat {
-    min-height: 180px;
-  }
-
   .cmp-conversations__jump-button {
     bottom: 6px;
     min-height: 28px;
     padding: 5px 10px;
     font-size: 10.5px;
+  }
+
+  .cmp-conversations__placeholder,
+  .cmp-conversations__empty-chat {
+    min-height: 180px;
   }
 }
 
@@ -742,14 +829,6 @@
     overflow: hidden;
   }
 
-  .cmp-conversations__jump-button {
-    bottom: 8px;
-    max-width: min(260px, 78vw);
-    min-height: 32px;
-    padding: 6px 12px;
-    font-size: 11px;
-  }
-  
   .cmp-conversations__sidebar,
   .cmp-conversations__chat {
     min-height: 0;
@@ -793,8 +872,20 @@
     font-weight: 850;
   }
 
+  .cmp-conversations__chat-status-group {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 7px;
+  }
+
   .cmp-conversations__chat-status {
     display: none;
+  }
+
+  .cmp-conversations__realtime {
+    min-height: 26px;
+    padding: 5px 8px;
+    font-size: 11px;
   }
 
   .cmp-conversations__chat-title-area {
@@ -826,6 +917,14 @@
     min-height: 24px;
     padding: 4px 10px;
     font-size: 10px;
+  }
+
+  .cmp-conversations__jump-button {
+    bottom: 8px;
+    max-width: min(260px, 78vw);
+    min-height: 32px;
+    padding: 6px 12px;
+    font-size: 11px;
   }
 
   .cmp-conversations__composer {

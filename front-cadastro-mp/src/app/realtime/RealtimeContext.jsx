@@ -33,7 +33,6 @@ const ROLE_ADMIN = 1;
 const ROLE_ANALYST = 2;
 const ROLE_USER = 3;
 
-// ✅ dedupe global (protege até se tiver Provider duplicado)
 function getGlobalDedupeStore() {
   const g = window;
   if (!g.__cadmpDedupe) {
@@ -58,9 +57,6 @@ function isSecureForNotifications() {
   return typeof window !== "undefined" && window.isSecureContext === true;
 }
 
-// -----------------------------
-// ✅ Notificação do navegador
-// -----------------------------
 export async function requestBrowserNotificationsPermission() {
   if (!canUseBrowserNotifications()) return { ok: false, reason: "unsupported" };
   if (!isSecureForNotifications()) return { ok: false, reason: "insecure_context" };
@@ -115,7 +111,6 @@ export function RealtimeProvider({ children }) {
   const isPrivileged = roleId === ROLE_ADMIN || roleId === ROLE_ANALYST;
   const isUserOnly = roleId === ROLE_USER;
 
-  // ✅ refs anti-closure
   const activeUserIdRef = useRef(activeUserId ?? null);
   const isPrivilegedRef = useRef(isPrivileged);
   const isUserOnlyRef = useRef(isUserOnly);
@@ -131,10 +126,10 @@ export function RealtimeProvider({ children }) {
 
   const [conversations, setConversations] = useState([]);
   const [createdRequestsCount, setCreatedRequestsCount] = useState(0);
+  const [realtimeStatus, setRealtimeStatus] = useState(() =>
+    socket.connected ? "online" : "offline"
+  );
 
-  // -----------------------------
-  // ✅ Token "reativo"
-  // -----------------------------
   const [accessToken, setAccessToken] = useState(() => {
     try {
       return String(authStorage?.getActiveAccessToken?.() ?? "").trim();
@@ -158,7 +153,6 @@ export function RealtimeProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // mesmo tab: polling leve
     const id = setInterval(() => {
       try {
         const t = String(authStorage?.getActiveAccessToken?.() ?? "").trim();
@@ -171,9 +165,6 @@ export function RealtimeProvider({ children }) {
     return () => clearInterval(id);
   }, []);
 
-  // -----------------------------
-  // ✅ Unread por perfil (persistência local)
-  // -----------------------------
   const unreadKey = useMemo(
     () => `cadmp_unread_counts:${activeUserId ?? "na"}`,
     [activeUserId]
@@ -209,12 +200,8 @@ export function RealtimeProvider({ children }) {
     );
   }, [unreadCounts]);
 
-  // conversa ativa (controlada pela página)
   const activeConvRef = useRef(null);
 
-  // -----------------------------
-  // ✅ Controle de acesso (para USER)
-  // -----------------------------
   const allowedConvIdsRef = useRef(new Set());
   const prevConvIdsRef = useRef(new Set());
 
@@ -230,9 +217,6 @@ export function RealtimeProvider({ children }) {
     return allowedConvIdsRef.current.has(Number(cid));
   }
 
-  // -----------------------------
-  // helpers payload
-  // -----------------------------
   function stableText(v) {
     if (v == null) return "";
     return String(v).trim();
@@ -365,180 +349,185 @@ export function RealtimeProvider({ children }) {
       list[idx] = {
         ...list[idx],
         title,
-        updated_at: new Date().toISOString(),
+        updated_at: list[idx].updated_at ?? new Date().toISOString(),
       };
+
       return list;
     });
   }
 
-  // -----------------------------
-  // ✅ DEDUPE
-  // -----------------------------
   function markSeenAny(keys) {
     const store = getGlobalDedupeStore();
     const now = Date.now();
 
-    for (const k of keys) {
-      if (!k) continue;
-      const last = store.seen.get(k);
-      if (last != null && now - last < store.ttlMs) return true;
+    for (const [key, ts] of store.seen.entries()) {
+      if (now - ts > store.ttlMs) store.seen.delete(key);
     }
 
-    for (const k of keys) {
-      if (!k) continue;
-      store.seen.set(k, now);
+    const validKeys = keys.filter(Boolean);
+
+    if (validKeys.some((key) => store.seen.has(key))) {
+      return true;
     }
+
+    validKeys.forEach((key) => store.seen.set(key, now));
 
     if (store.seen.size > store.max) {
-      for (const [k, t] of store.seen) {
-        if (now - t > store.ttlMs) store.seen.delete(k);
-        if (store.seen.size <= store.max) break;
+      const entries = [...store.seen.entries()].sort((a, b) => a[1] - b[1]);
+      const removeCount = Math.ceil(store.max * 0.25);
+
+      for (const [key] of entries.slice(0, removeCount)) {
+        store.seen.delete(key);
       }
     }
 
     return false;
   }
 
-  // -----------------------------
-  // ✅ Browser notification (throttle)
-  // -----------------------------
-  const notifPermissionAskedRef = useRef(false);
-
-  async function ensureNotificationPermissionOnce() {
-    if (!canUseBrowserNotifications()) return false;
-
-    if (Notification.permission === "granted") return true;
-    if (Notification.permission === "denied") return false;
-
-    if (notifPermissionAskedRef.current) return false;
-
-    const askedKey = "cadmp_notif_permission_asked";
-    const alreadyAsked = localStorage.getItem(askedKey) === "1";
-    if (alreadyAsked) {
-      notifPermissionAskedRef.current = true;
-      return false;
-    }
-
-    notifPermissionAskedRef.current = true;
-    localStorage.setItem(askedKey, "1");
-
-    try {
-      const res = await Notification.requestPermission();
-      return res === "granted";
-    } catch {
-      return false;
-    }
-  }
-
-  async function showBrowserNotification({ title, body }) {
-    if (!canUseBrowserNotifications()) return;
-    if (isTabFocused()) return;
-
-    const ok = await ensureNotificationPermissionOnce();
-    if (!ok) return;
-
-    await showBrowserNotificationBase({ title, body });
-  }
-
-  // -----------------------------
-  // loads (API)
-  // -----------------------------
-  async function loadConversations() {
-    const data = await listConversationsApi({ limit: 50, offset: 0 });
-    const list = Array.isArray(data) ? data : data?.items ?? [];
-    setConversations(list);
-    prevConvIdsRef.current = new Set(list.map((c) => Number(c.id)).filter(Boolean));
-  }
-
-  async function loadUnreadSummary() {
-    try {
-      const summary = await getUnreadSummaryApi();
-      setUnreadCounts(summary ?? {});
-    } catch {
-      setUnreadCounts({});
-    }
-  }
-
-  async function loadCreatedRequestsCount() {
-    try {
-      const total = await getRequestsCountApi({ status_id: 1 }); // CRIADO
-      setCreatedRequestsCount(Number(total || 0));
-    } catch {
-      setCreatedRequestsCount(0);
-    }
-  }
-
-  // ✅ refresh central (login/refresh/reconnect/voltar pra aba)
-  async function refreshAll() {
-    await Promise.allSettled([loadConversations(), loadUnreadSummary(), loadCreatedRequestsCount()]);
-  }
-
-  // debounce de sync (pra não floodar API)
-  const syncTimerRef = useRef(null);
-  function scheduleSyncAll(delayMs = 300) {
-    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = setTimeout(() => {
-      refreshAll();
-    }, delayMs);
-  }
-
-  // -----------------------------
-  // ✅ helpers: notify vs sync
-  // -----------------------------
   function toastForRequestStatus(statusId) {
-    // Ajuste textos se quiser, mas mantém sem “notificar todo mundo”
-    if (statusId === 1) return { kind: "success", text: "Item (re)enviado." };
-    if (statusId === 2) return { kind: "success", text: "Item em processo." };
-    if (statusId === 3) return { kind: "success", text: "Item finalizado." };
-    if (statusId === 5) return { kind: "warning", text: "Item devolvido." };
-    if (statusId === 6) return { kind: "error", text: "Item rejeitado." };
-    if (statusId === 4) return { kind: "error", text: "Falha ao processar item." };
+    const n = Number(statusId);
+
+    if (n === 1) {
+      return { kind: "success", text: "Solicitação retornada para análise." };
+    }
+
+    if (n === 2) {
+      return { kind: "warning", text: "Solicitação em análise." };
+    }
+
+    if (n === 3) {
+      return { kind: "success", text: "Solicitação aprovada." };
+    }
+
+    if (n === 4) {
+      return { kind: "error", text: "Solicitação reprovada." };
+    }
+
+    if (n === 5) {
+      return { kind: "success", text: "Produto criado a partir da solicitação." };
+    }
+
     return { kind: "warning", text: "Solicitação atualizada." };
   }
 
   function shouldNotifyRequestChange(payload, { statusId, changedBy, requestOwnerId }) {
     const currentUserId = Number(activeUserIdRef.current);
 
-    // 1) Sempre notifica quem fez a ação e o dono da solicitação
-    if (currentUserId && (currentUserId === Number(changedBy) || currentUserId === Number(requestOwnerId))) {
-      return true;
+    if (changedBy && changedBy === currentUserId) return false;
+
+    if (isPrivilegedRef.current) return true;
+
+    if (isUserOnlyRef.current) {
+      if (requestOwnerId && requestOwnerId === currentUserId) return true;
+
+      const payloadOwnerId = Number(
+        payload?.created_by ??
+          payload?.user_id ??
+          payload?.request?.created_by ??
+          payload?.request?.user_id
+      );
+
+      if (payloadOwnerId && payloadOwnerId === currentUserId) return true;
     }
 
-    // 2) ADMIN / ANALYST
-    if (isPrivilegedRef.current) {
-      // criação ou reenvio (status 1) → sempre notifica
-      if (Number(statusId) === 1) return true;
-
-      // outros status → só se estiver atribuído
-      if (isConversationAssignedToMe(payload)) return true;
-    }
-
-    // 3) USER: nunca notifica se não for o dono (ou quem fez a ação)
-    if (isUserOnlyRef.current) return false;
-
-    // default: não notifica “todo mundo”
-    return false;
+    return Number(statusId) === 1;
   }
 
-  // ✅ pedido do usuário: extrair função
+  async function refreshConversations() {
+    try {
+      const data = await listConversationsApi();
+      const arr = Array.isArray(data) ? data : data?.items ?? [];
+
+      setConversations((prev) => {
+        const normalized = Array.isArray(arr) ? arr : [];
+
+        const prevIds = prevConvIdsRef.current;
+        const nextIds = new Set(normalized.map((c) => Number(c.id)).filter(Boolean));
+        prevConvIdsRef.current = nextIds;
+
+        if (!prevIds || prevIds.size === 0) {
+          return normalized;
+        }
+
+        return normalized;
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  async function refreshUnreadSummary() {
+    try {
+      const summary = await getUnreadSummaryApi();
+
+      if (summary && typeof summary === "object" && !Array.isArray(summary)) {
+        setUnreadCounts(summary);
+        return;
+      }
+
+      if (Array.isArray(summary)) {
+        const next = {};
+        summary.forEach((row) => {
+          const cid = Number(row?.conversation_id ?? row?.id);
+          const count = Number(row?.unread_count ?? row?.count ?? 0);
+          if (cid) next[cid] = count;
+        });
+        setUnreadCounts(next);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  async function refreshCreatedRequestsCount() {
+    try {
+      const data = await getRequestsCountApi({ status_id: 1 });
+      const count = Number(data?.count ?? data?.total ?? data ?? 0);
+      setCreatedRequestsCount(Number.isFinite(count) ? count : 0);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function refreshAll() {
+    await Promise.allSettled([
+      refreshConversations(),
+      refreshUnreadSummary(),
+      refreshCreatedRequestsCount(),
+    ]);
+  }
+
+  const syncTimerRef = useRef(null);
+
+  function scheduleSyncAll(delay = 300) {
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+
+    syncTimerRef.current = setTimeout(() => {
+      syncTimerRef.current = null;
+      refreshAll();
+    }, delay);
+  }
+
   async function syncAfterRequestChange(statusId) {
-    // badge depende do total de status_id=1, então QUALQUER transição envolvendo item
-    // pode afetar o total (ex.: 5 -> 1, 1 -> 2, etc). Atualiza e depois sincroniza geral.
-    await loadCreatedRequestsCount();
+    await refreshCreatedRequestsCount();
 
-    // status 1 costuma ser mais “sensível” (reaparece na fila); sincroniza mais rápido
-    if (Number(statusId) === 1) scheduleSyncAll(120);
-    else scheduleSyncAll(250);
+    if (Number(statusId) === 1) {
+      await refreshCreatedRequestsCount();
+    }
+
+    scheduleSyncAll(250);
   }
 
-  // -----------------------------
-  // ✅ efeito principal
-  // -----------------------------
+  function showBrowserNotification(args) {
+    showBrowserNotificationBase(args);
+  }
+
   useEffect(() => {
     let cancelled = false;
 
-    // logout (ou refresh sem token)
     if (!accessToken) {
+      setRealtimeStatus("offline");
+
       try {
         disconnectSocket({ clearAuth: true });
       } catch {
@@ -558,37 +547,65 @@ export function RealtimeProvider({ children }) {
       };
     }
 
-    // login/refresh com token
+    setRealtimeStatus(socket.connected ? "online" : "connecting");
     setSocketAuthToken(accessToken);
     connectSocket(accessToken);
 
     const onConnect = async () => {
       if (cancelled) return;
+      setRealtimeStatus("online");
       await refreshAll();
+    };
+
+    const onDisconnect = () => {
+      if (cancelled) return;
+      setRealtimeStatus("offline");
+    };
+
+    const onConnectError = () => {
+      if (cancelled) return;
+      setRealtimeStatus("offline");
+    };
+
+    const onReconnectAttempt = () => {
+      if (cancelled) return;
+      setRealtimeStatus("reconnecting");
+    };
+
+    const onReconnectError = () => {
+      if (cancelled) return;
+      setRealtimeStatus("reconnecting");
+    };
+
+    const onReconnectFailed = () => {
+      if (cancelled) return;
+      setRealtimeStatus("offline");
     };
 
     const onReconnect = async () => {
       if (cancelled) return;
+      setRealtimeStatus("online");
       await refreshAll();
     };
 
     socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onConnectError);
+    socket.io.on?.("reconnect_attempt", onReconnectAttempt);
+    socket.io.on?.("reconnect_error", onReconnectError);
+    socket.io.on?.("reconnect_failed", onReconnectFailed);
     socket.io.on?.("reconnect", onReconnect);
 
-    // primeira carga (não depende do connect)
     (async () => {
       await refreshAll();
     })();
 
-    // quando volta pra aba (muito comum ficar stale)
     const onVisibility = () => {
       if (!document.hidden) scheduleSyncAll(100);
     };
+
     document.addEventListener("visibilitychange", onVisibility);
 
-    // -----------------------------
-    // handlers realtime
-    // -----------------------------
     const onMessageNew = (payload) => {
       const cid = conversationIdOf(payload);
       if (!cid) return;
@@ -610,13 +627,11 @@ export function RealtimeProvider({ children }) {
       const currentUserId = Number(activeUserIdRef.current);
       const isMine = sid && currentUserId === sid;
 
-      // se estou dentro da conversa: não faz notify, mas faz sync leve (fonte da verdade)
       if (activeConvRef.current === cid) {
         scheduleSyncAll(250);
         return;
       }
 
-      // mensagem minha: não notifica (mas pode sync se quiser; aqui não precisa)
       if (isMine) return;
 
       const who = senderNameOf(payload);
@@ -625,13 +640,11 @@ export function RealtimeProvider({ children }) {
 
       toastSuccess(title ? `Nova mensagem de ${who} • ${title}` : `Nova mensagem de ${who}`);
 
-      // feedback instantâneo no badge
       setUnreadCounts((prevCounts) => ({
         ...(prevCounts ?? {}),
         [cid]: Number((prevCounts ?? {})[cid] ?? 0) + 1,
       }));
 
-      // e sincroniza com o servidor (fonte da verdade)
       scheduleSyncAll(350);
 
       showBrowserNotification({
@@ -647,7 +660,6 @@ export function RealtimeProvider({ children }) {
       const keys = [cid ? `conversation:new|cid:${cid}` : "", fp];
       if (markSeenAny(keys)) return;
 
-      // notify: apenas se privilegiado (e com contexto)
       if (isPrivilegedRef.current) {
         const title = conversationTitleOf(payload);
         const assignedToMe = isConversationAssignedToMe(payload);
@@ -668,7 +680,6 @@ export function RealtimeProvider({ children }) {
         });
       }
 
-      // sync sempre
       scheduleSyncAll(150);
     };
 
@@ -684,18 +695,14 @@ export function RealtimeProvider({ children }) {
 
       const currentUserId = Number(activeUserIdRef.current);
 
-      // USER: só notifica se foi ele quem criou
       if (isUserOnlyRef.current && sid && sid !== currentUserId) {
-        // ainda assim faz sync
         await syncAfterRequestChange(1);
         return;
       }
 
-      // notify: geralmente ok (já era assim), mas sem “todo mundo”
       toastSuccess("Solicitação criada.");
       showBrowserNotification({ title: "Controle MP", body: "Solicitação criada." });
 
-      // sync/badge: criação geralmente implica status 1
       await syncAfterRequestChange(1);
     };
 
@@ -717,7 +724,6 @@ export function RealtimeProvider({ children }) {
       ];
       if (markSeenAny(keys)) return;
 
-      // notify: só para interessados
       const notify = shouldNotifyRequestChange(payload, {
         statusId,
         changedBy,
@@ -726,6 +732,7 @@ export function RealtimeProvider({ children }) {
 
       if (notify) {
         const t = toastForRequestStatus(statusId);
+
         if (t.kind === "success") toastSuccess(t.text);
         else if (t.kind === "warning") toastWarning(t.text);
         else toastError(t.text);
@@ -733,7 +740,6 @@ export function RealtimeProvider({ children }) {
         showBrowserNotification({ title: "Controle MP", body: t.text });
       }
 
-      // sync SEMPRE (badge depende do status 1; ex.: 5 -> 1 precisa subir)
       await syncAfterRequestChange(statusId);
     };
 
@@ -775,6 +781,11 @@ export function RealtimeProvider({ children }) {
       document.removeEventListener("visibilitychange", onVisibility);
 
       socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onConnectError);
+      socket.io.off?.("reconnect_attempt", onReconnectAttempt);
+      socket.io.off?.("reconnect_error", onReconnectError);
+      socket.io.off?.("reconnect_failed", onReconnectFailed);
       socket.io.off?.("reconnect", onReconnect);
 
       socket.off("message:new", onMessageNew);
@@ -784,7 +795,7 @@ export function RealtimeProvider({ children }) {
       socket.off("product:created", onProductCreated);
       socket.off("product:updated", onProductUpdated);
     };
-  }, [accessToken]); // 🔥 intencional: handlers usam refs
+  }, [accessToken]);
 
   return (
     <RealtimeContext.Provider
@@ -798,6 +809,8 @@ export function RealtimeProvider({ children }) {
 
         createdRequestsCount,
         setCreatedRequestsCount,
+
+        realtimeStatus,
 
         activeConvRef,
         updateConversationTitle,

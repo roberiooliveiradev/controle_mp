@@ -106,6 +106,28 @@ function formatMessageDateSeparator(date) {
   });
 }
 
+function realtimeStatusMeta(status) {
+  if (status === "online") {
+    return {
+      label: "Online",
+      className: "cmp-conversations__realtime cmp-conversations__realtime--online",
+    };
+  }
+
+  if (status === "reconnecting" || status === "connecting") {
+    return {
+      label: "Reconectando...",
+      className:
+        "cmp-conversations__realtime cmp-conversations__realtime--reconnecting",
+    };
+  }
+
+  return {
+    label: "Offline",
+    className: "cmp-conversations__realtime cmp-conversations__realtime--offline",
+  };
+}
+
 export default function ConversationsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -122,7 +144,13 @@ export default function ConversationsPage() {
     setUnreadCounts,
     activeConvRef,
     updateConversationTitle,
+    realtimeStatus,
   } = useRealtime();
+
+  const realtimeMeta = useMemo(
+    () => realtimeStatusMeta(realtimeStatus),
+    [realtimeStatus]
+  );
 
   const targetMessageId = useMemo(() => {
     const sp = new URLSearchParams(location.search || "");
@@ -1031,9 +1059,16 @@ export default function ConversationsPage() {
                 </div>
               </div>
 
-              <span className="cmp-conversations__chat-status">
-                {chatBusy ? "Carregando" : "Ativo"}
-              </span>
+              <div className="cmp-conversations__chat-status-group">
+                <span className={realtimeMeta.className}>
+                  <span className="cmp-conversations__realtime-dot" />
+                  <span>{realtimeMeta.label}</span>
+                </span>
+
+                <span className="cmp-conversations__chat-status">
+                  {chatBusy ? "Carregando" : "Ativo"}
+                </span>
+              </div>
             </div>
 
             <div
