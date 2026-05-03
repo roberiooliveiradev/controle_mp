@@ -91,3 +91,5 @@ reports/
 # =========================
 *.bak
 *.tmp
+
+api-cadastro-mp/uploads/

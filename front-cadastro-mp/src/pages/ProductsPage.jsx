@@ -20,7 +20,18 @@ function fmt(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleString();
+  return d.toLocaleString("pt-BR");
+}
+
+function formatDateOnly(iso) {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString("pt-BR");
+}
+
+function getFlagCount(row) {
+  return Number(row?.flags_count ?? 0);
 }
 
 function ProductDetailsModal({ open, productId, onClose }) {
@@ -103,9 +114,10 @@ function ProductDetailsModal({ open, productId, onClose }) {
       ) : (
         <div className="cmp-products-fields">
           <div className="cmp-products-fields__header">
-            <div className="cmp-products-fields__title">Campos do Produto</div>
+            <div className="cmp-products-fields__title">Campos do produto</div>
             <div className="cmp-products-fields__meta">
-              Código atual: {valuesByTag?.[TAGS.codigo_atual] || "—"} • Descrição: {valuesByTag?.[TAGS.descricao] || "—"}
+              Código atual: {valuesByTag?.[TAGS.codigo_atual] || "—"} • Descrição:{" "}
+              {valuesByTag?.[TAGS.descricao] || "—"}
             </div>
           </div>
 
@@ -240,6 +252,38 @@ export default function ProductsPage() {
     return { start, end };
   }, [offset, limit, total]);
 
+  const summary = useMemo(() => {
+    const flaggedOnPage = rows.reduce((acc, row) => acc + (getFlagCount(row) > 0 ? 1 : 0), 0);
+
+    return {
+      total,
+      onPage: rows.length,
+      flaggedOnPage,
+      cleanOnPage: Math.max(0, rows.length - flaggedOnPage),
+    };
+  }, [rows, total]);
+
+  const hasActiveFilters = Boolean(
+    q.trim() ||
+      flagFilter !== "all" ||
+      dateFrom ||
+      dateTo
+  );
+
+  const activeFiltersLabel = useMemo(() => {
+    const parts = [];
+
+    if (q.trim()) parts.push(`busca: ${q.trim()}`);
+
+    if (flagFilter === "with") parts.push("com flag");
+    if (flagFilter === "without") parts.push("sem flag");
+
+    if (dateFrom) parts.push(`de ${formatDateOnly(`${dateFrom}T00:00:00`)}`);
+    if (dateTo) parts.push(`até ${formatDateOnly(`${dateTo}T00:00:00`)}`);
+
+    return parts.join(" • ");
+  }, [q, flagFilter, dateFrom, dateTo]);
+
   function openDetails(id) {
     setSelectedId(id);
     setDetailsOpen(true);
@@ -253,7 +297,48 @@ export default function ProductsPage() {
   return (
     <div className="cmp-products-page">
       <div className="cmp-products-page__header">
-        <h2 className="cmp-products-page__title">Produtos</h2>
+        <div className="cmp-products-page__heading-row">
+          <div>
+            <h2 className="cmp-products-page__title">Produtos</h2>
+            <p className="cmp-products-page__subtitle">
+              Consulte produtos cadastrados, acompanhe flags e abra os detalhes técnicos.
+            </p>
+          </div>
+
+          {busy ? (
+            <span className="cmp-products-page__sync-badge">Atualizando...</span>
+          ) : (
+            <span className="cmp-products-page__sync-badge cmp-products-page__sync-badge--ok">
+              Lista atualizada
+            </span>
+          )}
+        </div>
+
+        <div className="cmp-products-page__summary-grid" aria-label="Resumo de produtos">
+          <div className="cmp-products-page__summary-card">
+            <span>Total</span>
+            <strong>{summary.total}</strong>
+            <small>na API</small>
+          </div>
+
+          <div className="cmp-products-page__summary-card">
+            <span>Página</span>
+            <strong>{summary.onPage}</strong>
+            <small>itens carregados</small>
+          </div>
+
+          <div className="cmp-products-page__summary-card cmp-products-page__summary-card--flagged">
+            <span>Flags</span>
+            <strong>{summary.flaggedOnPage}</strong>
+            <small>na página</small>
+          </div>
+
+          <div className="cmp-products-page__summary-card cmp-products-page__summary-card--clean">
+            <span>Sem flags</span>
+            <strong>{summary.cleanOnPage}</strong>
+            <small>na página</small>
+          </div>
+        </div>
 
         <div className="cmp-products-page__filters">
           <select
@@ -267,7 +352,7 @@ export default function ProductsPage() {
           </select>
 
           <input
-            placeholder="Buscar (código/descrição)"
+            placeholder="Buscar por código ou descrição"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className="cmp-products-page__control cmp-products-page__control--search"
@@ -299,66 +384,140 @@ export default function ProductsPage() {
             Limpar filtros
           </button>
         </div>
+
+        {hasActiveFilters ? (
+          <div className="cmp-products-page__active-filters">
+            <span>
+              Filtros ativos: <strong>{activeFiltersLabel}</strong>
+            </span>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="cmp-products-page__active-filters-button"
+              disabled={busy}
+            >
+              Remover filtros
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {error ? <div className="cmp-products-error">{error}</div> : null}
 
-      <div className="cmp-products-page__table-card">
-        <table className="cmp-products-page__table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Código</th>
-              <th>Descrição</th>
-              <th>Atualizado</th>
-              <th>Flags</th>
-              <th>Abrir</th>
-            </tr>
-          </thead>
+      <div className="cmp-products-page__content">
+        <div className="cmp-products-page__table-card">
+          <table className="cmp-products-page__table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Atualizado</th>
+                <th>Flags</th>
+                <th>Abrir</th>
+              </tr>
+            </thead>
 
-          <tbody>
-            {busy ? (
-              <tr>
-                <td colSpan={6} className="cmp-products-page__empty-cell">
-                  Carregando...
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="cmp-products-page__empty-cell">
-                  Nenhum produto encontrado.
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <span className="cmp-products-page__id">{r.id}</span>
-                  </td>
-                  <td>{r.codigo_atual ?? "—"}</td>
-                  <td>{r.descricao ?? "—"}</td>
-                  <td>{fmt(r.updated_at || r.created_at)}</td>
-                  <td>
-                    {Number(r.flags_count ?? 0) > 0 ? (
-                      <b>🚩{Number(r.flags_count)}</b>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      onClick={() => openDetails(r.id)}
-                      className="cmp-products-page__table-button"
-                    >
-                      Abrir
-                    </button>
+            <tbody>
+              {busy ? (
+                <tr>
+                  <td colSpan={6} className="cmp-products-page__empty-cell">
+                    Carregando produtos...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="cmp-products-page__empty-cell">
+                    <strong>Nenhum produto encontrado.</strong>
+                    <span>
+                      Ajuste os filtros ou limpe a busca para consultar todos os produtos.
+                    </span>
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <span className="cmp-products-page__id">{r.id}</span>
+                    </td>
+                    <td>{r.codigo_atual ?? "—"}</td>
+                    <td>{r.descricao ?? "—"}</td>
+                    <td>{fmt(r.updated_at || r.created_at)}</td>
+                    <td>
+                      {getFlagCount(r) > 0 ? (
+                        <b>🚩 {getFlagCount(r)}</b>
+                      ) : (
+                        <span className="cmp-products-page__muted">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => openDetails(r.id)}
+                        className="cmp-products-page__table-button"
+                      >
+                        Abrir
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="cmp-products-page__cards" aria-label="Produtos em cards">
+          {busy ? (
+            <div className="cmp-products-page__empty-card">Carregando produtos...</div>
+          ) : rows.length === 0 ? (
+            <div className="cmp-products-page__empty-card">
+              <strong>Nenhum produto encontrado.</strong>
+              <span>Ajuste os filtros ou limpe a busca para consultar todos os produtos.</span>
+            </div>
+          ) : (
+            rows.map((r) => {
+              const flagsCount = getFlagCount(r);
+
+              return (
+                <article key={r.id} className="cmp-products-page__card">
+                  <div className="cmp-products-page__card-header">
+                    <div className="cmp-products-page__card-title-area">
+                      <span className="cmp-products-page__card-eyebrow">Produto #{r.id}</span>
+                      <strong className="cmp-products-page__card-title">
+                        {r.codigo_atual ?? "Sem código"}
+                      </strong>
+                    </div>
+
+                    {flagsCount > 0 ? (
+                      <span className="cmp-products-page__flag-badge">🚩 {flagsCount}</span>
+                    ) : (
+                      <span className="cmp-products-page__flag-badge cmp-products-page__flag-badge--ok">
+                        Sem flag
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="cmp-products-page__card-description">
+                    {r.descricao ?? "Sem descrição informada."}
+                  </div>
+
+                  <div className="cmp-products-page__card-meta">
+                    <span>Atualizado</span>
+                    <strong>{fmt(r.updated_at || r.created_at)}</strong>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => openDetails(r.id)}
+                    className="cmp-products-page__card-button"
+                  >
+                    Abrir produto
+                  </button>
+                </article>
+              );
+            })
+          )}
+        </div>
       </div>
 
       <div className="cmp-products-page__pagination">

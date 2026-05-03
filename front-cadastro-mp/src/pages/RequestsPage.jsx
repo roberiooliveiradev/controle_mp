@@ -44,6 +44,13 @@ function fmt(iso) {
   return d.toLocaleString("pt-BR");
 }
 
+function formatDateOnly(iso) {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString("pt-BR");
+}
+
 function norm(s) {
   return String(s ?? "")
     .trim()
@@ -71,6 +78,48 @@ function parseDateRange(dateFrom, dateTo) {
   }
 
   return { fromMs, toMs };
+}
+
+function getStatusName(row) {
+  return String(row?.request_status?.status_name ?? row?.request_status_id ?? "—");
+}
+
+function getTypeName(row) {
+  return String(row?.request_type?.type_name ?? row?.request_type_id ?? "—");
+}
+
+function getStatusClass(row) {
+  const id = Number(row?.request_status_id);
+  const name = norm(getStatusName(row));
+
+  if (id === REQUEST_STATUS.FINALIZED || name.includes("final")) {
+    return "cmp-requests-page__status-badge cmp-requests-page__status-badge--finalized";
+  }
+
+  if (id === REQUEST_STATUS.REJECTED || name.includes("rejeit")) {
+    return "cmp-requests-page__status-badge cmp-requests-page__status-badge--rejected";
+  }
+
+  if (id === REQUEST_STATUS.RETURNED || name.includes("devol") || name.includes("retorn")) {
+    return "cmp-requests-page__status-badge cmp-requests-page__status-badge--returned";
+  }
+
+  if (id === REQUEST_STATUS.IN_PROGRESS || name.includes("andamento")) {
+    return "cmp-requests-page__status-badge cmp-requests-page__status-badge--progress";
+  }
+
+  return "cmp-requests-page__status-badge cmp-requests-page__status-badge--created";
+}
+
+function canEditRow(row, user) {
+  const rowIsReturned = Number(row?.request_status_id) === REQUEST_STATUS.RETURNED;
+  const rowIsOwner = Number(row?.request_created_by) === Number(user?.id);
+
+  const rowLockAfterDone =
+    Number(row?.request_status_id) === REQUEST_STATUS.FINALIZED ||
+    Number(row?.request_status_id) === REQUEST_STATUS.REJECTED;
+
+  return rowIsReturned && rowIsOwner && !rowLockAfterDone;
 }
 
 function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
@@ -402,7 +451,7 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
     if (!isMod) return;
 
     if (lockAfterDone) {
-      alert("Solicitação FINALIZED/REJECTED não pode ser alterada.");
+      alert("Solicitação FINALIZADA/REJEITADA não pode ser alterada.");
       return;
     }
 
@@ -861,6 +910,99 @@ export default function RequestsPage() {
     return { start, end };
   }, [offset, limit, total]);
 
+  const summary = useMemo(() => {
+    const list = filteredRows || [];
+
+    const returned = list.filter(
+      (row) => Number(row?.request_status_id) === REQUEST_STATUS.RETURNED
+    ).length;
+
+    const finalized = list.filter(
+      (row) => Number(row?.request_status_id) === REQUEST_STATUS.FINALIZED
+    ).length;
+
+    const rejected = list.filter(
+      (row) => Number(row?.request_status_id) === REQUEST_STATUS.REJECTED
+    ).length;
+
+    const editable = list.filter((row) => canEditRow(row, user)).length;
+
+    return {
+      total,
+      visible: list.length,
+      returned,
+      finalized,
+      rejected,
+      editable,
+    };
+  }, [filteredRows, total, user]);
+
+  const hasActiveFilters = Boolean(
+    statusId ||
+      createdByName.trim() ||
+      typeId ||
+      itemFilter.trim() ||
+      dateFrom ||
+      dateTo ||
+      dateMode !== "AUTO"
+  );
+
+  const activeFiltersLabel = useMemo(() => {
+    const parts = [];
+
+    const selectedType = (requestTypes || []).find(
+      (item) => String(item.id) === String(typeId)
+    );
+
+    const selectedStatus = (requestStatuses || []).find(
+      (item) => String(item.id) === String(statusId)
+    );
+
+    if (selectedType) {
+      parts.push(`tipo: ${String(selectedType.type_name ?? "").toUpperCase()}`);
+    }
+
+    if (selectedStatus) {
+      parts.push(`status: ${String(selectedStatus.status_name ?? "").toUpperCase()}`);
+    }
+
+    if (createdByName.trim()) {
+      parts.push(`criado por: ${createdByName.trim()}`);
+    }
+
+    if (itemFilter.trim()) {
+      parts.push(`item: ${itemFilter.trim()}`);
+    }
+
+    if (dateMode === "CREATED") {
+      parts.push("data: criação");
+    }
+
+    if (dateMode === "UPDATED") {
+      parts.push("data: atualização");
+    }
+
+    if (dateFrom) {
+      parts.push(`de ${formatDateOnly(`${dateFrom}T00:00:00`)}`);
+    }
+
+    if (dateTo) {
+      parts.push(`até ${formatDateOnly(`${dateTo}T00:00:00`)}`);
+    }
+
+    return parts.join(" • ");
+  }, [
+    requestTypes,
+    requestStatuses,
+    typeId,
+    statusId,
+    createdByName,
+    itemFilter,
+    dateMode,
+    dateFrom,
+    dateTo,
+  ]);
+
   function openDetails(row, mode = "view") {
     setSelectedRow(row);
     setDetailsMode(mode);
@@ -909,7 +1051,48 @@ export default function RequestsPage() {
   return (
     <div className="cmp-requests-page">
       <div className="cmp-requests-page__header">
-        <h2 className="cmp-requests-page__title">Solicitações</h2>
+        <div className="cmp-requests-page__heading-row">
+          <div>
+            <h2 className="cmp-requests-page__title">Solicitações</h2>
+            <p className="cmp-requests-page__subtitle">
+              Consulte solicitações criadas pelo chat, acompanhe status e abra a conversa de origem.
+            </p>
+          </div>
+
+          {busy ? (
+            <span className="cmp-requests-page__sync-badge">Atualizando...</span>
+          ) : (
+            <span className="cmp-requests-page__sync-badge cmp-requests-page__sync-badge--ok">
+              Lista atualizada
+            </span>
+          )}
+        </div>
+
+        <div className="cmp-requests-page__summary-grid" aria-label="Resumo de solicitações">
+          <div className="cmp-requests-page__summary-card">
+            <span>Total</span>
+            <strong>{summary.total}</strong>
+            <small>na API</small>
+          </div>
+
+          <div className="cmp-requests-page__summary-card">
+            <span>Exibidas</span>
+            <strong>{summary.visible}</strong>
+            <small>após filtros locais</small>
+          </div>
+
+          <div className="cmp-requests-page__summary-card cmp-requests-page__summary-card--returned">
+            <span>Devolvidas</span>
+            <strong>{summary.returned}</strong>
+            <small>precisam revisão</small>
+          </div>
+
+          <div className="cmp-requests-page__summary-card cmp-requests-page__summary-card--editable">
+            <span>Editáveis</span>
+            <strong>{summary.editable}</strong>
+            <small>para seu usuário</small>
+          </div>
+        </div>
 
         <div className="cmp-requests-page__filters">
           <select
@@ -966,21 +1149,25 @@ export default function RequestsPage() {
             <option value="UPDATED">Data: Atualizado</option>
           </select>
 
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            title="De (data)"
-            className="cmp-requests-page__control cmp-requests-page__control--date"
-          />
+          <div className="cmp-requests-page__date-group">
+            <span className="cmp-requests-page__date-label">De</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              title="De (data)"
+              className="cmp-requests-page__control cmp-requests-page__control--date"
+            />
 
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            title="Até (data)"
-            className="cmp-requests-page__control cmp-requests-page__control--date"
-          />
+            <span className="cmp-requests-page__date-label">Até</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              title="Até (data)"
+              className="cmp-requests-page__control cmp-requests-page__control--date"
+            />
+          </div>
 
           <button
             type="button"
@@ -991,112 +1178,218 @@ export default function RequestsPage() {
             Limpar
           </button>
         </div>
+
+        {hasActiveFilters ? (
+          <div className="cmp-requests-page__active-filters">
+            <span>
+              Filtros ativos: <strong>{activeFiltersLabel}</strong>
+            </span>
+
+            <button
+              type="button"
+              onClick={clearFilters}
+              disabled={busy}
+              className="cmp-requests-page__active-filters-button"
+            >
+              Remover filtros
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {error ? <div className="cmp-requests-error">{error}</div> : null}
 
-      <div className="cmp-requests-page__summary">
-        Itens na página (após refino local): <b>{filteredRows.length}</b> •
-        Total na API: <b>{total}</b>
-      </div>
-
-      <div className="cmp-requests-page__table-card">
-        <table className="cmp-requests-page__table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Tipo</th>
-              <th>Status</th>
-              <th>Criado por</th>
-              <th>Criado em</th>
-              <th>Atualizado em</th>
-              <th>Abrir</th>
-              <th>Editar</th>
-              <th>Conversa</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {busy ? (
+      <div className="cmp-requests-page__content">
+        <div className="cmp-requests-page__table-card">
+          <table className="cmp-requests-page__table">
+            <thead>
               <tr>
-                <td colSpan={9} className="cmp-requests-page__empty-cell">
-                  Carregando...
-                </td>
+                <th>ID</th>
+                <th>Tipo</th>
+                <th>Status</th>
+                <th>Criado por</th>
+                <th>Criado em</th>
+                <th>Atualizado em</th>
+                <th>Abrir</th>
+                <th>Editar</th>
+                <th>Conversa</th>
               </tr>
-            ) : filteredRows.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="cmp-requests-page__empty-cell">
-                  Nenhuma solicitação encontrada.
-                </td>
-              </tr>
-            ) : (
-              filteredRows.map((r) => {
-                const rowIsReturned =
-                  Number(r.request_status_id) === REQUEST_STATUS.RETURNED;
-                const rowIsOwner =
-                  Number(r.request_created_by) === Number(user?.id);
-                const rowLockAfterDone =
-                  Number(r.request_status_id) === REQUEST_STATUS.FINALIZED ||
-                  Number(r.request_status_id) === REQUEST_STATUS.REJECTED;
+            </thead>
 
-                const canEditNormal =
-                  rowIsReturned && rowIsOwner && !rowLockAfterDone;
+            <tbody>
+              {busy ? (
+                <tr>
+                  <td colSpan={9} className="cmp-requests-page__empty-cell">
+                    Carregando solicitações...
+                  </td>
+                </tr>
+              ) : filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="cmp-requests-page__empty-cell">
+                    <strong>Nenhuma solicitação encontrada.</strong>
+                    <span>
+                      Ajuste os filtros ou limpe a busca para consultar todas as solicitações.
+                    </span>
+                  </td>
+                </tr>
+              ) : (
+                filteredRows.map((r) => {
+                  const canEditNormal = canEditRow(r, user);
 
-                return (
-                  <tr key={r.item_id}>
-                    <td>
-                      <span className="cmp-requests-page__id">
-                        {r.item_id}
-                      </span>
-                    </td>
+                  return (
+                    <tr key={r.item_id}>
+                      <td>
+                        <span className="cmp-requests-page__id">
+                          {r.item_id}
+                        </span>
+                      </td>
 
-                    <td>{r.request_type?.type_name ?? r.request_type_id}</td>
-                    <td>
-                      {r.request_status?.status_name ?? r.request_status_id}
-                    </td>
-                    <td>{r.request_created_by_user?.full_name ?? "—"}</td>
-                    <td>{fmt(r.item_created_at)}</td>
-                    <td>{fmt(r.item_updated_at ? r.item_updated_at : "")}</td>
+                      <td>{getTypeName(r)}</td>
+                      <td>
+                        <span className={getStatusClass(r)}>
+                          {getStatusName(r)}
+                        </span>
+                      </td>
+                      <td>{r.request_created_by_user?.full_name ?? "—"}</td>
+                      <td>{fmt(r.item_created_at)}</td>
+                      <td>{fmt(r.item_updated_at ? r.item_updated_at : "")}</td>
 
-                    <td>
-                      <button
-                        type="button"
-                        onClick={() => openDetails(r, "view")}
-                        className="cmp-requests-page__table-button"
-                      >
-                        Abrir
-                      </button>
-                    </td>
-
-                    <td>
-                      {canEditNormal ? (
+                      <td>
                         <button
                           type="button"
-                          onClick={() => openDetails(r, "edit")}
+                          onClick={() => openDetails(r, "view")}
                           className="cmp-requests-page__table-button"
                         >
-                          Editar
+                          Abrir
                         </button>
-                      ) : (
-                        <span className="cmp-requests-page__muted">—</span>
-                      )}
-                    </td>
+                      </td>
 
-                    <td>
+                      <td>
+                        {canEditNormal ? (
+                          <button
+                            type="button"
+                            onClick={() => openDetails(r, "edit")}
+                            className="cmp-requests-page__table-button"
+                          >
+                            Editar
+                          </button>
+                        ) : (
+                          <span className="cmp-requests-page__muted">—</span>
+                        )}
+                      </td>
+
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => goToConversation(r)}
+                          className="cmp-requests-page__table-button"
+                        >
+                          Ir para conversa
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="cmp-requests-page__cards" aria-label="Solicitações em cards">
+          {busy ? (
+            <div className="cmp-requests-page__empty-card">
+              Carregando solicitações...
+            </div>
+          ) : filteredRows.length === 0 ? (
+            <div className="cmp-requests-page__empty-card">
+              <strong>Nenhuma solicitação encontrada.</strong>
+              <span>
+                Ajuste os filtros ou limpe a busca para consultar todas as solicitações.
+              </span>
+            </div>
+          ) : (
+            filteredRows.map((r) => {
+              const canEditNormal = canEditRow(r, user);
+
+              return (
+                <article key={r.item_id} className="cmp-requests-page__card">
+                  <div className="cmp-requests-page__card-header">
+                    <div className="cmp-requests-page__card-title-area">
+                      <span className="cmp-requests-page__card-eyebrow">
+                        Solicitação #{r.request_id}
+                      </span>
+
+                      <strong className="cmp-requests-page__card-title">
+                        Item #{r.item_id}
+                      </strong>
+                    </div>
+
+                    <span className={getStatusClass(r)}>
+                      {getStatusName(r)}
+                    </span>
+                  </div>
+
+                  <div className="cmp-requests-page__card-pills">
+                    <span className="cmp-requests-page__type-badge">
+                      {getTypeName(r)}
+                    </span>
+
+                    {canEditNormal ? (
+                      <span className="cmp-requests-page__edit-badge">
+                        Editável
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="cmp-requests-page__card-meta-grid">
+                    <div className="cmp-requests-page__card-meta">
+                      <span>Criado por</span>
+                      <strong>{r.request_created_by_user?.full_name ?? "—"}</strong>
+                    </div>
+
+                    <div className="cmp-requests-page__card-meta">
+                      <span>Criado em</span>
+                      <strong>{fmt(r.item_created_at)}</strong>
+                    </div>
+
+                    <div className="cmp-requests-page__card-meta">
+                      <span>Atualizado em</span>
+                      <strong>{fmt(r.item_updated_at ? r.item_updated_at : "")}</strong>
+                    </div>
+                  </div>
+
+                  <div className="cmp-requests-page__card-actions">
+                    <button
+                      type="button"
+                      onClick={() => openDetails(r, "view")}
+                      className="cmp-requests-page__card-button"
+                    >
+                      Abrir
+                    </button>
+
+                    {canEditNormal ? (
                       <button
                         type="button"
-                        onClick={() => goToConversation(r)}
-                        className="cmp-requests-page__table-button"
+                        onClick={() => openDetails(r, "edit")}
+                        className="cmp-requests-page__card-button"
                       >
-                        Ir para conversa
+                        Editar
                       </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => goToConversation(r)}
+                      className="cmp-requests-page__card-button cmp-requests-page__card-button--conversation"
+                    >
+                      Conversa
+                    </button>
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </div>
       </div>
 
       <div className="cmp-requests-page__pagination">
