@@ -336,6 +336,12 @@ export default function ConversationsPage() {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [activeFilter, setActiveFilter] = useState("");
+
+  const trimmedNewTitle = newTitle.trim();
+  const hasActiveFilter = activeFilter.trim().length > 0;
 
   async function handleSearch(forcedTitle) {
     const raw =
@@ -348,15 +354,30 @@ export default function ConversationsPage() {
     const value = raw.trim();
 
     try {
+      setSearchBusy(true);
+      setSearchError("");
+      setCreateError("");
+
       const data = await listConversationsApi({
         title: value,
       });
 
       const arr = Array.isArray(data) ? data : data?.items ?? [];
       setConversations(sortConversationsByLastActivity(arr));
+      setActiveFilter(value);
     } catch (err) {
       console.error("Erro ao filtrar conversas", err);
+      setSearchError(err?.response?.data?.error ?? "Erro ao pesquisar conversas.");
+    } finally {
+      setSearchBusy(false);
     }
+  }
+
+  async function clearConversationFilter() {
+    setNewTitle("");
+    setActiveFilter("");
+    setSearchError("");
+    await handleSearch("");
   }
 
   function isUnreadFromOthers(m) {
@@ -552,6 +573,7 @@ export default function ConversationsPage() {
     try {
       setCreateBusy(true);
       setCreateError("");
+      setSearchError("");
 
       const created = await createConversationApi({
         title,
@@ -560,6 +582,7 @@ export default function ConversationsPage() {
       });
 
       setNewTitle("");
+      setActiveFilter("");
 
       try {
         const data = await listConversationsApi();
@@ -890,58 +913,99 @@ export default function ConversationsPage() {
                     handleSearch();
                   }
                 }}
-                placeholder="Digite para criar ou pesquisar..."
+                placeholder="Buscar ou criar conversa..."
                 className="cmp-conversations__search-input"
-                disabled={createBusy}
+                disabled={createBusy || searchBusy}
               />
 
-              {newTitle.trim() ? (
+              {newTitle.trim() || hasActiveFilter ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setNewTitle("");
-                    handleSearch("");
-                  }}
-                  title="Limpar filtro"
+                  onClick={clearConversationFilter}
+                  title="Limpar busca"
                   className="cmp-conversations__field-action cmp-conversations__field-action--clear"
+                  disabled={createBusy || searchBusy}
                 >
                   ×
                 </button>
               ) : null}
+            </div>
 
+            <div className="cmp-conversations__form-actions">
               <button
                 type="button"
-                onClick={handleSearch}
-                title="Pesquisar conversas"
+                onClick={() => handleSearch()}
+                disabled={searchBusy}
                 className={
-                  isSearchFocused
-                    ? "cmp-conversations__field-action cmp-conversations__field-action--search cmp-conversations__field-action--active"
-                    : "cmp-conversations__field-action cmp-conversations__field-action--search"
+                  isSearchFocused || hasActiveFilter
+                    ? "cmp-conversations__search-button cmp-conversations__search-button--active"
+                    : "cmp-conversations__search-button"
                 }
               >
-                🔍
+                {searchBusy ? "Pesquisando..." : "Pesquisar"}
+              </button>
+
+              <button
+                type="submit"
+                disabled={createBusy || searchBusy || !trimmedNewTitle}
+                className="cmp-conversations__create-button"
+              >
+                {createBusy ? "Criando..." : "Criar conversa"}
               </button>
             </div>
+
+            {searchError ? (
+              <div className="cmp-conversations__form-error">{searchError}</div>
+            ) : null}
 
             {createError ? (
               <div className="cmp-conversations__form-error">{createError}</div>
             ) : null}
 
-            <button
-              type="submit"
-              disabled={createBusy || !newTitle.trim()}
-              className="cmp-conversations__create-button"
-            >
-              {createBusy ? "Criando..." : "Criar conversa"}
-            </button>
+            {hasActiveFilter ? (
+              <div className="cmp-conversations__filter-status">
+                <span>
+                  Filtrando por <strong>{activeFilter}</strong>
+                </span>
+
+                <button
+                  type="button"
+                  onClick={clearConversationFilter}
+                  disabled={searchBusy}
+                  className="cmp-conversations__filter-clear"
+                >
+                  Limpar filtro
+                </button>
+              </div>
+            ) : (
+              <div className="cmp-conversations__form-hint">
+                Enter cria uma conversa. Ctrl + Enter pesquisa pelo texto digitado.
+              </div>
+            )}
           </form>
         </div>
 
         <div className="cmp-conversations__list">
           {orderedConversations.length === 0 ? (
             <div className="cmp-conversations__empty-list">
-              <strong>Nenhuma conversa encontrada.</strong>
-              <span>Digite um título acima para criar uma nova conversa.</span>
+              {searchBusy ? (
+                <>
+                  <strong>Pesquisando conversas...</strong>
+                  <span>Aguarde enquanto buscamos os resultados.</span>
+                </>
+              ) : hasActiveFilter ? (
+                <>
+                  <strong>Nenhuma conversa encontrada.</strong>
+                  <span>
+                    Não encontramos conversas para “{activeFilter}”. Você pode limpar o filtro ou criar uma nova conversa com esse título.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <strong>Nenhuma conversa encontrada.</strong>
+                  <span>Digite um título acima para criar uma nova conversa.</span>
+                </>
+              )}
             </div>
           ) : null}
 
