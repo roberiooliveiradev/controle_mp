@@ -265,6 +265,9 @@ export default function ConversationsPage() {
   const messagesContainerRef = useRef(null);
   const bottomRef = useRef(null);
 
+  const [showJumpToBottom, setShowJumpToBottom] = useState(false);
+  const [pendingNewMessages, setPendingNewMessages] = useState(0);
+
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
 
@@ -337,9 +340,11 @@ export default function ConversationsPage() {
     return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
   }
 
-  function scrollToBottom() {
+  function scrollToBottom(options = {}) {
+    const behavior = options.behavior ?? "smooth";
+
     requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      bottomRef.current?.scrollIntoView({ behavior });
     });
   }
 
@@ -370,6 +375,12 @@ export default function ConversationsPage() {
     return true;
   }
 
+  function handleJumpToBottom() {
+    setPendingNewMessages(0);
+    setShowJumpToBottom(false);
+    scrollToBottom();
+  }
+
   useEffect(() => {
     let alive = true;
 
@@ -380,6 +391,8 @@ export default function ConversationsPage() {
         setChatError("");
         setIncomingFiles([]);
         setIsDraggingFiles(false);
+        setPendingNewMessages(0);
+        setShowJumpToBottom(false);
         dragDepthRef.current = 0;
         return;
       }
@@ -387,6 +400,8 @@ export default function ConversationsPage() {
       try {
         setChatBusy(true);
         setChatError("");
+        setPendingNewMessages(0);
+        setShowJumpToBottom(false);
 
         const c = await getConversationApi(selectedId);
         const m = await listMessagesApi(selectedId);
@@ -413,9 +428,9 @@ export default function ConversationsPage() {
 
           if (hasUnread) {
             const did = scrollToFirstUnread(items);
-            if (!did) scrollToBottom();
+            if (!did) scrollToBottom({ behavior: "auto" });
           } else {
-            scrollToBottom();
+            scrollToBottom({ behavior: "auto" });
           }
         });
       } catch (err) {
@@ -480,7 +495,12 @@ export default function ConversationsPage() {
         }
 
         if (shouldAutoScroll) {
+          setPendingNewMessages(0);
+          setShowJumpToBottom(false);
           scrollToBottom();
+        } else {
+          setPendingNewMessages((prev) => prev + 1);
+          setShowJumpToBottom(true);
         }
       } catch {
         // Não quebra a tela se falhar uma sincronização pontual.
@@ -673,7 +693,13 @@ export default function ConversationsPage() {
       setMessages((prev) => prev.map((m) => (m.id === tempId ? merged : m)));
       setUnreadCounts((prev) => ({ ...(prev ?? {}), [selectedId]: 0 }));
 
-      if (shouldAutoScroll) scrollToBottom();
+      if (shouldAutoScroll) {
+        setPendingNewMessages(0);
+        setShowJumpToBottom(false);
+        scrollToBottom();
+      } else {
+        setShowJumpToBottom(true);
+      }
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       throw err;
@@ -690,7 +716,11 @@ export default function ConversationsPage() {
     const el = e.currentTarget;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
 
+    setShowJumpToBottom(!nearBottom);
+
     if (!nearBottom) return;
+
+    setPendingNewMessages(0);
 
     const unreadIds = messages
       .filter((m) => !m.is_read && m.sender?.id !== myUserId)
@@ -1028,6 +1058,22 @@ export default function ConversationsPage() {
               ) : null}
 
               {messages.map((m, index) => renderMessageWithDateSeparator(m, index))}
+
+              {showJumpToBottom && messages.length > 0 ? (
+                <button
+                  type="button"
+                  className={
+                    pendingNewMessages > 0
+                      ? "cmp-conversations__jump-button cmp-conversations__jump-button--new"
+                      : "cmp-conversations__jump-button"
+                  }
+                  onClick={handleJumpToBottom}
+                >
+                  {pendingNewMessages > 0
+                    ? `${pendingNewMessages} nova${pendingNewMessages === 1 ? "" : "s"} mensagem${pendingNewMessages === 1 ? "" : "s"} ↓`
+                    : "Ir para o fim ↓"}
+                </button>
+              ) : null}
 
               <div ref={bottomRef} />
             </div>

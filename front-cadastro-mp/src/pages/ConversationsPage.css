@@ -441,6 +441,64 @@
     0 8px 18px color-mix(in srgb, #000000 10%, transparent);
 }
 
+.cmp-conversations__jump-button {
+  position: sticky;
+  bottom: 12px;
+  z-index: 6;
+  width: fit-content;
+  max-width: min(280px, 82vw);
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px auto 4px;
+  padding: 7px 13px;
+  border: 1px solid color-mix(in srgb, var(--primary) 38%, var(--border));
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-elevated, var(--surface)) 96%, transparent),
+      color-mix(in srgb, var(--surface-2) 84%, transparent)
+    );
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 10%, transparent),
+    0 10px 24px color-mix(in srgb, #000000 18%, transparent);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.cmp-conversations__jump-button:hover {
+  border-color: color-mix(in srgb, var(--primary) 62%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface-2));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 12%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent),
+    0 12px 26px color-mix(in srgb, #000000 20%, transparent);
+  transform: translateY(-1px);
+}
+
+.cmp-conversations__jump-button--new {
+  border-color: color-mix(in srgb, var(--primary) 68%, transparent);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--primary) 96%, #ffffff 4%),
+      color-mix(in srgb, var(--primary) 82%, #000000 18%)
+    );
+  color: #ffffff;
+}
+
 .cmp-conversations__state,
 .cmp-conversations__error {
   margin-bottom: 10px;
@@ -569,6 +627,13 @@
     margin-top: 10px;
     gap: 7px;
   }
+  
+  .cmp-conversations__jump-button {
+    bottom: 8px;
+    min-height: 30px;
+    padding: 6px 11px;
+    font-size: 11px;
+  }
 
   .cmp-conversations__search-input,
   .cmp-conversations__create-button {
@@ -643,6 +708,13 @@
   .cmp-conversations__empty-chat {
     min-height: 180px;
   }
+
+  .cmp-conversations__jump-button {
+    bottom: 6px;
+    min-height: 28px;
+    padding: 5px 10px;
+    font-size: 10.5px;
+  }
 }
 
 /* =========================================
@@ -670,6 +742,14 @@
     overflow: hidden;
   }
 
+  .cmp-conversations__jump-button {
+    bottom: 8px;
+    max-width: min(260px, 78vw);
+    min-height: 32px;
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+  
   .cmp-conversations__sidebar,
   .cmp-conversations__chat {
     min-height: 0;
@@ -786,5 +866,13 @@
     min-height: 22px;
     padding: 4px 9px;
     font-size: 9.5px;
+  }
+
+  .cmp-conversations__jump-button {
+    bottom: 6px;
+    max-width: min(240px, 76vw);
+    min-height: 30px;
+    padding: 6px 10px;
+    font-size: 10.5px;
   }
 }
