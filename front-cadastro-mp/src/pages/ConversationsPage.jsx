@@ -64,6 +64,48 @@ function formatDateTime(iso) {
   return d.toLocaleString("pt-BR");
 }
 
+function getMessageDate(message) {
+  const iso = message?.created_at ?? message?.created_at_iso ?? null;
+  const d = iso ? new Date(iso) : null;
+
+  if (!d || Number.isNaN(d.getTime())) return null;
+
+  return d;
+}
+
+function getLocalDateKey(date) {
+  if (!date || Number.isNaN(date.getTime())) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function startOfLocalDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function formatMessageDateSeparator(date) {
+  if (!date || Number.isNaN(date.getTime())) return "";
+
+  const today = startOfLocalDay(new Date());
+  const target = startOfLocalDay(date);
+
+  const diffMs = today.getTime() - target.getTime();
+  const diffDays = Math.round(diffMs / 86400000);
+
+  if (diffDays === 0) return "Hoje";
+  if (diffDays === 1) return "Ontem";
+
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 export default function ConversationsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -714,6 +756,33 @@ export default function ConversationsPage() {
     setIncomingFiles(files);
   }
 
+  function renderMessageWithDateSeparator(message, index) {
+    const isMine = message.sender?.id === myUserId;
+    const currentDate = getMessageDate(message);
+    const currentKey = getLocalDateKey(currentDate);
+
+    const previousMessage = index > 0 ? messages[index - 1] : null;
+    const previousDate = getMessageDate(previousMessage);
+    const previousKey = getLocalDateKey(previousDate);
+
+    const shouldShowDateSeparator = Boolean(currentKey && currentKey !== previousKey);
+    const separatorLabel = shouldShowDateSeparator
+      ? formatMessageDateSeparator(currentDate)
+      : "";
+
+    return (
+      <div key={message.id} id={`msg-${message.id}`} data-message-id={message.id}>
+        {shouldShowDateSeparator ? (
+          <div className="cmp-conversations__date-separator" aria-label={separatorLabel}>
+            <span>{separatorLabel}</span>
+          </div>
+        ) : null}
+
+        <MessageBubble message={message} isMine={isMine} />
+      </div>
+    );
+  }
+
   const chatOwner = conv?.created_by?.full_name ?? conv?.created_by?.email ?? "";
   const lastActivity = convLastActivityIso(conv);
 
@@ -958,15 +1027,7 @@ export default function ConversationsPage() {
                 </div>
               ) : null}
 
-              {messages.map((m) => {
-                const isMine = m.sender?.id === myUserId;
-
-                return (
-                  <div key={m.id} id={`msg-${m.id}`} data-message-id={m.id}>
-                    <MessageBubble message={m} isMine={isMine} />
-                  </div>
-                );
-              })}
+              {messages.map((m, index) => renderMessageWithDateSeparator(m, index))}
 
               <div ref={bottomRef} />
             </div>
