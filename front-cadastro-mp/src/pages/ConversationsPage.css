@@ -923,6 +923,67 @@
   }
 }
 
+@media (max-height: 440px) and (orientation: landscape) {
+  .cmp-conversations__sidebar-header {
+    padding: 6px;
+  }
+
+  .cmp-conversations__form {
+    margin-top: 7px;
+    gap: 5px;
+  }
+
+  .cmp-conversations__search-input,
+  .cmp-conversations__search-button,
+  .cmp-conversations__create-button {
+    min-height: 30px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    font-size: 11.5px;
+  }
+
+  .cmp-conversations__form-hint,
+  .cmp-conversations__filter-status {
+    display: none;
+  }
+
+  .cmp-conversations__list {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .cmp-conversations__chat-header {
+    min-height: 40px;
+    padding: 6px 8px;
+  }
+
+  .cmp-conversations__back-button {
+    min-height: 28px;
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  .cmp-conversations__chat-title {
+    font-size: 14px;
+  }
+
+  .cmp-conversations__realtime {
+    min-height: 20px;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .cmp-conversations__messages {
+    padding: 6px;
+  }
+
+  .cmp-conversations__jump-button {
+    min-height: 26px;
+    padding: 4px 9px;
+    font-size: 10px;
+  }
+}
+
 /* =========================================
    RESPONSIVE
 ========================================= */
@@ -934,6 +995,17 @@
 
   .cmp-conversations__divider {
     display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .cmp-conversations__form-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cmp-conversations__search-button,
+  .cmp-conversations__create-button {
+    width: 100%;
   }
 }
 
@@ -1010,6 +1082,10 @@
   .cmp-conversations__chat-title-area {
     width: 100%;
     min-width: 0;
+  }
+
+  .cmp-conversations__chat-title {
+    max-width: 100%;
   }
 
   .cmp-conversations__messages {
@@ -1090,6 +1166,41 @@
 }
 
 @media (max-width: 420px) {
+  .cmp-conversations__sidebar-header {
+    padding: 10px;
+  }
+
+  .cmp-conversations__form {
+    margin-top: 10px;
+    gap: 7px;
+  }
+
+  .cmp-conversations__search-input {
+    min-height: 38px;
+    padding: 8px 40px 8px 10px;
+    font-size: 13px;
+  }
+
+  .cmp-conversations__search-button,
+  .cmp-conversations__create-button {
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .cmp-conversations__form-hint {
+    font-size: 10.5px;
+  }
+
+  .cmp-conversations__list {
+    padding: 9px;
+    gap: 8px;
+  }
+
+  .cmp-conversations__chat-header {
+    padding: 9px;
+  }
+
   .cmp-conversations__messages {
     padding: 8px;
   }
@@ -1110,5 +1221,65 @@
     min-height: 30px;
     padding: 6px 10px;
     font-size: 10.5px;
+  }
+}
+
+@media (max-width: 360px) {
+  .cmp-conversations__sidebar-header {
+    padding: 8px;
+  }
+
+  .cmp-conversations__title {
+    font-size: 15px;
+  }
+
+  .cmp-conversations__total-unread {
+    min-width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
+
+  .cmp-conversations__search-input {
+    min-height: 36px;
+    font-size: 12.5px;
+  }
+
+  .cmp-conversations__search-button,
+  .cmp-conversations__create-button {
+    min-height: 36px;
+    font-size: 11.5px;
+  }
+
+  .cmp-conversations__form-hint {
+    display: none;
+  }
+
+  .cmp-conversations__list {
+    padding: 7px;
+  }
+
+  .cmp-conversations__chat-header {
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .cmp-conversations__back-button {
+    min-height: 30px;
+    padding: 5px 9px;
+    font-size: 11.5px;
+  }
+
+  .cmp-conversations__chat-title {
+    font-size: 15px;
+  }
+
+  .cmp-conversations__realtime {
+    min-height: 24px;
+    padding: 4px 7px;
+    font-size: 10.5px;
+  }
+
+  .cmp-conversations__messages {
+    padding: 7px;
   }
 }
