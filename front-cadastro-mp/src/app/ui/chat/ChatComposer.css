@@ -1,6 +1,7 @@
 /* src/app/ui/chat/ChatComposer.css */
 
 .cmp-chat-composer {
+  position: relative;
   flex: 0 0 auto;
   min-width: 0;
   background:
@@ -609,21 +610,36 @@
     font-size: 12px;
   }
 
-  .cmp-chat-composer__menu,
+  .cmp-chat-composer__menu-wrap {
+    position: static;
+  }
+
+  .cmp-chat-composer__menu {
+    left: 8px;
+    right: 8px;
+    bottom: calc(100% + 8px);
+    width: auto;
+    max-width: none;
+    transform: none;
+  }
+
   .cmp-chat-composer__emoji-menu {
-    right: auto;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 8px;
+    right: 8px;
+    bottom: calc(100% + 8px);
+    width: auto;
+    max-width: none;
+    transform: none;
   }
 
   .cmp-chat-composer__menu::after,
   .cmp-chat-composer__emoji-menu::after {
-    right: 50%;
-    transform: translateX(50%) rotate(45deg);
+    right: 88px;
+    transform: rotate(45deg);
   }
 
   .cmp-chat-composer__emoji-menu {
-    width: min(340px, 94vw);
+    max-height: min(440px, 70dvh);
   }
 }
 
@@ -648,5 +664,40 @@
     min-height: 38px;
     min-width: 0;
     padding-inline: 10px;
+  }
+
+  .cmp-chat-composer__menu,
+  .cmp-chat-composer__emoji-menu {
+    left: 6px;
+    right: 6px;
+    bottom: calc(100% + 7px);
+  }
+
+  .cmp-chat-composer__menu {
+    padding: 6px;
+  }
+
+  .cmp-chat-composer__menu-item {
+    min-height: 44px;
+    padding: 9px;
+    gap: 9px;
+  }
+
+  .cmp-chat-composer__menu-item-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .cmp-chat-composer__menu-item strong {
+    font-size: 12.5px;
+  }
+
+  .cmp-chat-composer__menu-item small {
+    font-size: 10.5px;
+  }
+
+  .cmp-chat-composer__menu::after,
+  .cmp-chat-composer__emoji-menu::after {
+    right: 74px;
   }
 }

@@ -1,5 +1,5 @@
 // src/app/ui/chat/RequestComposerModal.jsx
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RequestItemFields } from "../requests/RequestItemFields";
 import {
   newStructuredItem,
@@ -8,48 +8,124 @@ import {
 } from "../requests/requestItemFields.logic";
 import "./RequestComposerModal.css";
 
+function makeClientId() {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `cid-${Date.now()}-${Math.random()}`
+  );
+}
+
+function isFilled(value) {
+  return String(value ?? "").trim().length > 0;
+}
+
+function supplierHasContent(row) {
+  if (!row || typeof row !== "object") return false;
+
+  return (
+    isFilled(row.supplier_code) ||
+    isFilled(row.store) ||
+    isFilled(row.supplier_name) ||
+    isFilled(row.part_number) ||
+    isFilled(row.catalog_number)
+  );
+}
+
+function itemHasUserContent(item) {
+  if (!item) return false;
+
+  return (
+    isFilled(item.codigo_atual) ||
+    isFilled(item.novo_codigo) ||
+    isFilled(item.grupo) ||
+    isFilled(item.descricao) ||
+    isFilled(item.unidade) ||
+    isFilled(item.ref_cliente) ||
+    (Array.isArray(item.fornecedores) && item.fornecedores.some(supplierHasContent))
+  );
+}
+
+function countSupplierRows(item) {
+  const rows = Array.isArray(item?.fornecedores) ? item.fornecedores : [];
+  return rows.filter(supplierHasContent).length;
+}
+
+function getItemTitle(item, index) {
+  const descricao = String(item?.descricao ?? "").trim();
+  const codigoAtual = String(item?.codigo_atual ?? "").trim();
+  const novoCodigo = String(item?.novo_codigo ?? "").trim();
+
+  if (descricao) return descricao;
+  if (codigoAtual) return `Código ${codigoAtual}`;
+  if (novoCodigo) return `Novo código ${novoCodigo}`;
+
+  return `Item #${index + 1}`;
+}
+
+function countErrorsForItem(itemErrors) {
+  const fieldsCount = Object.keys(itemErrors?.fields || {}).length;
+  const suppliersObj = itemErrors?.suppliers || {};
+  const suppliersCount = Object.values(suppliersObj).reduce(
+    (acc, row) => acc + Object.keys(row || {}).length,
+    0
+  );
+
+  return fieldsCount + suppliersCount;
+}
+
 export function RequestComposerModal({ onClose, onSubmit }) {
   const [items, setItems] = useState([newStructuredItem()]);
   const [activeIndex, setActiveIndex] = useState(0);
-
-  /**
-   * errors shape:
-   * {
-   *   [itemIndex]: { fields:{}, suppliers:{} }
-   * }
-   */
   const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
 
   const active = items[activeIndex];
-  const canSubmit = useMemo(() => items.length > 0, [items.length]);
+  const canSubmit = useMemo(() => items.length > 0 && !submitting, [
+    items.length,
+    submitting,
+  ]);
 
   const hasUnsavedChanges = useMemo(() => {
     if (items.length > 1) return true;
-
-    const first = items[0];
-    if (!first) return false;
-
-    return Object.entries(first).some(([key, value]) => {
-      if (key === "_client_id") return false;
-      if (Array.isArray(value)) return value.length > 0;
-      return Boolean(value);
-    });
+    return items.some(itemHasUserContent);
   }, [items]);
+
+  const totalErrors = useMemo(() => {
+    return Object.values(errors || {}).reduce(
+      (acc, itemErrors) => acc + countErrorsForItem(itemErrors),
+      0
+    );
+  }, [errors]);
+
+  const filledItemsCount = useMemo(() => {
+    return items.filter(itemHasUserContent).length;
+  }, [items]);
+
+  const activeError = getItemErrors(activeIndex);
+  const activeErrorCount = countErrorsForItem(activeError);
+  const activeSupplierCount = countSupplierRows(active);
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        requestClose();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUnsavedChanges]);
 
   function getItemErrors(idx) {
     return errors?.[idx] || { fields: {}, suppliers: {} };
   }
 
   function itemHasAnyError(idx) {
-    const itemErrors = getItemErrors(idx);
-    const fieldsCount = Object.keys(itemErrors.fields || {}).length;
-    const suppliersObj = itemErrors.suppliers || {};
-    const suppliersCount = Object.values(suppliersObj).reduce(
-      (acc, row) => acc + Object.keys(row || {}).length,
-      0
-    );
-
-    return fieldsCount + suppliersCount > 0;
+    return countErrorsForItem(getItemErrors(idx)) > 0;
   }
 
   function clearFieldError(itemIdx, key) {
@@ -61,13 +137,20 @@ export function RequestComposerModal({ onClose, onSubmit }) {
       const nextFields = { ...(current.fields || {}) };
       delete nextFields[key];
 
-      return {
-        ...prev,
-        [itemIdx]: {
-          fields: nextFields,
-          suppliers: current.suppliers || {},
-        },
+      const nextItemErrors = {
+        fields: nextFields,
+        suppliers: current.suppliers || {},
       };
+
+      const next = { ...prev };
+
+      if (countErrorsForItem(nextItemErrors) === 0) {
+        delete next[itemIdx];
+      } else {
+        next[itemIdx] = nextItemErrors;
+      }
+
+      return next;
     });
   }
 
@@ -82,15 +165,27 @@ export function RequestComposerModal({ onClose, onSubmit }) {
       delete nextRow[key];
 
       const nextSuppliers = { ...(current.suppliers || {}) };
-      nextSuppliers[rowIdx] = nextRow;
 
-      return {
-        ...prev,
-        [itemIdx]: {
-          fields: current.fields || {},
-          suppliers: nextSuppliers,
-        },
+      if (Object.keys(nextRow).length === 0) {
+        delete nextSuppliers[rowIdx];
+      } else {
+        nextSuppliers[rowIdx] = nextRow;
+      }
+
+      const nextItemErrors = {
+        fields: current.fields || {},
+        suppliers: nextSuppliers,
       };
+
+      const next = { ...prev };
+
+      if (countErrorsForItem(nextItemErrors) === 0) {
+        delete next[itemIdx];
+      } else {
+        next[itemIdx] = nextItemErrors;
+      }
+
+      return next;
     });
   }
 
@@ -118,8 +213,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
 
       const cloned = {
         ...source,
-        _client_id:
-          crypto?.randomUUID?.() ?? `cid-${Date.now()}-${Math.random()}`,
+        _client_id: makeClientId(),
         fornecedores: Array.isArray(source.fornecedores)
           ? source.fornecedores.map((row) => ({ ...row }))
           : [],
@@ -130,6 +224,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
       }
 
       list.splice(idx + 1, 0, cloned);
+
       return list;
     });
 
@@ -140,6 +235,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
 
       Object.keys(prev || {}).forEach((key) => {
         const currentIndex = Number(key);
+
         if (Number.isNaN(currentIndex)) return;
 
         next[currentIndex > idx ? currentIndex + 1 : currentIndex] =
@@ -151,6 +247,8 @@ export function RequestComposerModal({ onClose, onSubmit }) {
   }
 
   function removeItem(idx) {
+    if (items.length <= 1) return;
+
     setItems((prev) => prev.filter((_, itemIdx) => itemIdx !== idx));
 
     setErrors((prev) => {
@@ -158,6 +256,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
 
       Object.keys(prev || {}).forEach((key) => {
         const currentIndex = Number(key);
+
         if (Number.isNaN(currentIndex)) return;
         if (currentIndex === idx) return;
 
@@ -169,8 +268,12 @@ export function RequestComposerModal({ onClose, onSubmit }) {
     });
 
     setActiveIndex((prev) => {
-      if (idx === prev) return 0;
+      const nextLength = Math.max(items.length - 1, 0);
+
+      if (nextLength <= 0) return 0;
       if (idx < prev) return prev - 1;
+      if (idx === prev) return Math.min(prev, nextLength - 1);
+
       return prev;
     });
   }
@@ -190,6 +293,8 @@ export function RequestComposerModal({ onClose, onSubmit }) {
   }
 
   function requestClose() {
+    if (submitting) return;
+
     if (!hasUnsavedChanges) {
       onClose();
       return;
@@ -205,6 +310,8 @@ export function RequestComposerModal({ onClose, onSubmit }) {
   }
 
   async function submit() {
+    if (!canSubmit) return;
+
     const nextErrors = validateAll();
     setErrors(nextErrors);
 
@@ -219,15 +326,20 @@ export function RequestComposerModal({ onClose, onSubmit }) {
     }
 
     const requestItems = items.map(structuredItemToRequestPayloadItem);
-    await onSubmit({ requestItems });
-  }
 
-  const activeError = getItemErrors(activeIndex);
+    try {
+      setSubmitting(true);
+      await onSubmit({ requestItems });
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby="request-composer-title"
       className="cmp-request-modal"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -238,40 +350,75 @@ export function RequestComposerModal({ onClose, onSubmit }) {
       <div className="cmp-request-modal__panel">
         <header className="cmp-request-modal__header">
           <div className="cmp-request-modal__heading">
-            <strong className="cmp-request-modal__title">Nova solicitação</strong>
+            <span className="cmp-request-modal__eyebrow">Solicitação via chat</span>
+
+            <strong
+              id="request-composer-title"
+              className="cmp-request-modal__title"
+            >
+              Nova solicitação de produto
+            </strong>
+
             <span className="cmp-request-modal__subtitle">
-              Preencha os itens e envie como um carrinho.
+              Monte um ou mais itens para enviar uma solicitação vinculada à conversa.
             </span>
           </div>
 
-          <div className="cmp-request-modal__header-actions">
-            <button
-              type="button"
-              onClick={requestClose}
-              className="cmp-request-modal__button"
-            >
-              Cancelar
-            </button>
+          <div className="cmp-request-modal__header-summary" aria-label="Resumo da solicitação">
+            <span className="cmp-request-modal__summary-card">
+              <strong>{items.length}</strong>
+              <span>{items.length === 1 ? "item" : "itens"}</span>
+            </span>
 
-            <button
-              type="button"
-              onClick={submit}
-              disabled={!canSubmit}
-              className="cmp-request-modal__button cmp-request-modal__button--primary"
+            <span className="cmp-request-modal__summary-card">
+              <strong>{filledItemsCount}</strong>
+              <span>preenchido{filledItemsCount === 1 ? "" : "s"}</span>
+            </span>
+
+            <span
+              className={
+                totalErrors > 0
+                  ? "cmp-request-modal__summary-card cmp-request-modal__summary-card--error"
+                  : "cmp-request-modal__summary-card"
+              }
             >
-              Enviar
-            </button>
+              <strong>{totalErrors}</strong>
+              <span>{totalErrors === 1 ? "pendência" : "pendências"}</span>
+            </span>
           </div>
+
+          <button
+            type="button"
+            onClick={requestClose}
+            disabled={submitting}
+            className="cmp-request-modal__icon-button"
+            aria-label="Fechar modal"
+            title="Fechar"
+          >
+            ×
+          </button>
         </header>
 
+        {totalErrors > 0 ? (
+          <div className="cmp-request-modal__alert" role="alert">
+            Existem campos obrigatórios pendentes. O primeiro item com erro foi selecionado automaticamente.
+          </div>
+        ) : null}
+
         <div className="cmp-request-modal__body">
-          <aside className="cmp-request-modal__items">
+          <aside className="cmp-request-modal__items" aria-label="Itens da solicitação">
             <div className="cmp-request-modal__items-header">
-              <strong className="cmp-request-modal__items-title">Itens</strong>
+              <div>
+                <strong className="cmp-request-modal__items-title">Itens</strong>
+                <span className="cmp-request-modal__items-subtitle">
+                  Selecione um item para editar
+                </span>
+              </div>
 
               <button
                 type="button"
                 onClick={addItem}
+                disabled={submitting}
                 className="cmp-request-modal__button cmp-request-modal__button--compact"
               >
                 + Item
@@ -282,6 +429,9 @@ export function RequestComposerModal({ onClose, onSubmit }) {
               {items.map((item, idx) => {
                 const isActive = idx === activeIndex;
                 const hasError = itemHasAnyError(idx);
+                const itemErrorCount = countErrorsForItem(getItemErrors(idx));
+                const supplierCount = countSupplierRows(item);
+                const title = getItemTitle(item, idx);
 
                 return (
                   <article
@@ -297,13 +447,17 @@ export function RequestComposerModal({ onClose, onSubmit }) {
                   >
                     <div className="cmp-request-modal__item-top">
                       <div className="cmp-request-modal__item-title-wrap">
+                        <span className="cmp-request-modal__item-number">
+                          #{idx + 1}
+                        </span>
+
                         <span className="cmp-request-modal__item-title">
-                          Item #{idx + 1}
+                          {title}
                         </span>
 
                         {hasError ? (
                           <span
-                            title="Há campos obrigatórios faltando"
+                            title={`${itemErrorCount} pendência(s)`}
                             className="cmp-request-modal__item-error-badge"
                           >
                             !
@@ -314,6 +468,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
                       <div className="cmp-request-modal__item-actions">
                         <button
                           type="button"
+                          disabled={submitting}
                           onClick={(event) => {
                             event.stopPropagation();
                             duplicateItem(idx);
@@ -326,6 +481,7 @@ export function RequestComposerModal({ onClose, onSubmit }) {
                         {items.length > 1 ? (
                           <button
                             type="button"
+                            disabled={submitting}
                             onClick={(event) => {
                               event.stopPropagation();
                               removeItem(idx);
@@ -339,14 +495,34 @@ export function RequestComposerModal({ onClose, onSubmit }) {
                     </div>
 
                     <div className="cmp-request-modal__item-meta">
-                      <span className="cmp-request-modal__pill">
+                      <span
+                        className={
+                          item.request_type_code === "UPDATE"
+                            ? "cmp-request-modal__pill cmp-request-modal__pill--update"
+                            : "cmp-request-modal__pill cmp-request-modal__pill--create"
+                        }
+                      >
                         {item.request_type_code === "UPDATE" ? "ALTERAR" : "CRIAR"}
                       </span>
 
-                      <span className="cmp-request-modal__item-description">
-                        {item.descricao ? item.descricao.slice(0, 40) : "Sem descrição"}
-                      </span>
+                      {item.grupo ? (
+                        <span className="cmp-request-modal__pill">
+                          Grupo {item.grupo}
+                        </span>
+                      ) : null}
+
+                      {supplierCount > 0 ? (
+                        <span className="cmp-request-modal__pill">
+                          {supplierCount} fornecedor{supplierCount === 1 ? "" : "es"}
+                        </span>
+                      ) : null}
                     </div>
+
+                    {hasError ? (
+                      <div className="cmp-request-modal__item-error-text">
+                        {itemErrorCount} pendência{itemErrorCount === 1 ? "" : "s"} para revisar
+                      </div>
+                    ) : null}
                   </article>
                 );
               })}
@@ -354,20 +530,95 @@ export function RequestComposerModal({ onClose, onSubmit }) {
           </aside>
 
           <main className="cmp-request-modal__editor">
-            <RequestItemFields
-              variant="structured"
-              item={active}
-              itemKey={active?._client_id ?? activeIndex}
-              readOnly={false}
-              errors={activeError}
-              onItemChange={(key, value) => setActiveItemField(key, value)}
-              onClearFieldError={(key) => clearFieldError(activeIndex, key)}
-              onClearSupplierError={(rowIdx, key) =>
-                clearSupplierError(activeIndex, rowIdx, key)
-              }
-            />
+            <div className="cmp-request-modal__editor-header">
+              <div className="cmp-request-modal__editor-title-area">
+                <span className="cmp-request-modal__editor-eyebrow">
+                  Editando
+                </span>
+
+                <strong className="cmp-request-modal__editor-title">
+                  Item #{activeIndex + 1}
+                </strong>
+              </div>
+
+              <div className="cmp-request-modal__editor-badges">
+                <span
+                  className={
+                    active?.request_type_code === "UPDATE"
+                      ? "cmp-request-modal__pill cmp-request-modal__pill--update"
+                      : "cmp-request-modal__pill cmp-request-modal__pill--create"
+                  }
+                >
+                  {active?.request_type_code === "UPDATE" ? "ALTERAR" : "CRIAR"}
+                </span>
+
+                {activeErrorCount > 0 ? (
+                  <span className="cmp-request-modal__pill cmp-request-modal__pill--error">
+                    {activeErrorCount} pendência{activeErrorCount === 1 ? "" : "s"}
+                  </span>
+                ) : (
+                  <span className="cmp-request-modal__pill cmp-request-modal__pill--ok">
+                    Sem pendências
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="cmp-request-modal__editor-scroll">
+              <RequestItemFields
+                variant="structured"
+                item={active}
+                itemKey={active?._client_id ?? activeIndex}
+                readOnly={false}
+                errors={activeError}
+                onItemChange={(key, value) => setActiveItemField(key, value)}
+                onClearFieldError={(key) => clearFieldError(activeIndex, key)}
+                onClearSupplierError={(rowIdx, key) =>
+                  clearSupplierError(activeIndex, rowIdx, key)
+                }
+              />
+            </div>
           </main>
         </div>
+
+        <footer className="cmp-request-modal__footer">
+          <div className="cmp-request-modal__footer-info">
+            <strong>Resumo</strong>
+            <span>
+              {items.length} {items.length === 1 ? "item" : "itens"} na solicitação
+              {totalErrors > 0 ? ` • ${totalErrors} pendência(s)` : " • pronto para validar"}
+            </span>
+          </div>
+
+          <div className="cmp-request-modal__footer-actions">
+            <button
+              type="button"
+              onClick={requestClose}
+              disabled={submitting}
+              className="cmp-request-modal__button"
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              onClick={addItem}
+              disabled={submitting}
+              className="cmp-request-modal__button"
+            >
+              Adicionar item
+            </button>
+
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!canSubmit}
+              className="cmp-request-modal__button cmp-request-modal__button--primary"
+            >
+              {submitting ? "Enviando..." : "Enviar solicitação"}
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   );
