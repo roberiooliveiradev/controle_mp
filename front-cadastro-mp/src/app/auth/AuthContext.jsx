@@ -13,6 +13,10 @@ import {
 
 const AuthContext = createContext(null);
 
+function normalizeEmail(value) {
+  return value ? String(value).trim().toLowerCase() : "";
+}
+
 function buildUserFromAccessToken(accessToken) {
   const payload = decodeJwt(accessToken);
   if (!payload) return null;
@@ -22,6 +26,17 @@ function buildUserFromAccessToken(accessToken) {
     email: payload.email,
     role_id: payload.role_id,
     full_name: payload.full_name,
+  };
+}
+
+function getCentralIdentity(centralAccessToken) {
+  const payload = decodeJwt(centralAccessToken);
+  if (!payload) return null;
+
+  return {
+    sub: payload.sub,
+    email: normalizeEmail(payload.email),
+    name: payload.name || payload.full_name || payload.preferred_username,
   };
 }
 
@@ -103,8 +118,13 @@ export function AuthProvider({ children }) {
     const uid = authStorage.getActiveUserId();
 
     if (!uid) {
-      authStorage.clearActiveUserId();
-      authStorage.clearLoginMode();
+      if (clearAll) {
+        authStorage.clearAllAuth();
+      } else {
+        authStorage.clearActiveUserId();
+        authStorage.clearLoginMode();
+      }
+
       refreshActiveFromStorage();
       return;
     }
@@ -134,6 +154,41 @@ export function AuthProvider({ children }) {
 
       refreshActiveFromStorage();
     }
+  }
+
+  async function syncSsoSession({ centralAccessToken }) {
+    if (!centralAccessToken) {
+      throw new Error("Token central ausente.");
+    }
+
+    const centralIdentity = getCentralIdentity(centralAccessToken);
+    if (!centralIdentity?.email) {
+      throw new Error("Token central sem email.");
+    }
+
+    const currentUser = authStorage.getActiveUser();
+    const currentEmail = normalizeEmail(currentUser?.email);
+    const currentMode = authStorage.getLoginMode();
+    const currentToken = authStorage.getActiveAccessToken();
+
+    const alreadySynced =
+      currentMode === "sso" &&
+      !!currentToken &&
+      !!currentEmail &&
+      currentEmail === centralIdentity.email;
+
+    if (alreadySynced) {
+      return currentUser;
+    }
+
+    if (authStorage.getActiveUserId()) {
+      await logout({ silent: true, clearAll: true });
+    } else {
+      authStorage.clearAllAuth();
+      refreshActiveFromStorage();
+    }
+
+    return ssoLogin({ centralAccessToken });
   }
 
   function listProfiles() {
@@ -174,6 +229,7 @@ export function AuthProvider({ children }) {
 
       login,
       ssoLogin,
+      syncSsoSession,
       logout,
 
       setActiveUserId,

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { decodeJwt } from "../auth/jwt";
 
 const ALLOWED_PARENT_ORIGINS = [
   import.meta.env.VITE_DELPI_PARENT_ORIGIN,
@@ -16,11 +17,21 @@ function isAllowedParentOrigin(origin) {
   return ALLOWED_PARENT_ORIGINS.includes(origin);
 }
 
+function normalizeEmail(value) {
+  return value ? String(value).trim().toLowerCase() : "";
+}
+
+function getTokenEmail(token) {
+  const payload = decodeJwt(token);
+  return normalizeEmail(payload?.email);
+}
+
 export function DelpiSsoBridge() {
   const navigate = useNavigate();
-  const { isAuthenticated, ssoLogin, logout } = useAuth();
+  const { user, isAuthenticated, syncSsoSession, logout } = useAuth();
 
   const handledTokenRef = useRef(null);
+  const inFlightTokenRef = useRef(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -46,6 +57,7 @@ export function DelpiSsoBridge() {
 
       if (event.data?.type === "DELPI_LOGOUT") {
         handledTokenRef.current = null;
+        inFlightTokenRef.current = null;
 
         logout({ silent: true, clearAll: true }).finally(() => {
           if (!mountedRef.current) return;
@@ -60,22 +72,40 @@ export function DelpiSsoBridge() {
       const centralAccessToken = event.data?.token;
       if (!centralAccessToken) return;
 
-      if (handledTokenRef.current === centralAccessToken) return;
-      handledTokenRef.current = centralAccessToken;
+      const centralEmail = getTokenEmail(centralAccessToken);
+      const currentEmail = normalizeEmail(user?.email);
 
-      if (isAuthenticated) return;
+      const alreadySynced =
+        isAuthenticated &&
+        handledTokenRef.current === centralAccessToken &&
+        !!centralEmail &&
+        !!currentEmail &&
+        centralEmail === currentEmail;
 
-      ssoLogin({ centralAccessToken })
+      if (alreadySynced) return;
+
+      if (inFlightTokenRef.current === centralAccessToken) return;
+      inFlightTokenRef.current = centralAccessToken;
+
+      syncSsoSession({ centralAccessToken })
         .then(() => {
+          handledTokenRef.current = centralAccessToken;
+
           if (!mountedRef.current) return;
           navigate("/conversations", { replace: true });
         })
         .catch((error) => {
           console.error("Falha no SSO Minha DELPI:", error);
 
-          // Não solicitar refresh em loop para erros de audience, issuer, JWKS ou backend.
-          // O AppHost reenviará novo token em reload/foco quando necessário.
-          handledTokenRef.current = centralAccessToken;
+          handledTokenRef.current = null;
+
+          if (!mountedRef.current) return;
+          navigate("/login", { replace: true });
+        })
+        .finally(() => {
+          if (inFlightTokenRef.current === centralAccessToken) {
+            inFlightTokenRef.current = null;
+          }
         });
     }
 
@@ -88,7 +118,7 @@ export function DelpiSsoBridge() {
       window.removeEventListener("message", handleMessage);
       window.clearTimeout(retry);
     };
-  }, [isAuthenticated, ssoLogin, logout, navigate]);
+  }, [user, isAuthenticated, syncSsoSession, logout, navigate]);
 
   return null;
 }

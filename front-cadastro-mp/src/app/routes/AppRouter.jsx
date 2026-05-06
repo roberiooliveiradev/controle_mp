@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { Layout } from "../ui/Layout";
 import { DelpiSsoBridge } from "../sso/DelpiSsoBridge";
+import { LogoutFromParentPage } from "../sso/LogoutFromParentPage";
 
 import LoginPage from "../../pages/LoginPage";
 import ConversationsPage from "../../pages/ConversationsPage";
@@ -20,6 +21,8 @@ export function AppRouter() {
       <DelpiSsoBridge />
 
       <Routes>
+        <Route path="/sso/logout-from-parent" element={<LogoutFromParentPage />} />
+
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
