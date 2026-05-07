@@ -165,7 +165,7 @@
 }
 
 /* =========================================
-   SUPPLIERS TABLE
+   SUPPLIERS TABLE / CARDS
 ========================================= */
 
 .cmp-request-fields__suppliers-table-wrap {
@@ -203,7 +203,8 @@
 }
 
 .cmp-request-fields__suppliers-action-col {
-  width: 100px;
+  width: 180px;
+  min-width: 180px;
 }
 
 .cmp-request-fields__readonly-cell {
@@ -217,6 +218,35 @@
   line-height: 1.35;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.cmp-request-fields__supplier-actions {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: nowrap;
+}
+
+.cmp-request-fields__supplier-actions .cmp-request-fields__secondary-button {
+  min-width: 0;
+}
+
+.cmp-request-fields__secondary-button--icon {
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.cmp-request-fields__button-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.cmp-request-fields__button-text {
+  min-width: 0;
 }
 
 /* =========================================
@@ -389,6 +419,146 @@
 .cmp-request-fields-flag-modal__button--primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--primary) 84%, #000000);
   color: #ffffff;
+}
+
+/* =========================================
+   RESPONSIVE TABLET / MOBILE SUPPLIERS
+========================================= */
+
+@media (max-width: 980px) {
+  .cmp-request-fields__suppliers-table {
+    min-width: 0;
+  }
+
+  .cmp-request-fields__suppliers-table,
+  .cmp-request-fields__suppliers-table thead,
+  .cmp-request-fields__suppliers-table tbody,
+  .cmp-request-fields__suppliers-table tr,
+  .cmp-request-fields__suppliers-table th,
+  .cmp-request-fields__suppliers-table td {
+    display: block;
+  }
+
+  .cmp-request-fields__suppliers-table thead {
+    display: none;
+  }
+
+  .cmp-request-fields__suppliers-table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .cmp-request-fields__suppliers-table tbody {
+    display: grid;
+    gap: 10px;
+  }
+
+  .cmp-request-fields__suppliers-table tr {
+    display: grid;
+    grid-template-columns: minmax(92px, 0.7fr) minmax(72px, 0.45fr) minmax(190px, 1.4fr);
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+  }
+
+  .cmp-request-fields__suppliers-table td {
+    min-width: 0;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .cmp-request-fields__suppliers-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 850;
+    line-height: 1.2;
+  }
+
+  .cmp-request-fields__suppliers-table td:nth-child(4),
+  .cmp-request-fields__suppliers-table td:nth-child(5) {
+    grid-column: span 1;
+  }
+
+  .cmp-request-fields__suppliers-table td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .cmp-request-fields__suppliers-table td:last-child::before {
+    display: none;
+  }
+
+  .cmp-request-fields__supplier-actions {
+    justify-content: flex-end;
+  }
+
+  .cmp-request-fields__supplier-actions .cmp-request-fields__secondary-button {
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+
+  .cmp-request-fields__button-icon {
+    width: 15px;
+    height: 15px;
+  }
+}
+
+@media (max-width: 620px) {
+  .cmp-request-fields__suppliers-table tr {
+    grid-template-columns: minmax(0, 1fr) minmax(72px, 0.42fr);
+  }
+
+  .cmp-request-fields__suppliers-table td:nth-child(3),
+  .cmp-request-fields__suppliers-table td:nth-child(4),
+  .cmp-request-fields__suppliers-table td:nth-child(5),
+  .cmp-request-fields__suppliers-table td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .cmp-request-fields__supplier-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .cmp-request-fields__supplier-actions .cmp-request-fields__secondary-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .cmp-request-fields__supplier-actions {
+    grid-template-columns: 44px 44px;
+    justify-content: end;
+  }
+
+  .cmp-request-fields__supplier-actions .cmp-request-fields__secondary-button {
+    width: 44px;
+    min-width: 44px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+  }
+
+  .cmp-request-fields__button-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .cmp-request-fields__button-icon {
+    width: 17px;
+    height: 17px;
+  }
 }
 
 /* =========================================

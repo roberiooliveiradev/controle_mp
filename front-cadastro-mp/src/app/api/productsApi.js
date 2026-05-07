@@ -29,3 +29,26 @@ export async function getProductApi(productId) {
   const { data } = await httpClient.get(`/products/${productId}`);
   return data;
 }
+
+export async function searchTotvsSuppliersApi({
+  code = null,
+  store = null,
+  name = null,
+  limit = 20,
+  offset = 0,
+} = {}) {
+  const params = {
+    limit,
+    offset,
+  };
+
+  if (code) params.code = code;
+  if (store) params.store = store;
+  if (name) params.name = name;
+
+  const { data } = await httpClient.get("/products/totvs/suppliers", {
+    params,
+  });
+
+  return data;
+}

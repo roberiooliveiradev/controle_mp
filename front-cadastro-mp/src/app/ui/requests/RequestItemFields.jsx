@@ -1,8 +1,10 @@
 // src/app/ui/requests/RequestItemFields.jsx
 
 import { useMemo, useState, useEffect, useRef } from "react";
+import { Search, Trash2 } from "lucide-react";
 
 import { getTotvsByProductCodeApi } from "../../api/requestsApi";
+import { SupplierSearchModal } from "./SupplierSearchModal";
 
 import {
   TAGS,
@@ -94,6 +96,11 @@ export function RequestItemFields({
     value: "",
     saving: false,
     error: "",
+  });
+
+  const [supplierSearchModal, setSupplierSearchModal] = useState({
+    open: false,
+    rowIndex: null,
   });
 
   function closeFlagModal() {
@@ -461,6 +468,49 @@ export function RequestItemFields({
 
     onChangeFornecedores?.(next);
     onClearSupplierError?.(rowIndex, columnKey);
+  }
+
+
+  function openSupplierSearch(rowIndex) {
+    if (!canEditNormal) return;
+
+    setSupplierSearchModal({
+      open: true,
+      rowIndex,
+    });
+  }
+
+  function closeSupplierSearch() {
+    setSupplierSearchModal({
+      open: false,
+      rowIndex: null,
+    });
+  }
+
+  function applySupplierFromSearch(supplier) {
+    if (!canEditNormal) return;
+
+    const rowIndex = Number(supplierSearchModal.rowIndex);
+    if (!Number.isInteger(rowIndex) || rowIndex < 0) return;
+
+    const next = fornecedores.map((row, idx) => {
+      if (idx !== rowIndex) return row;
+
+      return {
+        ...row,
+        supplier_code: supplier.supplier_code ?? "",
+        store: supplier.store ?? "",
+        supplier_name: supplier.supplier_name ?? "",
+      };
+    });
+
+    setFornecedores(next);
+
+    onClearSupplierError?.(rowIndex, "supplier_code");
+    onClearSupplierError?.(rowIndex, "store");
+    onClearSupplierError?.(rowIndex, "supplier_name");
+
+    closeSupplierSearch();
   }
 
   async function saveFlagFromModal() {
@@ -1034,7 +1084,7 @@ export function RequestItemFields({
                 return (
                   <tr key={rowIdx}>
                     {SUPPLIER_COLUMNS.map((column) => (
-                      <td key={column.key}>
+                      <td key={column.key} data-label={column.header}>
                         {!canEditNormal ? (
                           <div className="cmp-request-fields__readonly-cell">
                             {String(row?.[column.key] ?? "").trim() ? (
@@ -1065,15 +1115,41 @@ export function RequestItemFields({
                       </td>
                     ))}
 
-                    <td>
+                    <td data-label="Ações">
                       {canEditNormal ? (
-                        <button
-                          type="button"
-                          onClick={() => removeSupplierRow(rowIdx)}
-                          className="cmp-request-fields__secondary-button cmp-request-fields__secondary-button--danger"
-                        >
-                          Remover
-                        </button>
+                        <div className="cmp-request-fields__supplier-actions">
+                          <button
+                            type="button"
+                            onClick={() => openSupplierSearch(rowIdx)}
+                            className="cmp-request-fields__secondary-button cmp-request-fields__secondary-button--icon"
+                            title="Buscar fornecedor"
+                            aria-label="Buscar fornecedor"
+                          >
+                            <Search
+                              aria-hidden="true"
+                              className="cmp-request-fields__button-icon"
+                            />
+                            <span className="cmp-request-fields__button-text">
+                              Buscar
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => removeSupplierRow(rowIdx)}
+                            className="cmp-request-fields__secondary-button cmp-request-fields__secondary-button--danger cmp-request-fields__secondary-button--icon"
+                            title="Remover fornecedor"
+                            aria-label="Remover fornecedor"
+                          >
+                            <Trash2
+                              aria-hidden="true"
+                              className="cmp-request-fields__button-icon"
+                            />
+                            <span className="cmp-request-fields__button-text">
+                              Remover
+                            </span>
+                          </button>
+                        </div>
                       ) : (
                         <span className="cmp-request-fields__empty">—</span>
                       )}
@@ -1089,6 +1165,26 @@ export function RequestItemFields({
           Os fornecedores são armazenados em um field JSON (tag: fornecedores).
         </FieldHint>
       </section>
+
+      <SupplierSearchModal
+        open={supplierSearchModal.open}
+        initialFilters={{
+          code:
+            supplierSearchModal.rowIndex == null
+              ? ""
+              : fornecedores?.[supplierSearchModal.rowIndex]?.supplier_code ?? "",
+          store:
+            supplierSearchModal.rowIndex == null
+              ? ""
+              : fornecedores?.[supplierSearchModal.rowIndex]?.store ?? "",
+          name:
+            supplierSearchModal.rowIndex == null
+              ? ""
+              : fornecedores?.[supplierSearchModal.rowIndex]?.supplier_name ?? "",
+        }}
+        onClose={closeSupplierSearch}
+        onConfirm={applySupplierFromSearch}
+      />
 
       <FlagModal />
     </div>

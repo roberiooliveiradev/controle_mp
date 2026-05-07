@@ -44,7 +44,66 @@ class TotvsProductRepository:
             result = session.execute(text(sql), params)
             rows = [dict(row._mapping) for row in result]
             return [_deep_strip(r) for r in rows]
+        
+            
+    def search_suppliers(
+        self,
+        *,
+        code: str | None = None,
+        store: str | None = None,
+        name: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        safe_limit = max(1, min(int(limit or 20), 50))
+        safe_offset = max(0, int(offset or 0))
 
+        where = """
+            WHERE
+                SA2010.D_E_L_E_T_ = ''
+        """
+
+        params = {}
+
+        if code:
+            where += " AND UPPER(LTRIM(RTRIM(A2_COD))) LIKE UPPER(:code)"
+            params["code"] = f"%{code.strip()}%"
+
+        if store:
+            where += " AND UPPER(LTRIM(RTRIM(A2_LOJA))) LIKE UPPER(:store)"
+            params["store"] = f"%{store.strip()}%"
+
+        if name:
+            where += " AND UPPER(LTRIM(RTRIM(A2_NOME))) LIKE UPPER(:name)"
+            params["name"] = f"%{name.strip()}%"
+
+        with TotvsSessionLocal() as session:
+            count_sql = f"""
+                SELECT COUNT(1) AS total
+                FROM SA2010
+                {where}
+            """
+
+            total = int(session.execute(text(count_sql), params).scalar() or 0)
+
+            sql = f"""
+                SELECT
+                    LTRIM(RTRIM(A2_COD))  AS supplier_code,
+                    LTRIM(RTRIM(A2_LOJA)) AS store,
+                    LTRIM(RTRIM(A2_NOME)) AS supplier_name
+                FROM SA2010
+                {where}
+                ORDER BY
+                    A2_COD ASC,
+                    A2_LOJA ASC,
+                    A2_NOME ASC
+                OFFSET {safe_offset} ROWS
+                FETCH NEXT {safe_limit} ROWS ONLY
+            """
+
+            result = session.execute(text(sql), params)
+            rows = [dict(row._mapping) for row in result]
+            return [_deep_strip(r) for r in rows], total
 
 def _deep_strip(value):
     if isinstance(value, str):

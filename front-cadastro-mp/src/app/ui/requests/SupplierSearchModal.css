@@ -1,0 +1,202 @@
+.cmp-supplier-search-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.52);
+}
+
+.cmp-supplier-search-modal__panel {
+  width: min(860px, 100%);
+  max-height: min(720px, 92dvh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.cmp-supplier-search-modal__header,
+.cmp-supplier-search-modal__footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cmp-supplier-search-modal__footer {
+  border-top: 1px solid var(--border);
+  border-bottom: 0;
+  justify-content: flex-end;
+}
+
+.cmp-supplier-search-modal__title {
+  display: block;
+  font-size: 16px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.cmp-supplier-search-modal__subtitle {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.cmp-supplier-search-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.cmp-supplier-search-modal__filters {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(90px, 0.5fr) minmax(220px, 1.4fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.cmp-supplier-search-modal__field {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.cmp-supplier-search-modal__field span {
+  color: var(--text-muted);
+  font-weight: 800;
+}
+
+.cmp-supplier-search-modal__field input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 9px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-md);
+  background: var(--control-bg);
+  color: var(--control-text);
+}
+
+.cmp-supplier-search-modal__button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 850;
+}
+
+.cmp-supplier-search-modal__button:hover:not(:disabled) {
+  border-color: var(--border-2);
+  background: var(--surface-2);
+  color: var(--primary);
+}
+
+.cmp-supplier-search-modal__button--primary {
+  border-color: color-mix(in srgb, var(--primary) 68%, transparent);
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.cmp-supplier-search-modal__button--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 84%, #000000);
+  color: #ffffff;
+}
+
+.cmp-supplier-search-modal__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.cmp-supplier-search-modal__error {
+  padding: 10px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-md);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.cmp-supplier-search-modal__table-wrap {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.cmp-supplier-search-modal__table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+}
+
+.cmp-supplier-search-modal__table th,
+.cmp-supplier-search-modal__table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.cmp-supplier-search-modal__table th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.cmp-supplier-search-modal__row {
+  cursor: pointer;
+}
+
+.cmp-supplier-search-modal__row:hover {
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+}
+
+.cmp-supplier-search-modal__row--active {
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--primary);
+  font-weight: 850;
+}
+
+.cmp-supplier-search-modal__empty {
+  color: var(--text-soft);
+}
+
+@media (max-width: 760px) {
+  .cmp-supplier-search-modal {
+    align-items: stretch;
+    padding: 8px;
+  }
+
+  .cmp-supplier-search-modal__filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cmp-supplier-search-modal__footer {
+    flex-direction: column;
+  }
+
+  .cmp-supplier-search-modal__button {
+    width: 100%;
+  }
+}

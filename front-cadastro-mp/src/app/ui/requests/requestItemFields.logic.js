@@ -42,30 +42,36 @@ export const TAGS = {
 };
 
 export function newSupplierRow() {
-	return { supplier_code: "", store: "", supplier_name: "", part_number: "" };
+	return {
+		supplier_code: "",
+		store: "",
+		supplier_name: "",
+		part_number: "",
+		catalog_number: "",
+	};
 }
 
 export function newStructuredItem() {
-  const cid =
-    globalThis.crypto?.randomUUID?.() ??
-    `cid-${Date.now()}-${Math.random()}`;
+	const cid =
+		globalThis.crypto?.randomUUID?.() ??
+		`cid-${Date.now()}-${Math.random()}`;
 
-  return {
-    _client_id: cid, // ✅ agora existe
-    request_type_code: "CREATE",
-    codigo_atual: "",
-    grupo: "",
-    novo_codigo: "",
+	return {
+		_client_id: cid,
+		request_type_code: "CREATE",
+		codigo_atual: "",
+		grupo: "",
+		novo_codigo: "",
 
-    descricao: "",
-    tipo: DEFAULT_VALUES.TIPO,
-    armazem_padrao: DEFAULT_VALUES.ARMAZEM_PADRAO,
-    unidade: "",
-    produto_terceiro: DEFAULT_VALUES.PRODUTO_TERCEIRO,
-    cta_contabil: DEFAULT_VALUES.CTA_CONTABIL,
-    ref_cliente: "",
-    fornecedores: [newSupplierRow()],
-  };
+		descricao: "",
+		tipo: DEFAULT_VALUES.TIPO,
+		armazem_padrao: DEFAULT_VALUES.ARMAZEM_PADRAO,
+		unidade: "",
+		produto_terceiro: DEFAULT_VALUES.PRODUTO_TERCEIRO,
+		cta_contabil: DEFAULT_VALUES.CTA_CONTABIL,
+		ref_cliente: "",
+		fornecedores: [newSupplierRow()],
+	};
 }
 
 export function toRequestTypeId(code) {
@@ -85,19 +91,18 @@ export function safeJsonParse(str, fallback) {
 }
 
 export function pushTextField(fields, tag, value) {
-  let v = String(value ?? "").trim();
-  if (!v) return;
+	let v = String(value ?? "").trim();
+	if (!v) return;
 
-  v = v.toUpperCase(); // ✅ TODAS AS TAGS
+	v = v.toUpperCase();
 
-  fields.push({
-    field_type_id: FIELD_TYPE_ID_TEXT,
-    field_tag: tag,
-    field_value: v,
-    field_flag: null,
-  });
+	fields.push({
+		field_type_id: FIELD_TYPE_ID_TEXT,
+		field_tag: tag,
+		field_value: v,
+		field_flag: null,
+	});
 }
-
 
 /**
  * Converte o "item estruturado" do Composer para payload de request_items.
@@ -107,12 +112,10 @@ export function structuredItemToRequestPayloadItem(it) {
 	const isUpdateItem = it.request_type_code === "UPDATE";
 	const isCreateItem = it.request_type_code === "CREATE";
 
-	// ✅ CREATE: pode enviar novo_codigo (se vier preenchido)
 	if (isCreateItem) {
 		pushTextField(fields, TAGS.novo_codigo, it.novo_codigo);
 	}
 
-	// ✅ UPDATE: envia codigo_atual e (opcional) novo_codigo
 	if (isUpdateItem) {
 		pushTextField(fields, TAGS.codigo_atual, it.codigo_atual);
 		pushTextField(fields, TAGS.novo_codigo, it.novo_codigo);
@@ -128,12 +131,13 @@ export function structuredItemToRequestPayloadItem(it) {
 	pushTextField(fields, TAGS.ref_cliente, it.ref_cliente);
 
 	const fornecedores = (Array.isArray(it.fornecedores) ? it.fornecedores : []).map(
-	(r) => ({
-		supplier_code: String(r.supplier_code ?? "").trim().toUpperCase(),
-		store: String(r.store ?? "").trim().toUpperCase(),
-		supplier_name: String(r.supplier_name ?? "").trim().toUpperCase(),
-		part_number: String(r.part_number ?? "").trim().toUpperCase(),
-	}),
+		(r) => ({
+			supplier_code: String(r.supplier_code ?? "").trim().toUpperCase(),
+			store: String(r.store ?? "").trim().toUpperCase(),
+			supplier_name: String(r.supplier_name ?? "").trim().toUpperCase(),
+			part_number: String(r.part_number ?? "").trim().toUpperCase(),
+			catalog_number: String(r.catalog_number ?? "").trim().toUpperCase(),
+		}),
 	);
 
 	fields.push({
@@ -163,7 +167,6 @@ export function validateStructuredItem(it) {
 	if (update && isBlank(it.codigo_atual))
 		fields.codigo_atual = "Informe o código atual.";
 
-	// sempre obrigatórios
 	if (isBlank(it.grupo)) fields.grupo = "Campo obrigatório.";
 	if (isBlank(it.descricao)) fields.descricao = "Campo obrigatório.";
 	if (isBlank(it.tipo)) fields.tipo = "Campo obrigatório.";
@@ -172,15 +175,16 @@ export function validateStructuredItem(it) {
 	if (isBlank(it.produto_terceiro))
 		fields.produto_terceiro = "Campo obrigatório.";
 	if (isBlank(it.cta_contabil)) fields.cta_contabil = "Campo obrigatório.";
-	// if (isBlank(it.ref_cliente)) fields.ref_cliente = "Campo obrigatório.";
 
 	const rows = Array.isArray(it.fornecedores) ? it.fornecedores : [];
 	rows.forEach((r, idx) => {
 		const rowErr = {};
+
 		if (isBlank(r.supplier_code)) rowErr.supplier_code = "Obrigatório.";
 		if (isBlank(r.store)) rowErr.store = "Obrigatório.";
 		if (isBlank(r.supplier_name)) rowErr.supplier_name = "Obrigatório.";
 		if (isBlank(r.part_number)) rowErr.part_number = "Obrigatório.";
+
 		if (Object.keys(rowErr).length) suppliers[idx] = rowErr;
 	});
 
@@ -235,7 +239,6 @@ export function validateStructuredItemFromTags(
 	if (isUpdate && !get(TAGS.codigo_atual))
 		fields[TAGS.codigo_atual] = "Informe o código atual.";
 
-	// obrigatórios sempre
 	if (!get(TAGS.grupo)) fields[TAGS.grupo] = "Campo obrigatório.";
 	if (!get(TAGS.descricao)) fields[TAGS.descricao] = "Campo obrigatório.";
 	if (!get(TAGS.tipo)) fields[TAGS.tipo] = "Campo obrigatório.";

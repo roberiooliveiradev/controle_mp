@@ -213,3 +213,25 @@ class ProductQueryService:
             item["fornecedores"] = []
 
         return item
+
+
+    def search_suppliers_totvs(
+        self,
+        *,
+        code: str | None = None,
+        store: str | None = None,
+        name: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        code = (code or "").strip() or None
+        store = (store or "").strip() or None
+        name = (name or "").strip() or None
+
+        return self._totvs_prod_repo.search_suppliers(
+            code=code,
+            store=store,
+            name=name,
+            limit=limit,
+            offset=offset,
+        )

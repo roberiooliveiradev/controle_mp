@@ -192,6 +192,42 @@ def get_product_totvs(product_id: int):
 
     return jsonify({"product_id": int(p.id), "codigo_atual": codigo_atual, "totvs": totvs}), 200
 
+@bp_prod.get("/totvs/suppliers")
+@require_auth
+def search_suppliers_totvs():
+    code = (request.args.get("code") or "").strip() or None
+    store = (request.args.get("store") or "").strip() or None
+    name = (request.args.get("name") or "").strip() or None
+
+    limit_raw = request.args.get("limit")
+    offset_raw = request.args.get("offset")
+
+    try:
+        limit = int(limit_raw) if limit_raw not in (None, "") else 20
+        offset = int(offset_raw) if offset_raw not in (None, "") else 0
+    except ValueError:
+        return jsonify({"error": "Parâmetros limit/offset inválidos."}), 400
+
+    limit = max(1, min(int(limit), 50))
+    offset = max(0, int(offset))
+
+    with db_session() as session:
+        svc = _build_query_service(session)
+        items, total = svc.search_suppliers_totvs(
+            code=code,
+            store=store,
+            name=name,
+            limit=limit,
+            offset=offset,
+        )
+
+    return jsonify({
+        "items": items,
+        "total": int(total),
+        "limit": int(limit),
+        "offset": int(offset),
+    }), 200
+
 @bp_prod.get("/totvs/<product_code>")
 @require_auth
 def get_product_by_code_totvs(product_code: str):
