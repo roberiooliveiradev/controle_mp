@@ -1,5 +1,13 @@
 // src/app/ui/chat/ChatComposer.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  FilePlus2,
+  Paperclip,
+  ReceiptText,
+  SendHorizontal,
+  Settings2,
+  SmilePlus,
+} from "lucide-react";
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 
 import { AttachmentTray } from "./AttachmentTray";
@@ -118,6 +126,7 @@ export function ChatComposer({
   const textareaRef = useRef(null);
   const actionsBtnRef = useRef(null);
   const actionsMenuRef = useRef(null);
+  const actionsHoverCloseTimerRef = useRef(null);
   const emojiBtnRef = useRef(null);
   const emojiMenuRef = useRef(null);
 
@@ -206,6 +215,36 @@ export function ChatComposer({
       document.removeEventListener("keydown", onEsc);
     };
   }, [actionsOpen, emojiOpen]);
+
+  useEffect(() => {
+    return () => {
+      clearActionsHoverCloseTimer();
+    };
+  }, []);
+
+  function clearActionsHoverCloseTimer() {
+    if (actionsHoverCloseTimerRef.current) {
+      window.clearTimeout(actionsHoverCloseTimerRef.current);
+      actionsHoverCloseTimerRef.current = null;
+    }
+  }
+
+  function openActionsByHover() {
+    if (sending) return;
+
+    clearActionsHoverCloseTimer();
+    setActionsOpen(true);
+    setEmojiOpen(false);
+  }
+
+  function closeActionsByHoverWithDelay() {
+    clearActionsHoverCloseTimer();
+
+    actionsHoverCloseTimerRef.current = window.setTimeout(() => {
+      setActionsOpen(false);
+      actionsHoverCloseTimerRef.current = null;
+    }, 300);
+  }
 
   function pickFiles() {
     if (sending) return;
@@ -313,6 +352,7 @@ export function ChatComposer({
   function openRequestModal() {
     if (sending) return;
 
+    clearActionsHoverCloseTimer();
     setActionsOpen(false);
     setEmojiOpen(false);
     setRequestModalOpen(true);
@@ -419,15 +459,18 @@ export function ChatComposer({
             disabled={sending}
             className="cmp-chat-composer__button cmp-chat-composer__button--attach"
             title="Anexar arquivos"
+            aria-label="Anexar arquivos"
           >
             <span className="cmp-chat-composer__button-icon" aria-hidden="true">
-              📎
+              <Paperclip />
             </span>
 
             <span>Anexar</span>
 
             {fileCount > 0 ? (
-              <span className="cmp-chat-composer__button-count">{fileCount}</span>
+              <span className="cmp-chat-composer__button-count">
+                {fileCount}
+              </span>
             ) : null}
           </button>
 
@@ -448,9 +491,10 @@ export function ChatComposer({
                   : "cmp-chat-composer__button cmp-chat-composer__button--emoji"
               }
               title="Inserir emoji"
+              aria-label="Inserir emoji"
             >
               <span className="cmp-chat-composer__button-icon" aria-hidden="true">
-                🙂
+                <SmilePlus />
               </span>
 
               <span>Emoji</span>
@@ -479,11 +523,16 @@ export function ChatComposer({
             ) : null}
           </div>
 
-          <div className="cmp-chat-composer__menu-wrap">
+          <div
+            className="cmp-chat-composer__menu-wrap"
+            onMouseEnter={openActionsByHover}
+            onMouseLeave={closeActionsByHoverWithDelay}
+          >
             <button
               ref={actionsBtnRef}
               type="button"
               onClick={() => {
+                clearActionsHoverCloseTimer();
                 setActionsOpen((value) => !value);
                 setEmojiOpen(false);
               }}
@@ -495,16 +544,14 @@ export function ChatComposer({
                   ? "cmp-chat-composer__button cmp-chat-composer__button--actions cmp-chat-composer__button--active"
                   : "cmp-chat-composer__button cmp-chat-composer__button--actions"
               }
+              title="Ações"
+              aria-label="Ações"
             >
               <span className="cmp-chat-composer__button-icon" aria-hidden="true">
-                ⚙
+                <Settings2 />
               </span>
 
               <span>Ações</span>
-
-              <span className="cmp-chat-composer__chevron" aria-hidden="true">
-                ▾
-              </span>
             </button>
 
             {actionsOpen ? (
@@ -519,8 +566,11 @@ export function ChatComposer({
                   onClick={openRequestModal}
                   className="cmp-chat-composer__menu-item"
                 >
-                  <span className="cmp-chat-composer__menu-item-icon" aria-hidden="true">
-                    🧾
+                  <span
+                    className="cmp-chat-composer__menu-item-icon"
+                    aria-hidden="true"
+                  >
+                    <ReceiptText />
                   </span>
 
                   <span>
@@ -537,7 +587,11 @@ export function ChatComposer({
             disabled={!canSend || sending}
             className="cmp-chat-composer__send"
           >
-            {sending ? "Enviando..." : "Enviar"}
+            <span className="cmp-chat-composer__send-icon" aria-hidden="true">
+              {sending ? <FilePlus2 /> : <SendHorizontal />}
+            </span>
+
+            <span>{sending ? "Enviando..." : "Enviar"}</span>
           </button>
         </div>
       </form>
