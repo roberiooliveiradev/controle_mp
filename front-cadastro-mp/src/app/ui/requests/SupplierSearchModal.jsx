@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { searchTotvsSuppliersApi } from "../../api/productsApi";
 import "./SupplierSearchModal.css";
 
@@ -41,6 +41,12 @@ export function SupplierSearchModal({
   const totalPages = Math.max(1, Math.ceil(pagination.total / pagination.limit));
   const hasPreviousPage = pagination.offset > 0;
   const hasNextPage = pagination.offset + pagination.limit < pagination.total;
+
+  const hasActiveFilters = Boolean(
+    normalizeText(filters.code) ||
+      normalizeText(filters.store) ||
+      normalizeText(filters.name),
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -117,7 +123,7 @@ export function SupplierSearchModal({
         offset: 0,
       });
       setError(
-        err?.response?.data?.error ?? "Falha ao buscar fornecedores no TOTVS."
+        err?.response?.data?.error ?? "Falha ao buscar fornecedores no TOTVS.",
       );
     } finally {
       setLoading(false);
@@ -127,6 +133,26 @@ export function SupplierSearchModal({
   function searchSuppliers() {
     loadSuppliers({
       nextFilters: filters,
+      nextOffset: 0,
+      keepSelection: false,
+    });
+  }
+
+  function clearSearch() {
+    if (loading) return;
+
+    const emptyFilters = {
+      code: "",
+      store: "",
+      name: "",
+    };
+
+    setFilters(emptyFilters);
+    setSelectedIndex(null);
+    setError("");
+
+    loadSuppliers({
+      nextFilters: emptyFilters,
       nextOffset: 0,
       keepSelection: false,
     });
@@ -241,13 +267,28 @@ export function SupplierSearchModal({
               type="button"
               onClick={searchSuppliers}
               disabled={loading}
-              className="cmp-supplier-search-modal__button cmp-supplier-search-modal__button--primary"
+              className="cmp-supplier-search-modal__button cmp-supplier-search-modal__button--primary cmp-supplier-search-modal__button--search"
             >
               <Search
                 aria-hidden="true"
                 className="cmp-supplier-search-modal__icon"
               />
               {loading ? "Buscando..." : "Buscar"}
+            </button>
+
+            <button
+              type="button"
+              onClick={clearSearch}
+              disabled={loading || !hasActiveFilters}
+              className="cmp-supplier-search-modal__button cmp-supplier-search-modal__button--clear"
+              title="Limpar pesquisa"
+              aria-label="Limpar pesquisa"
+            >
+              <X
+                aria-hidden="true"
+                className="cmp-supplier-search-modal__icon"
+              />
+              Limpar
             </button>
           </div>
 
