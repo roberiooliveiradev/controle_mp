@@ -257,13 +257,7 @@
 }
 
 .cmp-chat-composer__chevron {
-  position: absolute;
-  right: 5px;
-  bottom: 5px;
-  width: 11px;
-  height: 11px;
-  color: var(--text-muted);
-  stroke-width: 3;
+  display: none;
 }
 
 .cmp-chat-composer__send {
@@ -538,8 +532,7 @@
   }
 
   .cmp-chat-composer__chevron {
-    width: 10px;
-    height: 10px;
+    display: none;
   }
 
   .cmp-chat-composer__emoji-menu {
@@ -682,6 +675,53 @@
     width: 100%;
     min-width: 0;
   }
+
+  .cmp-chat-composer__button > span:not(.cmp-chat-composer__button-icon):not(.cmp-chat-composer__button-count):not(.cmp-chat-composer__chevron) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .cmp-chat-composer__chevron {
+    display: none;
+  }
+
+  .cmp-chat-composer__menu-wrap {
+    position: static;
+  }
+
+  .cmp-chat-composer__menu {
+    left: 8px;
+    right: 8px;
+    bottom: calc(100% + 8px);
+    width: auto;
+    max-width: none;
+    transform: none;
+  }
+
+  .cmp-chat-composer__emoji-menu {
+    left: 8px;
+    right: 8px;
+    bottom: calc(100% + 8px);
+    width: auto;
+    max-width: none;
+    transform: none;
+    max-height: min(440px, 68dvh);
+  }
+
+  .cmp-chat-composer__menu::after,
+  .cmp-chat-composer__emoji-menu::after {
+    right: 88px;
+    transform: rotate(45deg);
+  }
+
+  .cmp-chat-composer__emoji-menu .EmojiPickerReact {
+    --epr-emoji-size: 22px;
+    --epr-emoji-gap: 5px;
+  }
 }
 
 @media (max-width: 520px) {
@@ -720,19 +760,6 @@
     height: 17px;
   }
 
-  .cmp-chat-composer__button > span:not(.cmp-chat-composer__button-icon):not(.cmp-chat-composer__button-count):not(.cmp-chat-composer__chevron) {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .cmp-chat-composer__chevron {
-    display: none;
-  }
-
   .cmp-chat-composer__send {
     min-height: 40px;
     min-width: 0;
@@ -743,40 +770,6 @@
   .cmp-chat-composer__send-icon svg {
     width: 16px;
     height: 16px;
-  }
-
-  .cmp-chat-composer__menu-wrap {
-    position: static;
-  }
-
-  .cmp-chat-composer__menu {
-    left: 8px;
-    right: 8px;
-    bottom: calc(100% + 8px);
-    width: auto;
-    max-width: none;
-    transform: none;
-  }
-
-  .cmp-chat-composer__emoji-menu {
-    left: 8px;
-    right: 8px;
-    bottom: calc(100% + 8px);
-    width: auto;
-    max-width: none;
-    transform: none;
-    max-height: min(440px, 68dvh);
-  }
-
-  .cmp-chat-composer__menu::after,
-  .cmp-chat-composer__emoji-menu::after {
-    right: 88px;
-    transform: rotate(45deg);
-  }
-
-  .cmp-chat-composer__emoji-menu .EmojiPickerReact {
-    --epr-emoji-size: 22px;
-    --epr-emoji-gap: 5px;
   }
 }
 
