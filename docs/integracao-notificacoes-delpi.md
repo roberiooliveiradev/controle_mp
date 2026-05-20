@@ -8,12 +8,13 @@ Eventos do Controle MP (mensagens, solicitações, conversas) podem gerar notifi
 
 ## Fluxo
 
-1. API Controle MP processa evento e emite Socket.IO (como antes).
+1. API Controle MP processa evento, **faz `commit` no banco** e emite Socket.IO `message:new` (tempo real no chat).
 2. Se `DELPI_NOTIFICATIONS_ENABLED=true`, chama `POST {DELPI_CORE_API_URL}/integrations/notifications`.
 3. Core API persiste notificação (`category: controle_mp`) para destinatários por **email**.
 4. Portal atualiza o sino (socket/polling).
-5. Usuário clica → `portal_route` + `metadata.deepPath` → `AppHost` envia `DELPI_NAVIGATE` ao iframe.
-6. Front Controle MP (`DelpiNavigateBridge`) faz `navigate(deepPath)`.
+5. Usuário clica → `portal_route` + `metadata.deepPath` → portal navega para `/controle-mp/conversations/{id}`.
+6. `AppHost` envia `DELPI_NAVIGATE` ao iframe; o front (`DelpiNavigateBridge`) faz `navigate(deepPath)`.
+7. Ao trocar de conversa no iframe, `DelpiRouteSyncBridge` envia `DELPI_EMBEDDED_ROUTE` e a URL do portal acompanha (como no chat IA).
 
 ## Configuração
 
@@ -42,10 +43,10 @@ Exemplo de alinhamento (mesmo valor nos dois lados):
 
 ```env
 # delpi-central/infra/.env
-CORE_API_INTEGRATIONS_SERVICE_TOKEN=beb8bb46008cc1202e05488b99117132d6556d1575cacc5e67cda8dc177f8c19
+CORE_API_INTEGRATIONS_SERVICE_TOKEN=<mesmo valor nos dois lados>
 
 # controle_mp/.env.production
-CORE_API_INTEGRATIONS_SERVICE_TOKEN=beb8bb46008cc1202e05488b99117132d6556d1575cacc5e67cda8dc177f8c19
+CORE_API_INTEGRATIONS_SERVICE_TOKEN=<mesmo valor nos dois lados>
 ```
 
 ### Minha DELPI (Core API)
@@ -94,19 +95,41 @@ O portal trata qualquer notificação com `metadata.deepPath` como deep link de 
 | Tipo | Direção | Uso |
 |------|---------|-----|
 | `DELPI_AUTH` | Portal → MP | SSO |
-| `DELPI_NAVIGATE` | Portal → MP | Deep link `{ path: "/conversations/1" }` |
+| `DELPI_NAVIGATE` | Portal → MP | Deep link `{ path: "/conversations/109" }` |
+| `DELPI_EMBEDDED_ROUTE` | MP → Portal | Sincronizar URL do portal com rota interna |
 | `DELPI_AUTH_READY` | MP → Portal | Pedir token |
 | `DELPI_LOGOUT` | Portal → MP | Encerrar sessão local |
+
+### URL na barra do navegador
+
+| Onde | Exemplo |
+|------|---------|
+| Portal (Minha DELPI) | `https://minhadelpi.com.br/controle-mp/conversations/110` |
+| Iframe (Controle MP) | `https://controle-mp.minhadelpi.com.br/conversations/110` |
+
+O portal registra apps embedded com rota wildcard (`/controle-mp/*`), no mesmo espírito do chat federado (`/apps/minha-delpi-chat/conversas/:id`).
 
 ### Arquivos no front (referência)
 
 | Arquivo | Função |
 |---------|--------|
-| `front-cadastro-mp/src/app/sso/DelpiSsoBridge.jsx` | SSO Keycloak → sessão local |
-| `front-cadastro-mp/src/app/sso/DelpiNavigateBridge.jsx` | Deep link `DELPI_NAVIGATE` |
-| `front-cadastro-mp/src/app/sso/delpiEmbeddedNavigation.js` | Rota pendente após SSO |
+| `front-cadastro-mp/src/app/sso/DelpiSsoBridge.jsx` | SSO Keycloak → sessão local; no iframe **não** força `/conversations` após SSO |
+| `front-cadastro-mp/src/app/sso/DelpiNavigateBridge.jsx` | Escuta `DELPI_NAVIGATE` e navega |
+| `front-cadastro-mp/src/app/sso/DelpiRouteSyncBridge.jsx` | Envia `DELPI_EMBEDDED_ROUTE` ao mudar rota |
+| `front-cadastro-mp/src/app/sso/delpiEmbeddedNavigation.js` | `delpi.child.pending_navigate` (rota pendente após SSO) |
+| `front-cadastro-mp/src/pages/ConversationsPage.jsx` | Chat em tempo real (`message:new` + merge de payload) |
 
-Após SSO, o app **não** deve redirecionar para `/conversations` se já existir rota pendente da notificação.
+Após SSO no iframe, o app aguarda `DELPI_NAVIGATE` ou rota pendente em `sessionStorage` — não redireciona para `/conversations` por padrão.
+
+## Tempo real (Socket.IO)
+
+| Regra | Detalhe |
+|-------|---------|
+| Ordem na API | `session.commit()` **antes** de `socketio.emit("message:new")` |
+| Front receptor | Aplica o payload do socket na UI e depois sincroniza com `GET /messages` (+ retry ~450 ms) |
+| Sala | `conversation:{id}` + broadcast global (fallback) |
+
+Ver também: `api-cadastro-mp/docs/documentacao_web_socket_realtime.md`.
 
 ### Manifesto no portal (exemplo)
 
@@ -139,10 +162,11 @@ Se o e-mail do Controle MP não existir na Core API, o log da API mostra:
 
 ## Teste manual
 
-1. Ativar variáveis no `.env` do Controle MP e reiniciar API.
-2. Garantir emails iguais nos dois sistemas.
+1. Ativar variáveis no `.env` do Controle MP e reiniciar API + front + portal.
+2. Garantir e-mails iguais nos dois sistemas.
 3. Usuário A envia mensagem; usuário B (admin/analista) verifica o sino na **home** da Minha DELPI.
-4. Clicar em **Abrir conversa** → deve abrir o Controle MP na conversa correta.
+4. Clicar em **Abrir conversa** → URL do portal `/controle-mp/conversations/{id}` e chat aberto na conversa correta.
+5. Com B na conversa aberta, A envia mensagem → B vê a mensagem **imediatamente** (sem precisar enviar outra).
 
 ## Ver logs no servidor
 

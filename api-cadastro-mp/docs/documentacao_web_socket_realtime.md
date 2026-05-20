@@ -119,14 +119,22 @@ Eventos emitidos:
 Exemplo:
 
 ```python
-class SocketIOMessageNotifier(MessageNotifier):
-    def message_created(self, message):
-        socketio.emit(
-            "message_created",
-            message,
-            room=f"conversation:{message.conversation_id}",
-        )
+# Implementação real: app/infrastructure/realtime/socketio_message_notifier.py
+socketio.emit("message:new", payload, room=f"conversation:{conversation_id}")
+socketio.emit("message:new", payload)  # fallback global
 ```
+
+### 5.4 Ordem: commit antes do emit (obrigatório)
+
+Na rota `POST /conversations/<id>/messages`, o fluxo é:
+
+1. `MessageService.create_message()` persiste a mensagem e monta `MessageCreatedEvent` (sem emitir).
+2. Auditoria e leitura para resposta HTTP.
+3. **`session.commit()`** — mensagem visível para outras conexões HTTP.
+4. `SocketIOMessageNotifier.notify_message_created(event)` — clientes podem refazer `GET /messages` com segurança.
+5. `DelpiNotificationService.on_message_created(event)` — sino Minha DELPI (sessão nova).
+
+Emitir `message:new` **antes** do commit faz o receptor refazer a lista e não ver a mensagem até o próximo envio.
 
 ---
 
@@ -196,31 +204,34 @@ socket.disconnect();
 
 ---
 
-## 8. Eventos no Frontend
+## 8. Eventos no Frontend (nomes reais)
 
-### 8.1 Nova mensagem
+| Evento | Uso |
+|--------|-----|
+| `message:new` | Nova mensagem (payload com `conversation_id`, `message_id`, `message` aninhado opcional) |
+| `message:read` | Leitura atualizada |
+| `conversation:new` | Nova conversa na lista |
+| `conversation:join` / `conversation:leave` | Emitidos pelo cliente ao abrir/fechar chat |
+
+### 8.1 Nova mensagem (`ConversationsPage`)
 
 ```js
-socket.on("message_created", (message) => {
-  // adiciona mensagem no chat
+socket.on("message:new", async (payload) => {
+  // 1) normalizar payload.message e acrescentar na UI (imediato)
+  // 2) GET /messages para alinhar com servidor (+ retry ~450ms)
+  // Remetente na conversa aberta: ignorar (já tem otimista local)
 });
 ```
 
-### 8.2 Mensagens lidas
+Arquivos: `ConversationsPage.jsx` (`normalizeRealtimeMessage`, `mergeMessagesWithPending`), `RealtimeContext.jsx` (badge/lista global).
+
+### 8.2 Entrar na sala
 
 ```js
-socket.on("message_read", ({ conversation_id, message_ids }) => {
-  // atualiza estado local
-});
+socket.emit("conversation:join", { conversation_id: id });
 ```
 
-### 8.3 Conversa criada
-
-```js
-socket.on("conversation_created", (conversation) => {
-  // adiciona card na lista
-});
-```
+Handlers: `app/api/realtime/socket_handlers.py` → `join_room(f"conversation:{id}")`.
 
 ---
 
@@ -228,15 +239,10 @@ socket.on("conversation_created", (conversation) => {
 
 Fluxo esperado:
 
-1. Usuário abre conversa
-2. Frontend entra no room:
-
-```js
-socket.emit("join_conversation", { conversation_id });
-```
-
-3. Backend adiciona usuário ao room
-4. Novas mensagens chegam automaticamente
+1. Usuário abre conversa → `joinConversationRoom(selectedId)`.
+2. Outro usuário envia mensagem → API faz **commit** → `message:new`.
+3. Receptor na conversa: aplica payload do socket e sincroniza com HTTP.
+4. Receptor em outra tela: `RealtimeContext` atualiza badge e lista.
 
 ---
 

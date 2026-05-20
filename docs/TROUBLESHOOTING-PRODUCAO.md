@@ -79,17 +79,24 @@ Login direto em `https://controle-mp.minhadelpi.com.br/login` (email/senha local
 
 1. Confirme `metadata.deepPath` na notificação (ex.: `/conversations/109`).
 2. `action.target` e manifesto `basePath` devem ser iguais (`/controle-mp`).
-3. Rebuild **portal** (delpi-central) e **front** Controle MP (bridges SSO + `DelpiNavigateBridge`).
-4. Tutorial completo: `delpi-central/docs/10-guias-operacionais/conectar-aplicacao-iframe.md`.
+3. Rebuild **portal** (delpi-central) e **front** Controle MP (`DelpiSsoBridge`, `DelpiNavigateBridge`, `DelpiRouteSyncBridge`).
+4. URL esperada no portal: `/controle-mp/conversations/{id}` (não só `/controle-mp`).
+5. Tutorial: `delpi-central/docs/10-guias-operacionais/conectar-aplicacao-iframe.md`.
 
-A URL do portal permanece `/controle-mp`; a conversa abre dentro do iframe.
+## “Conversa não encontrada” ao abrir pela notificação
 
-## Mensagem enviada só aparece ao mandar a próxima
+1. SSO no iframe redirecionava para `/conversations` antes do deep link — corrigido em `DelpiSsoBridge.jsx` (aguarda `DELPI_NAVIGATE` no iframe).
+2. Rebuild portal + front; teste em aba anônima após deploy.
+3. Se persistir: usuário pode não ter permissão na conversa (API retorna 404) — conferir papel e participação.
 
-Corrige com rebuild do **front** (corrida entre socket `message:new` e mensagem otimista). Atualize o código e:
+## Mensagem enviada só aparece para o outro ao mandar a próxima
+
+**Causa:** o socket `message:new` era emitido **antes** do `commit` no PostgreSQL; o receptor refazia `GET /messages` e a mensagem ainda não existia.
+
+**Correção (maio/2026):** `commit` antes do emit na rota `POST .../messages`; front aplica payload do socket antes do refetch.
 
 ```bash
-docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build controle-mp-front controle-mp-api
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build controle-mp-api controle-mp-front
 ```
 
 ---
