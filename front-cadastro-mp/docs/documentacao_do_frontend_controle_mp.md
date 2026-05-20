@@ -1,26 +1,32 @@
 # Frontend – Controle MP
 
+> Documentação técnica detalhada. Para início rápido, veja [README.md](../README.md) e [../../docs/README.md](../../docs/README.md).
+
 ## 1. Visão Geral
 
 O frontend do **Controle MP** é uma aplicação **React** criada com **Vite**, responsável por consumir a API Flask do projeto e fornecer a interface para usuários **ADMIN**, **ANALYST** e **USER**.
 
 Principais responsabilidades:
-- Autenticação via JWT (access + refresh token)
+- Autenticação via JWT (access + refresh token) e SSO Minha DELPI (iframe)
 - Navegação protegida por login
-- Listagem e gerenciamento de conversas
-- Visualização e envio de mensagens
-- Integração com Requests (solicitações)
-- Exibição correta de datas com timezone
+- Conversas e chat com anexos e criação de solicitações MP
+- Fila de solicitações (`/requests`) e catálogo de produtos (`/products`)
+- Tempo real via Socket.IO (`RealtimeContext`)
+- Administração de usuários e auditoria (ADMIN)
+- Multi-perfil no `localStorage`
 
 ---
 
 ## 2. Stack Utilizada
 
-- **React 18**
-- **Vite** (build e dev server)
-- **Axios** (HTTP client)
-- **React Router DOM** (roteamento)
-- **LocalStorage** (persistência de sessão)
+- **React 19**
+- **Vite 7** (build e dev server)
+- **Axios** (HTTP client + refresh em 401)
+- **React Router DOM 7** (roteamento)
+- **socket.io-client 4** (WebSocket)
+- **React Context** (`AuthContext`, `RealtimeContext`)
+- **LocalStorage** (tokens e perfil ativo)
+- **lucide-react**, **react-hot-toast**, **recharts**, **emoji-picker-react**
 
 ---
 
@@ -30,34 +36,47 @@ Principais responsabilidades:
 front-cadastro-mp/
 ├── src/
 │   ├── app/
-│   │   ├── api/
-│   │   │   ├── httpClient.js
-│   │   │   ├── authApi.js
-│   │   │   ├── conversationsApi.js
-│   │   │   ├── messagesApi.js
-│   │   │   └── requestsApi.js
-│   │   ├── auth/
-│   │   │   ├── AuthContext.jsx
-│   │   │   ├── authStorage.js
-│   │   │   └── jwt.js
-│   │   ├── routes/
-│   │   │   ├── AppRouter.jsx
-│   │   │   └── ProtectedRoute.jsx
-│   │   ├── ui/
-│   │   │   ├── Layout.jsx
-│   │   │   └── Topbar.jsx
-│   │   └── config/
-│   │       └── env.js
+│   │   ├── api/           # authApi, conversationsApi, messagesApi, requestsApi,
+│   │   │                  # productsApi, filesApi, auditApi, usersApi, httpClient
+│   │   ├── auth/          # AuthContext, authStorage, jwt
+│   │   ├── config/env.js
+│   │   ├── constants/     # roles, request status/types, message types
+│   │   ├── realtime/      # socket.js, RealtimeContext
+│   │   ├── routes/        # AppRouter, ProtectedRoute
+│   │   ├── sso/           # DelpiSsoBridge, LogoutFromParentPage
+│   │   └── ui/
+│   │       ├── Layout.jsx, Topbar.jsx
+│   │       ├── chat/      # ChatComposer, MessageBubble, RequestComposerModal
+│   │       ├── conversations/
+│   │       ├── requests/  # RequestItemFields, SupplierSearchModal
+│   │       └── common/
 │   ├── pages/
-│   │   ├── LoginPage.jsx
-│   │   ├── ConversationsPage.jsx
-│   │   └── ConversationDetailPage.jsx
+│   │   ├── LoginPage, RegisterPage
+│   │   ├── ConversationsPage
+│   │   ├── RequestsPage, ProductsPage
+│   │   ├── AccountPage, AdminUsersPage, AuditPage
+│   │   └── ConversationDetailPage.jsx  # legado — não usado no router
 │   ├── main.jsx
 │   └── index.css
-├── index.html
-├── package.json
-└── .env
+├── nginx.conf             # proxy /api e /socket.io (Docker)
+├── Dockerfile
+└── package.json
 ```
+
+## 3.1 Rotas (AppRouter)
+
+| Rota | Componente |
+|------|------------|
+| `/login` | `LoginPage` |
+| `/register` | `RegisterPage` |
+| `/sso/logout-from-parent` | `LogoutFromParentPage` |
+| `/` → `/conversations` | redirect |
+| `/conversations`, `/conversations/:id` | `ConversationsPage` |
+| `/requests` | `RequestsPage` |
+| `/products` | `ProductsPage` |
+| `/account` | `AccountPage` |
+| `/admin/users` | `AdminUsersPage` |
+| `/audit` | `AuditPage` |
 
 ---
 

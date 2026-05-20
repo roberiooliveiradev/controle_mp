@@ -7,7 +7,7 @@ Este documento define a **estrutura oficial de pastas** do projeto **Cadastro MP
 ## 📁 Estrutura Geral
 
 ```text
-app-cadastro-mp
+controle_mp/
 │
 ├── api-cadastro-mp
 │   ├── app
