@@ -4,18 +4,12 @@
  * Ver delpi-central/docs/05-portal/embedded-app-deep-links.md
  */
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { stashChildPendingNavigate } from "./delpiEmbeddedNavigation";
-
-const ALLOWED_PARENT_ORIGINS = [
-  import.meta.env.VITE_DELPI_PARENT_ORIGIN,
-  "https://minhadelpi.com.br",
-  "https://www.minhadelpi.com.br",
-].filter(Boolean);
-
-function isAllowedParentOrigin(origin) {
-  return ALLOWED_PARENT_ORIGINS.includes(origin);
-}
+import { useLocation, useNavigate } from "react-router-dom";
+import {
+  shouldApplyDelpiNavigate,
+  stashChildPendingNavigate,
+} from "./delpiEmbeddedNavigation";
+import { isAllowedDelpiParentOrigin } from "./delpiParentOrigins";
 
 function normalizePath(path) {
   if (!path) return null;
@@ -26,14 +20,16 @@ function normalizePath(path) {
 
 export function DelpiNavigateBridge() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     function handleNavigate(event) {
-      if (!isAllowedParentOrigin(event.origin)) return;
+      if (!isAllowedDelpiParentOrigin(event.origin)) return;
       if (event.data?.type !== "DELPI_NAVIGATE") return;
 
       const path = normalizePath(event.data?.path);
       if (!path) return;
+      if (!shouldApplyDelpiNavigate(path, location.pathname)) return;
 
       stashChildPendingNavigate(path);
       navigate(path, { replace: true });
@@ -41,7 +37,7 @@ export function DelpiNavigateBridge() {
 
     window.addEventListener("message", handleNavigate);
     return () => window.removeEventListener("message", handleNavigate);
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   return null;
 }

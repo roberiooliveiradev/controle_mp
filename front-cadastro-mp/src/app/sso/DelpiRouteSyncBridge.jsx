@@ -3,10 +3,7 @@
  */
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
-
-function getDefaultParentOrigin() {
-  return import.meta.env.VITE_DELPI_PARENT_ORIGIN || "https://minhadelpi.com.br";
-}
+import { getDelpiParentPostMessageTarget } from "./delpiParentOrigins";
 
 function isEmbeddedInPortal() {
   try {
@@ -32,7 +29,7 @@ export function DelpiRouteSyncBridge() {
 
     window.parent.postMessage(
       { type: "DELPI_EMBEDDED_ROUTE", path },
-      getDefaultParentOrigin()
+      getDelpiParentPostMessageTarget()
     );
   }, [location.pathname, location.search, location.hash]);
 

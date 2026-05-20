@@ -3,20 +3,11 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { decodeJwt } from "../auth/jwt";
 import { navigateAfterAuth } from "./delpiEmbeddedNavigation";
-
-const ALLOWED_PARENT_ORIGINS = [
-  import.meta.env.VITE_DELPI_PARENT_ORIGIN,
-  "https://minhadelpi.com.br",
-  "https://www.minhadelpi.com.br",
-].filter(Boolean);
-
-function getDefaultParentOrigin() {
-  return import.meta.env.VITE_DELPI_PARENT_ORIGIN || "https://minhadelpi.com.br";
-}
-
-function isAllowedParentOrigin(origin) {
-  return ALLOWED_PARENT_ORIGINS.includes(origin);
-}
+import {
+  getDelpiParentPostMessageTarget,
+  isAllowedDelpiParentOrigin,
+  rememberDelpiParentOrigin,
+} from "./delpiParentOrigins";
 
 function normalizeEmail(value) {
   return value ? String(value).trim().toLowerCase() : "";
@@ -50,12 +41,14 @@ export function DelpiSsoBridge() {
 
       window.parent.postMessage(
         { type: "DELPI_AUTH_READY" },
-        getDefaultParentOrigin()
+        getDelpiParentPostMessageTarget()
       );
     }
 
     function handleMessage(event) {
-      if (!isAllowedParentOrigin(event.origin)) return;
+      if (!isAllowedDelpiParentOrigin(event.origin)) return;
+
+      rememberDelpiParentOrigin(event.origin);
 
       if (event.data?.type === "DELPI_LOGOUT") {
         handledTokenRef.current = null;
@@ -124,7 +117,7 @@ export function DelpiSsoBridge() {
       window.removeEventListener("message", handleMessage);
       window.clearTimeout(retry);
     };
-  }, [user, isAuthenticated, syncSsoSession, logout, navigate, location.pathname]);
+  }, [user, isAuthenticated, syncSsoSession, logout, navigate]);
 
   return null;
 }

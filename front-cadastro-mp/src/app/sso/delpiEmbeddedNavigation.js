@@ -50,6 +50,33 @@ export function resolveRouteAfterAuth(pathname) {
  * Navega para a rota pós-auth ou agenda deep link tardio do portal.
  * @returns {boolean} true se disparou navegação (ou agendamento)
  */
+function normalizeEmbeddedPath(path) {
+  const value = String(path || "").trim();
+  if (!value) return "/";
+  const withSlash = value.startsWith("/") ? value : `/${value}`;
+  return withSlash.replace(/\/+$/, "") || "/";
+}
+
+function isPathAncestor(ancestor, child) {
+  const parent = normalizeEmbeddedPath(ancestor);
+  const current = normalizeEmbeddedPath(child);
+  if (parent === current) return false;
+  if (parent === "/") return current !== "/";
+  return current.startsWith(`${parent}/`);
+}
+
+/**
+ * Evita que DELPI_NAVIGATE do portal volte para /conversations enquanto o usuário
+ * já está em /conversations/:id (sendAuth / retentativas de SSO).
+ */
+export function shouldApplyDelpiNavigate(nextPath, currentPathname) {
+  const next = normalizeEmbeddedPath(nextPath);
+  const current = normalizeEmbeddedPath(currentPathname);
+  if (!next || next === current) return false;
+  if (isPathAncestor(next, current)) return false;
+  return true;
+}
+
 export function navigateAfterAuth(navigate, pathname) {
   const next = resolveRouteAfterAuth(pathname);
   if (next) {
