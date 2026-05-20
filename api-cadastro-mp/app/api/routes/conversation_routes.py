@@ -16,9 +16,7 @@ from app.api.schemas.conversation_schema import (
     UserMiniResponse,
 )
 
-from app.infrastructure.realtime.socketio_conversation_notifier import (
-    SocketIOConversationNotifier,
-)
+from app.infrastructure.realtime.composite_notifiers import build_conversation_notifier
 
 from app.services.audit_service import AuditService
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -36,7 +34,7 @@ bp_conv = Blueprint("conversations", __name__, url_prefix="/conversations")
 def _build_service(session) -> ConversationService:
     return ConversationService(
         ConversationRepository(session),
-        notifier=SocketIOConversationNotifier(),
+        notifier=build_conversation_notifier(session),
     )
 
 

@@ -119,6 +119,7 @@ Consulte [docs/GUIA_DESENVOLVIMENTO.md](docs/GUIA_DESENVOLVIMENTO.md) para deplo
 | [docs/ARQUITETURA.md](docs/ARQUITETURA.md) | Arquitetura, camadas, integrações |
 | [docs/GUIA_DESENVOLVIMENTO.md](docs/GUIA_DESENVOLVIMENTO.md) | Setup, migrations, deploy, troubleshooting |
 | [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | Referência de endpoints REST |
+| [docs/integracao-notificacoes-delpi.md](docs/integracao-notificacoes-delpi.md) | Notificações no sino Minha DELPI |
 | [api-cadastro-mp/README.md](api-cadastro-mp/README.md) | API — estrutura e execução |
 | [api-cadastro-mp/docs/](api-cadastro-mp/docs/) | Módulos detalhados (auth, requests, websocket, etc.) |
 | [front-cadastro-mp/README.md](front-cadastro-mp/README.md) | Frontend — rotas e execução |

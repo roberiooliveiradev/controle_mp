@@ -40,7 +40,7 @@ from app.services.audit_service import AuditService
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.totvs_product_repository import TotvsProductRepository
 
-from app.infrastructure.realtime.socketio_request_notifier import SocketIORequestNotifier
+from app.infrastructure.realtime.composite_notifiers import build_request_notifier
 
 from app.core.audit.audit_entities import AuditEntity
 from app.core.audit.audit_actions import AuditAction
@@ -69,7 +69,7 @@ def _build_service(session) -> RequestService:
         product_repo=ProductRepository(session),
         pfield_repo=ProductFieldRepository(session),
         totvs_repo=TotvsProductRepository(),
-        notifier=SocketIORequestNotifier(),
+        notifier=build_request_notifier(session),
     )
 
 

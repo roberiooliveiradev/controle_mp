@@ -19,6 +19,34 @@ class UserRepository(BaseRepository[UserModel]):
         stmt = select(UserModel).where(UserModel.id == user_id, UserModel.is_deleted.is_(False))
         return self._session.execute(stmt).scalar_one_or_none()
 
+    def list_user_ids_by_roles(self, role_ids: list[int]) -> list[int]:
+        if not role_ids:
+            return []
+        stmt = (
+            select(UserModel.id)
+            .where(
+                UserModel.role_id.in_(role_ids),
+                UserModel.is_deleted.is_(False),
+            )
+            .order_by(UserModel.id.asc())
+        )
+        return [int(row[0]) for row in self._session.execute(stmt).all()]
+
+    def list_emails_by_ids(self, user_ids: set[int] | list[int]) -> list[str]:
+        ids = [int(uid) for uid in user_ids if uid]
+        if not ids:
+            return []
+        stmt = select(UserModel.email).where(
+            UserModel.id.in_(ids),
+            UserModel.is_deleted.is_(False),
+        )
+        emails: list[str] = []
+        for row in self._session.execute(stmt).all():
+            email = (row[0] or "").strip().lower()
+            if email and "@" in email:
+                emails.append(email)
+        return sorted(set(emails))
+
     # ✅ admin: inclui deletados
     def get_by_id_any(self, user_id: int) -> UserModel | None:
         stmt = select(UserModel).where(UserModel.id == user_id)

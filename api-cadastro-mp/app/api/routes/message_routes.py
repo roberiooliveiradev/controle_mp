@@ -38,8 +38,10 @@ from app.repositories.totvs_product_repository import TotvsProductRepository
 from app.services.request_service import RequestService
 from app.services.message_service import MessageService
 
-from app.infrastructure.realtime.socketio_message_notifier import SocketIOMessageNotifier
-from app.infrastructure.realtime.socketio_request_notifier import SocketIORequestNotifier
+from app.infrastructure.realtime.composite_notifiers import (
+    build_message_notifier,
+    build_request_notifier,
+)
 
 from app.services.audit_service import AuditService
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -179,7 +181,7 @@ def _build_service(session) -> MessageService:
         product_repo=ProductRepository(session),
         pfield_repo=ProductFieldRepository(session),
         totvs_repo=TotvsProductRepository(),
-        notifier=SocketIORequestNotifier(),
+        notifier=build_request_notifier(session),
     )
 
     return MessageService(
@@ -189,7 +191,7 @@ def _build_service(session) -> MessageService:
         file_repo=MessageFileRepository(session),
         req_repo=RequestRepository(session),
         type_repo=MessageTypeRepository(session),
-        notifier=SocketIOMessageNotifier(),
+        notifier=build_message_notifier(session),
         req_service=req_service,
     )
 
