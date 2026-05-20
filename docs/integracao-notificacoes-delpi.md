@@ -15,14 +15,35 @@ Eventos do Controle MP (mensagens, solicitações, conversas) podem gerar notifi
 
 ## Configuração
 
-### Controle MP (`.env`)
+### Controle MP (`.env.production`)
+
+| Variável | Valor em produção |
+|----------|-------------------|
+| `DELPI_NOTIFICATIONS_ENABLED` | `true` |
+| `DELPI_CORE_API_URL` | `https://minhadelpi.com.br/core-api` |
+| `CORE_API_INTEGRATIONS_SERVICE_TOKEN` | **Copiar exatamente** de `delpi-central/infra/.env` → `CORE_API_INTEGRATIONS_SERVICE_TOKEN` |
+| `DELPI_PORTAL_CONTROLE_MP_ROUTE` | `basePath` do app no portal (ex.: `/controle_mp`) |
+| `JWT_SECRET` | Chave **própria** do Controle MP — **não** reutilizar o token de integração |
+| `CENTRAL_JWKS_URL` | `https://minhadelpi.com.br/auth/realms/delpi/protocol/openid-connect/certs` |
+| `CORS_ORIGINS` | Incluir `https://minhadelpi.com.br` além de `https://controle-mp.minhadelpi.com.br` |
+
+### Minha DELPI (`delpi-central/infra/.env`)
 
 | Variável | Descrição |
 |----------|-----------|
-| `DELPI_NOTIFICATIONS_ENABLED` | `true` para ativar envio |
-| `DELPI_CORE_API_URL` | Base da Core API, ex.: `https://minhadelpi.com.br/core-api` |
-| `CORE_API_INTEGRATIONS_SERVICE_TOKEN` | Mesmo token configurado na Core API |
-| `DELPI_PORTAL_CONTROLE_MP_ROUTE` | Rota do app no portal, ex.: `/apps/controle-mp` |
+| `CORE_API_INTEGRATIONS_SERVICE_TOKEN` | Token mestre; a Core API valida o header `X-Delpi-Service-Token` |
+| `PUBLIC_BASE_URL` | `https://minhadelpi.com.br` |
+| `VITE_FRONT_CHANNEL_LOGOUT_URLS` | Incluir URL de logout do Controle MP |
+
+Exemplo de alinhamento (mesmo valor nos dois lados):
+
+```env
+# delpi-central/infra/.env
+CORE_API_INTEGRATIONS_SERVICE_TOKEN=beb8bb46008cc1202e05488b99117132d6556d1575cacc5e67cda8dc177f8c19
+
+# controle_mp/.env.production
+CORE_API_INTEGRATIONS_SERVICE_TOKEN=beb8bb46008cc1202e05488b99117132d6556d1575cacc5e67cda8dc177f8c19
+```
 
 ### Minha DELPI (Core API)
 
