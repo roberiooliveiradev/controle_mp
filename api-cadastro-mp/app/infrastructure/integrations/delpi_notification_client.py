@@ -6,10 +6,17 @@ import logging
 import os
 import urllib.error
 import urllib.request
+from typing import Iterable
 
 logger = logging.getLogger(__name__)
 
 _CONFIG_LOGGED = False
+DEFAULT_BATCH_SIZE = 100
+
+
+def _chunked(items: list[str], size: int) -> Iterable[list[str]]:
+    for index in range(0, len(items), size):
+        yield items[index : index + size]
 
 
 class DelpiNotificationClient:
@@ -37,12 +44,19 @@ class DelpiNotificationClient:
         if not self._portal_route.startswith("/"):
             self._portal_route = f"/{self._portal_route}"
 
+        raw_batch = (os.getenv("DELPI_NOTIFICATIONS_BATCH_SIZE") or "").strip()
+        try:
+            self._batch_size = max(1, min(int(raw_batch), 500)) if raw_batch else DEFAULT_BATCH_SIZE
+        except ValueError:
+            self._batch_size = DEFAULT_BATCH_SIZE
+
         if not _CONFIG_LOGGED:
             if self.is_configured():
                 logger.info(
-                    "DELPI notifications enabled → %s (portal_route=%s)",
+                    "DELPI notifications enabled → %s (portal_route=%s, batch_size=%s)",
                     self._api_bases,
                     self._portal_route,
+                    self._batch_size,
                 )
             else:
                 logger.warning(
@@ -83,33 +97,39 @@ class DelpiNotificationClient:
             logger.debug("DELPI notification skipped (%s): no recipient emails", dedupe_key)
             return
 
-        sent = 0
-        for email in unique_emails:
-            if self._dispatch_one(
-                email=email,
+        total_created = 0
+        for chunk in _chunked(unique_emails, self._batch_size):
+            created = self._dispatch_batch(
+                emails=chunk,
                 title=title,
                 message=message,
                 notification_type=notification_type,
                 deep_path=deep_path,
                 event=event,
-                dedupe_key=f"{dedupe_key}:{email}",
+                dedupe_key=dedupe_key,
                 action_label=action_label,
                 metadata_extra=metadata_extra,
-            ):
-                sent += 1
+            )
+            total_created += created
 
-        if sent:
+        if total_created:
             logger.info(
-                "DELPI notification sent (%s): %s/%s recipients",
+                "DELPI notification sent (%s): %s/%s recipients (batch)",
                 event,
-                sent,
+                total_created,
+                len(unique_emails),
+            )
+        elif len(unique_emails):
+            logger.warning(
+                "DELPI notification: nenhuma notificação criada (%s) para %s destinatário(s)",
+                event,
                 len(unique_emails),
             )
 
-    def _dispatch_one(
+    def _dispatch_batch(
         self,
         *,
-        email: str,
+        emails: list[str],
         title: str,
         message: str,
         notification_type: str,
@@ -118,7 +138,63 @@ class DelpiNotificationClient:
         dedupe_key: str,
         action_label: str,
         metadata_extra: dict | None,
-    ) -> bool:
+    ) -> int:
+        if not emails:
+            return 0
+
+        result = self._post_dispatch(
+            emails=emails,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+            deep_path=deep_path,
+            event=event,
+            dedupe_key=dedupe_key,
+            action_label=action_label,
+            metadata_extra=metadata_extra,
+        )
+
+        if result is not None:
+            return result
+
+        if len(emails) <= 1:
+            return 0
+
+        logger.warning(
+            "DELPI batch failed (%s); tentando envio individual para %s destinatário(s)",
+            event,
+            len(emails),
+        )
+        created = 0
+        for email in emails:
+            one = self._post_dispatch(
+                emails=[email],
+                title=title,
+                message=message,
+                notification_type=notification_type,
+                deep_path=deep_path,
+                event=event,
+                dedupe_key=f"{dedupe_key}:{email}",
+                action_label=action_label,
+                metadata_extra=metadata_extra,
+            )
+            if one:
+                created += one
+        return created
+
+    def _post_dispatch(
+        self,
+        *,
+        emails: list[str],
+        title: str,
+        message: str,
+        notification_type: str,
+        deep_path: str,
+        event: str,
+        dedupe_key: str,
+        action_label: str,
+        metadata_extra: dict | None,
+    ) -> int | None:
         normalized_path = deep_path if deep_path.startswith("/") else f"/{deep_path}"
 
         metadata: dict = {
@@ -137,7 +213,7 @@ class DelpiNotificationClient:
             "category": "controle_mp",
             "presentation": "text",
             "icon": "message-circle",
-            "emails": [email],
+            "emails": emails,
             "sourceApp": "controle_mp",
             "action": {
                 "type": "portal_route",
@@ -156,6 +232,7 @@ class DelpiNotificationClient:
         }
 
         last_error: str | None = None
+        label = emails[0] if len(emails) == 1 else f"batch:{len(emails)}"
 
         for dispatch_url in self._dispatch_urls():
             req = urllib.request.Request(
@@ -166,7 +243,7 @@ class DelpiNotificationClient:
             )
 
             try:
-                with urllib.request.urlopen(req, timeout=8) as resp:
+                with urllib.request.urlopen(req, timeout=15) as resp:
                     raw = resp.read().decode("utf-8", errors="replace")
                     if resp.status >= 400:
                         last_error = f"HTTP {resp.status}: {raw[:300]}"
@@ -181,29 +258,38 @@ class DelpiNotificationClient:
                     if created < 1:
                         logger.warning(
                             "DELPI notification accepted but createdCount=0 for %s (%s) "
-                            "via %s. Verifique e-mail na Minha DELPI e categoria controle_mp "
-                            "nas preferências.",
-                            email,
+                            "via %s. Verifique e-mails na Minha DELPI, permissão controle-mp "
+                            "e categoria controle_mp nas preferências.",
+                            label,
                             event,
                             dispatch_url,
                         )
-                        return False
-                    return True
+                        return 0
+                    if created < len(emails):
+                        logger.info(
+                            "DELPI batch parcial (%s): %s/%s criadas via %s",
+                            event,
+                            created,
+                            len(emails),
+                            dispatch_url,
+                        )
+                    return created
             except urllib.error.HTTPError as exc:
                 detail = exc.read().decode("utf-8", errors="replace")[:500]
                 last_error = f"HTTP {exc.code}: {detail}"
                 if exc.code == 400 and "user not found" in detail.lower():
-                    logger.warning(
-                        "DELPI: e-mail %s não encontrado na Minha DELPI (%s) — "
-                        "use o mesmo e-mail do Keycloak/SSO no Controle MP",
-                        email,
-                        event,
-                    )
-                    return False
+                    if len(emails) == 1:
+                        logger.warning(
+                            "DELPI: e-mail %s não encontrado na Minha DELPI (%s)",
+                            emails[0],
+                            event,
+                        )
+                        return 0
+                    return None
                 logger.warning(
                     "DELPI notification HTTP %s for %s (%s) via %s: %s",
                     exc.code,
-                    email,
+                    label,
                     event,
                     dispatch_url,
                     detail,
@@ -212,7 +298,7 @@ class DelpiNotificationClient:
                 last_error = str(exc)
                 logger.warning(
                     "DELPI notification failed for %s (%s) via %s: %s",
-                    email,
+                    label,
                     event,
                     dispatch_url,
                     exc,
@@ -221,8 +307,8 @@ class DelpiNotificationClient:
         if last_error:
             logger.error(
                 "DELPI notification exhausted URLs for %s (%s): %s",
-                email,
+                label,
                 event,
                 last_error,
             )
-        return False
+        return None
