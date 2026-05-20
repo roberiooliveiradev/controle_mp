@@ -21,3 +21,12 @@ export function isAuthEntryPath(pathname) {
   const path = String(pathname || "");
   return path === "/" || path === "/login" || path.startsWith("/login/");
 }
+
+export function isEmbeddedInPortal() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.parent !== window;
+  } catch {
+    return false;
+  }
+}

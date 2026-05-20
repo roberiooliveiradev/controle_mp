@@ -169,7 +169,7 @@ export default function ConversationsPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const isAdmin = Number(user?.role_id) === 1;
   const [deleteBusyId, setDeleteBusyId] = useState(null);
 
@@ -482,6 +482,10 @@ export default function ConversationsPage() {
         return;
       }
 
+      if (!isAuthenticated) {
+        return;
+      }
+
       try {
         setChatBusy(true);
         setChatError("");
@@ -530,7 +534,7 @@ export default function ConversationsPage() {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, targetMessageId]);
+  }, [selectedId, targetMessageId, isAuthenticated]);
 
   useEffect(() => {
     if (!selectedId) return;

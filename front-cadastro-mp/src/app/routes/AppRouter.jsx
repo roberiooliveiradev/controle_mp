@@ -5,6 +5,7 @@ import { ProtectedRoute } from "./ProtectedRoute";
 import { Layout } from "../ui/Layout";
 import { DelpiSsoBridge } from "../sso/DelpiSsoBridge";
 import { DelpiNavigateBridge } from "../sso/DelpiNavigateBridge";
+import { DelpiRouteSyncBridge } from "../sso/DelpiRouteSyncBridge";
 import { LogoutFromParentPage } from "../sso/LogoutFromParentPage";
 
 import LoginPage from "../../pages/LoginPage";
@@ -21,6 +22,7 @@ export function AppRouter() {
     <BrowserRouter>
       <DelpiSsoBridge />
       <DelpiNavigateBridge />
+      <DelpiRouteSyncBridge />
 
       <Routes>
         <Route path="/sso/logout-from-parent" element={<LogoutFromParentPage />} />

@@ -5,6 +5,8 @@ import { decodeJwt } from "../auth/jwt";
 import {
   consumeChildPendingNavigate,
   isAuthEntryPath,
+  isEmbeddedInPortal,
+  peekChildPendingNavigate,
 } from "./delpiEmbeddedNavigation";
 
 const ALLOWED_PARENT_ORIGINS = [
@@ -34,11 +36,27 @@ function resolvePostSsoPath(locationPathname) {
   const pending = consumeChildPendingNavigate();
   if (pending) return pending;
 
-  if (isAuthEntryPath(locationPathname)) {
-    return "/conversations";
+  if (!isAuthEntryPath(locationPathname)) {
+    return null;
   }
 
-  return null;
+  // No iframe do portal, aguarda DELPI_NAVIGATE em vez de sobrescrever com /conversations.
+  if (isEmbeddedInPortal()) {
+    return null;
+  }
+
+  return "/conversations";
+}
+
+function scheduleLateEmbeddedNavigate(navigate) {
+  if (!isEmbeddedInPortal()) return;
+
+  window.setTimeout(() => {
+    const late = consumeChildPendingNavigate();
+    if (late) {
+      navigate(late, { replace: true });
+    }
+  }, 500);
 }
 
 export function DelpiSsoBridge() {
@@ -112,6 +130,8 @@ export function DelpiSsoBridge() {
           const nextPath = resolvePostSsoPath(location.pathname);
           if (nextPath) {
             navigate(nextPath, { replace: true });
+          } else if (isEmbeddedInPortal() && peekChildPendingNavigate()) {
+            scheduleLateEmbeddedNavigate(navigate);
           }
         })
         .catch((error) => {
