@@ -156,9 +156,12 @@ Usuários podem silenciar a categoria **Controle MP** em `/notifications` → Pr
 3. Destinatário com papel **ADMIN** ou **ANALYST** recebe alerta de **nova mensagem** em qualquer conversa (não precisa ter aberto o chat antes).
 4. Categoria **Controle MP** não pode estar em `mutedCategories` em `/notifications` → Preferências.
 5. `DELPI_PORTAL_CONTROLE_MP_ROUTE` = `basePath` do app no portal (ex.: `/controle-mp`, com hífen).
+6. **Acesso ao app no portal:** o usuário precisa da permissão do plugin (ex.: `controle-mp.access` via papel/grupo no RBAC). Sem isso, a Core API **não cria** a notificação (`createdCount=0` / erro de destinatários).
 
 Se o e-mail do Controle MP não existir na Core API, o log da API mostra:
 `DELPI: e-mail X não encontrado na Minha DELPI`.
+
+Se o usuário existir na Minha DELPI mas não tiver permissão para abrir o Controle MP, a notificação é descartada na Core API (mesma regra de `GET /me/apps`).
 
 ## Teste manual
 
