@@ -23,7 +23,7 @@ Eventos do Controle MP (mensagens, solicitações, conversas) podem gerar notifi
 | `DELPI_CORE_API_INTERNAL_URL` | `http://host.docker.internal/core-api` (srv-api, preferencial) |
 | `DELPI_CORE_API_URL` | `https://minhadelpi.com.br/core-api` (fallback) |
 | `CORE_API_INTEGRATIONS_SERVICE_TOKEN` | **Copiar exatamente** de `delpi-central/infra/.env` → `CORE_API_INTEGRATIONS_SERVICE_TOKEN` |
-| `DELPI_PORTAL_CONTROLE_MP_ROUTE` | `basePath` do app no portal (ex.: `/controle_mp`) |
+| `DELPI_PORTAL_CONTROLE_MP_ROUTE` | `basePath` do app no portal (ex.: `/controle-mp`) |
 | `JWT_SECRET` | Chave **própria** do Controle MP — **não** reutilizar o token de integração |
 | `CENTRAL_JWKS_URL` | `https://minhadelpi.com.br/auth/realms/delpi/protocol/openid-connect/certs` |
 | `CORS_ORIGINS` | Incluir `https://minhadelpi.com.br` além de `https://controle-mp.minhadelpi.com.br` |
@@ -69,6 +69,8 @@ Mensagens tipo `REQUEST` não disparam `message:new` no DELPI (evita duplicata c
 
 ## Metadados da notificação
 
+O portal trata qualquer notificação com `metadata.deepPath` como deep link de app embedded (não só Controle MP).
+
 ```json
 {
   "source": "controle_mp",
@@ -78,6 +80,12 @@ Mensagens tipo `REQUEST` não disparam `message:new` no DELPI (evita duplicata c
   "conversationId": 12
 }
 ```
+
+| Campo | Uso |
+|-------|-----|
+| `deepPath` | Rota interna no iframe (obrigatório para deep link) |
+| `source` | Identificador do app (`controle_mp`) |
+| `action.target` | `basePath` no portal (`/controle-mp`) |
 
 ## postMessage (iframe)
 
@@ -97,7 +105,7 @@ Usuários podem silenciar a categoria **Controle MP** em `/notifications` → Pr
 2. **Mesmo e-mail** em `tbUsers` (Controle MP) e em `users` (Minha DELPI / Keycloak).
 3. Destinatário com papel **ADMIN** ou **ANALYST** recebe alerta de **nova mensagem** em qualquer conversa (não precisa ter aberto o chat antes).
 4. Categoria **Controle MP** não pode estar em `mutedCategories` em `/notifications` → Preferências.
-5. `DELPI_PORTAL_CONTROLE_MP_ROUTE` = `basePath` do app no portal (ex.: `/controle_mp`).
+5. `DELPI_PORTAL_CONTROLE_MP_ROUTE` = `basePath` do app no portal (ex.: `/controle-mp`, com hífen).
 
 Se o e-mail do Controle MP não existir na Core API, o log da API mostra:
 `DELPI: e-mail X não encontrado na Minha DELPI`.

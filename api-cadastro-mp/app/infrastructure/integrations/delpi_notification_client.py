@@ -29,9 +29,11 @@ class DelpiNotificationClient:
         self._api_bases = [b for b in (internal, public) if b]
         self._token = (os.getenv("CORE_API_INTEGRATIONS_SERVICE_TOKEN") or "").strip()
         self._portal_route = (
-            os.getenv("DELPI_PORTAL_CONTROLE_MP_ROUTE", "/controle_mp").strip()
-            or "/controle_mp"
+            os.getenv("DELPI_PORTAL_CONTROLE_MP_ROUTE", "/controle-mp").strip()
+            or "/controle-mp"
         )
+        if self._portal_route == "/controle_mp":
+            self._portal_route = "/controle-mp"
         if not self._portal_route.startswith("/"):
             self._portal_route = f"/{self._portal_route}"
 

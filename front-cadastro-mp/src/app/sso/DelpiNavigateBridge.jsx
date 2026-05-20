@@ -1,3 +1,8 @@
+/**
+ * Bridge genérico Minha DELPI → app embedded (postMessage DELPI_NAVIGATE).
+ * Contrato: metadata.deepPath na notificação + listener no filho.
+ * Ver delpi-central/docs/05-portal/embedded-app-deep-links.md
+ */
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -29,7 +34,7 @@ export function DelpiNavigateBridge() {
       const path = normalizePath(event.data?.path);
       if (!path) return;
 
-      navigate(path, { replace: false });
+      navigate(path, { replace: true });
     }
 
     window.addEventListener("message", handleNavigate);
