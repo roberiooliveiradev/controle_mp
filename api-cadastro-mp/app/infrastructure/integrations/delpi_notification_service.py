@@ -208,6 +208,12 @@ class DelpiNotificationService:
         if conv.assigned_to and conv.assigned_to != exclude_user_id:
             ids.add(int(conv.assigned_to))
 
+        # Analistas/admin veem todas as conversas no app (socket global).
+        # Sem isso, o DELPI só notificava quem já tinha aberto a conversa.
+        for uid in self._users.list_user_ids_by_roles([ROLE_ADMIN, ROLE_ANALYST]):
+            if uid != exclude_user_id:
+                ids.add(uid)
+
         return ids
 
     def _request_item_recipient_ids(

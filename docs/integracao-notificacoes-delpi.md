@@ -69,13 +69,29 @@ Mensagens tipo `REQUEST` não disparam `message:new` no DELPI (evita duplicata c
 
 Usuários podem silenciar a categoria **Controle MP** em `/notifications` → Preferências (`mutedCategories` inclui `controle_mp`).
 
+## Requisitos para o sino encher
+
+1. `DELPI_NOTIFICATIONS_ENABLED=true` e token Core API corretos na API do Controle MP.
+2. **Mesmo e-mail** em `tbUsers` (Controle MP) e em `users` (Minha DELPI / Keycloak).
+3. Destinatário com papel **ADMIN** ou **ANALYST** recebe alerta de **nova mensagem** em qualquer conversa (não precisa ter aberto o chat antes).
+4. Categoria **Controle MP** não pode estar em `mutedCategories` em `/notifications` → Preferências.
+5. `DELPI_PORTAL_CONTROLE_MP_ROUTE` = `basePath` do app no portal (ex.: `/controle_mp`).
+
+Se o e-mail do Controle MP não existir na Core API, o log da API mostra:
+`DELPI: e-mail X não encontrado na Minha DELPI`.
+
 ## Teste manual
 
 1. Ativar variáveis no `.env` do Controle MP e reiniciar API.
 2. Garantir emails iguais nos dois sistemas.
-3. Enviar mensagem entre dois usuários.
-4. Verificar sino na Minha DELPI.
-5. Clicar em **Abrir conversa** → deve abrir a conversa correta.
+3. Usuário A envia mensagem; usuário B (admin/analista) verifica o sino na **home** da Minha DELPI.
+4. Clicar em **Abrir conversa** → deve abrir o Controle MP na conversa correta.
+
+## Ver logs no servidor
+
+```bash
+docker logs controle-mp-prod-api 2>&1 | grep -i "DELPI notification"
+```
 
 ## Referências
 

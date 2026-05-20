@@ -36,6 +36,16 @@ Login direto em `https://controle-mp.minhadelpi.com.br/login` (email/senha local
 
 ---
 
+## Notificações não aparecem no sino da Minha DELPI
+
+1. Confirme na API: `DELPI_NOTIFICATIONS_ENABLED=true` e `CORE_API_INTEGRATIONS_SERVICE_TOKEN` igual ao `infra/.env` do delpi-central.
+2. O e-mail do usuário no Controle MP deve ser **o mesmo** do cadastro na Minha DELPI (Keycloak).
+3. Após deploy da correção de destinatários, **admin/analista** passam a receber alerta de mensagens mesmo sem ter aberto a conversa antes.
+4. Veja logs: `docker logs <container-api> 2>&1 | grep DELPI`
+5. `DELPI_PORTAL_CONTROLE_MP_ROUTE` deve ser o `basePath` real do app (ex. `/controle_mp`, não `/apps/controle-mp` se o portal usar outro path).
+
+---
+
 ## Checklist rápido no servidor
 
 ```bash
