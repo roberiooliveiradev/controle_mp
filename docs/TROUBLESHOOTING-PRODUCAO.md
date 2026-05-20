@@ -73,7 +73,16 @@ Login direto em `https://controle-mp.minhadelpi.com.br/login` (email/senha local
 4. Quem **envia** a mensagem **não** recebe notificação — teste logado como **admin/analista** na Minha DELPI enquanto um **USER** envia no chat.
 5. Categoria **Controle MP** não pode estar silenciada em `/notifications` → Preferências.
 6. Logs: `docker logs controle-mp-prod-api 2>&1 | grep -i DELPI`
-7. `DELPI_PORTAL_CONTROLE_MP_ROUTE` = `basePath` real (ex. `/controle_mp`).
+7. `DELPI_PORTAL_CONTROLE_MP_ROUTE` = `basePath` real (ex. `/controle-mp`).
+
+## Notificação abre o app mas não a conversa (deep link)
+
+1. Confirme `metadata.deepPath` na notificação (ex.: `/conversations/109`).
+2. `action.target` e manifesto `basePath` devem ser iguais (`/controle-mp`).
+3. Rebuild **portal** (delpi-central) e **front** Controle MP (bridges SSO + `DelpiNavigateBridge`).
+4. Tutorial completo: `delpi-central/docs/10-guias-operacionais/conectar-aplicacao-iframe.md`.
+
+A URL do portal permanece `/controle-mp`; a conversa abre dentro do iframe.
 
 ## Mensagem enviada só aparece ao mandar a próxima
 

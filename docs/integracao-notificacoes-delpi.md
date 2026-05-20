@@ -1,5 +1,7 @@
 # Integração — Notificações Controle MP ↔ Minha DELPI
 
+> **Tutorial geral (conectar qualquer app iframe na Minha DELPI):** documentação no repositório `delpi-central` → `docs/10-guias-operacionais/conectar-aplicacao-iframe.md`
+
 ## Visão geral
 
 Eventos do Controle MP (mensagens, solicitações, conversas) podem gerar notificações no **sino da Minha DELPI**. Ao clicar, o portal abre o app Controle MP no iframe e navega para a tela correta (`DELPI_NAVIGATE`).
@@ -94,6 +96,31 @@ O portal trata qualquer notificação com `metadata.deepPath` como deep link de 
 | `DELPI_AUTH` | Portal → MP | SSO |
 | `DELPI_NAVIGATE` | Portal → MP | Deep link `{ path: "/conversations/1" }` |
 | `DELPI_AUTH_READY` | MP → Portal | Pedir token |
+| `DELPI_LOGOUT` | Portal → MP | Encerrar sessão local |
+
+### Arquivos no front (referência)
+
+| Arquivo | Função |
+|---------|--------|
+| `front-cadastro-mp/src/app/sso/DelpiSsoBridge.jsx` | SSO Keycloak → sessão local |
+| `front-cadastro-mp/src/app/sso/DelpiNavigateBridge.jsx` | Deep link `DELPI_NAVIGATE` |
+| `front-cadastro-mp/src/app/sso/delpiEmbeddedNavigation.js` | Rota pendente após SSO |
+
+Após SSO, o app **não** deve redirecionar para `/conversations` se já existir rota pendente da notificação.
+
+### Manifesto no portal (exemplo)
+
+```json
+{
+  "id": "controle-mp",
+  "type": "iframe",
+  "basePath": "/controle-mp",
+  "entry": "https://controle-mp.minhadelpi.com.br",
+  "ui": { "renderMode": "embedded" }
+}
+```
+
+`DELPI_PORTAL_CONTROLE_MP_ROUTE` e `action.target` nas notificações devem ser **`/controle-mp`** (igual ao `basePath`).
 
 ## Preferências do usuário
 

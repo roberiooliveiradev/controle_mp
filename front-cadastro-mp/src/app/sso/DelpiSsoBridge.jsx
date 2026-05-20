@@ -1,7 +1,11 @@
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { decodeJwt } from "../auth/jwt";
+import {
+  consumeChildPendingNavigate,
+  isAuthEntryPath,
+} from "./delpiEmbeddedNavigation";
 
 const ALLOWED_PARENT_ORIGINS = [
   import.meta.env.VITE_DELPI_PARENT_ORIGIN,
@@ -26,8 +30,20 @@ function getTokenEmail(token) {
   return normalizeEmail(payload?.email);
 }
 
+function resolvePostSsoPath(locationPathname) {
+  const pending = consumeChildPendingNavigate();
+  if (pending) return pending;
+
+  if (isAuthEntryPath(locationPathname)) {
+    return "/conversations";
+  }
+
+  return null;
+}
+
 export function DelpiSsoBridge() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isAuthenticated, syncSsoSession, logout } = useAuth();
 
   const handledTokenRef = useRef(null);
@@ -92,7 +108,11 @@ export function DelpiSsoBridge() {
           handledTokenRef.current = centralAccessToken;
 
           if (!mountedRef.current) return;
-          navigate("/conversations", { replace: true });
+
+          const nextPath = resolvePostSsoPath(location.pathname);
+          if (nextPath) {
+            navigate(nextPath, { replace: true });
+          }
         })
         .catch((error) => {
           console.error("Falha no SSO Minha DELPI:", error);
@@ -118,7 +138,7 @@ export function DelpiSsoBridge() {
       window.removeEventListener("message", handleMessage);
       window.clearTimeout(retry);
     };
-  }, [user, isAuthenticated, syncSsoSession, logout, navigate]);
+  }, [user, isAuthenticated, syncSsoSession, logout, navigate, location.pathname]);
 
   return null;
 }

@@ -5,6 +5,7 @@
  */
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { stashChildPendingNavigate } from "./delpiEmbeddedNavigation";
 
 const ALLOWED_PARENT_ORIGINS = [
   import.meta.env.VITE_DELPI_PARENT_ORIGIN,
@@ -34,6 +35,7 @@ export function DelpiNavigateBridge() {
       const path = normalizePath(event.data?.path);
       if (!path) return;
 
+      stashChildPendingNavigate(path);
       navigate(path, { replace: true });
     }
 

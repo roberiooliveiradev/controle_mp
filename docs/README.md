@@ -10,7 +10,7 @@
 | [GUIA_DESENVOLVIMENTO.md](GUIA_DESENVOLVIMENTO.md) | Setup local, Docker, migrations, deploy, troubleshooting |
 | [API_REFERENCE.md](API_REFERENCE.md) | Referência consolidada de endpoints REST |
 | [integracao-notificacoes-delpi.md](integracao-notificacoes-delpi.md) | Notificações no sino DELPI + deep link |
-| [TROUBLESHOOTING-PRODUCAO.md](TROUBLESHOOTING-PRODUCAO.md) | 401 / sessão / JWT em produção |
+| [TROUBLESHOOTING-PRODUCAO.md](TROUBLESHOOTING-PRODUCAO.md) | SSO, notificações, mensagens no chat (produção) |
 
 ## API (`api-cadastro-mp`)
 
