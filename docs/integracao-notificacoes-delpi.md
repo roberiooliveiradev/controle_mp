@@ -10,7 +10,7 @@ Eventos do Controle MP (mensagens, solicitações, conversas) podem gerar notifi
 
 1. API Controle MP processa evento, **faz `commit` no banco** e emite Socket.IO `message:new` (tempo real no chat).
 2. Se `DELPI_NOTIFICATIONS_ENABLED=true`, chama `POST {DELPI_CORE_API_URL}/integrations/notifications`.
-3. Core API persiste notificação (`category: controle_mp`) para destinatários por **email**.
+3. Core API resolve destinatários por **e-mail**, aplica preferências de categoria e **filtra quem tem permissão** para abrir o Controle MP no portal (`controle-mp.access`).
 4. Portal atualiza o sino (socket/polling).
 5. Usuário clica → `portal_route` + `metadata.deepPath` → portal navega para `/controle-mp/conversations/{id}`.
 6. `AppHost` envia `DELPI_NAVIGATE` ao iframe; o front (`DelpiNavigateBridge`) faz `navigate(deepPath)`.

@@ -74,6 +74,7 @@ Login direto em `https://controle-mp.minhadelpi.com.br/login` (email/senha local
 5. Categoria **Controle MP** não pode estar silenciada em `/notifications` → Preferências.
 6. Logs: `docker logs controle-mp-prod-api 2>&1 | grep -i DELPI`
 7. `DELPI_PORTAL_CONTROLE_MP_ROUTE` = `basePath` real (ex. `/controle-mp`).
+8. Destinatário precisa da permissão **`controle-mp.access`** na Minha DELPI (RBAC). Sem acesso ao app no portal, a Core API não cria a notificação (`createdCount=0` ou log de destinatários sem acesso).
 
 ## Notificação abre o app mas não a conversa (deep link)
 
