@@ -84,6 +84,12 @@ Login direto em `https://controle-mp.minhadelpi.com.br/login` (email/senha local
 4. URL esperada no portal: `/controle-mp/conversations/{id}` (não só `/controle-mp`).
 5. Tutorial: `delpi-central/docs/10-guias-operacionais/conectar-aplicacao-iframe.md`.
 
+### Controle MP abre em /login e só entra após F5
+
+1. Rebuild do **front** Controle MP e do **portal** (correção: redirecionar após SSO no iframe).
+2. Abra o app pelo menu; deve ir para `/controle-mp/conversations` sem atualizar a página.
+3. Se a URL do portal ficar em `/controle-mp/login`, o SSO ainda deve redirecionar para conversas automaticamente.
+
 ### Iframe com tema diferente do portal
 
 1. Confirme rebuild do **portal** e do **front** Controle MP (commits com `DELPI_THEME` / `DelpiThemeBridge`).

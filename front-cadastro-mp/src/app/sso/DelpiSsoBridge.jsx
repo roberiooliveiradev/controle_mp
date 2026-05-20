@@ -2,12 +2,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { decodeJwt } from "../auth/jwt";
-import {
-  consumeChildPendingNavigate,
-  isAuthEntryPath,
-  isEmbeddedInPortal,
-  peekChildPendingNavigate,
-} from "./delpiEmbeddedNavigation";
+import { navigateAfterAuth } from "./delpiEmbeddedNavigation";
 
 const ALLOWED_PARENT_ORIGINS = [
   import.meta.env.VITE_DELPI_PARENT_ORIGIN,
@@ -30,33 +25,6 @@ function normalizeEmail(value) {
 function getTokenEmail(token) {
   const payload = decodeJwt(token);
   return normalizeEmail(payload?.email);
-}
-
-function resolvePostSsoPath(locationPathname) {
-  const pending = consumeChildPendingNavigate();
-  if (pending) return pending;
-
-  if (!isAuthEntryPath(locationPathname)) {
-    return null;
-  }
-
-  // No iframe do portal, aguarda DELPI_NAVIGATE em vez de sobrescrever com /conversations.
-  if (isEmbeddedInPortal()) {
-    return null;
-  }
-
-  return "/conversations";
-}
-
-function scheduleLateEmbeddedNavigate(navigate) {
-  if (!isEmbeddedInPortal()) return;
-
-  window.setTimeout(() => {
-    const late = consumeChildPendingNavigate();
-    if (late) {
-      navigate(late, { replace: true });
-    }
-  }, 500);
 }
 
 export function DelpiSsoBridge() {
@@ -116,7 +84,10 @@ export function DelpiSsoBridge() {
         !!currentEmail &&
         centralEmail === currentEmail;
 
-      if (alreadySynced) return;
+      if (alreadySynced) {
+        navigateAfterAuth(navigate, location.pathname);
+        return;
+      }
 
       if (inFlightTokenRef.current === centralAccessToken) return;
       inFlightTokenRef.current = centralAccessToken;
@@ -127,12 +98,7 @@ export function DelpiSsoBridge() {
 
           if (!mountedRef.current) return;
 
-          const nextPath = resolvePostSsoPath(location.pathname);
-          if (nextPath) {
-            navigate(nextPath, { replace: true });
-          } else if (isEmbeddedInPortal() && peekChildPendingNavigate()) {
-            scheduleLateEmbeddedNavigate(navigate);
-          }
+          navigateAfterAuth(navigate, location.pathname);
         })
         .catch((error) => {
           console.error("Falha no SSO Minha DELPI:", error);

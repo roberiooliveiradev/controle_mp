@@ -138,7 +138,7 @@ O portal registra apps embedded com rota wildcard (`/controle-mp/*`), no mesmo e
 | `api-cadastro-mp/.../delpi_notification_client.py` | Cliente HTTP; envio em lote para Core API |
 | `front-cadastro-mp/src/pages/ConversationsPage.jsx` | Chat em tempo real (`message:new` + merge de payload) |
 
-Após SSO no iframe, o app aguarda `DELPI_NAVIGATE` ou rota pendente em `sessionStorage` — não redireciona para `/conversations` por padrão.
+Após SSO no iframe, o app sai de `/login` para `/conversations` (ou `DELPI_NAVIGATE` / rota pendente). Na abertura pelo menu em `/controle-mp`, o portal também envia `DELPI_NAVIGATE` com `/conversations`.
 
 ## Tempo real (Socket.IO)
 

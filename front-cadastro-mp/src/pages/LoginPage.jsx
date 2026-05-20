@@ -1,13 +1,21 @@
 // src/pages/LoginPage.jsx
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../app/auth/AuthContext";
+import { peekChildPendingNavigate } from "../app/sso/delpiEmbeddedNavigation";
 import "./AuthPages.css";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
   const nav = useNavigate();
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const pending = peekChildPendingNavigate();
+    nav(pending || "/conversations", { replace: true });
+  }, [isAuthenticated, nav]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
