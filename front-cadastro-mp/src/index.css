@@ -91,8 +91,39 @@ body {
   --app-main-padding: 16px;
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0f1115;
+    --surface: #0f1115;
+    --surface-2: #151a26;
+    --surface-3: #111521;
+    --surface-elevated: #10141d;
+
+    --text: rgba(255, 255, 255, 0.88);
+    --text-muted: rgba(255, 255, 255, 0.7);
+    --text-soft: rgba(255, 255, 255, 0.52);
+
+    --border: rgba(255, 255, 255, 0.1);
+    --border-2: rgba(255, 255, 255, 0.16);
+
+    --primary-soft: rgba(0, 153, 220, 0.16);
+
+    --danger: #ff6b6b;
+    --danger-bg: rgba(255, 107, 107, 0.16);
+    --danger-border: rgba(255, 107, 107, 0.32);
+
+    --shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+
+    --control-placeholder: rgba(255, 255, 255, 0.55);
+    --focus: 0 0 0 3px rgba(0, 153, 220, 0.3);
+}
+
+/* Standalone: segue preferência do sistema quando não sincronizado com o portal */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-delpi-theme-synced]) {
+    color-scheme: dark;
+
     --bg: #0f1115;
     --surface: #0f1115;
     --surface-2: #151a26;

@@ -15,6 +15,7 @@ Eventos do Controle MP (mensagens, solicitações, conversas) podem gerar notifi
 5. Usuário clica → `portal_route` + `metadata.deepPath` → portal navega para `/controle-mp/conversations/{id}`.
 6. `AppHost` envia `DELPI_NAVIGATE` ao iframe; o front (`DelpiNavigateBridge`) faz `navigate(deepPath)`.
 7. Ao trocar de conversa no iframe, `DelpiRouteSyncBridge` envia `DELPI_EMBEDDED_ROUTE` e a URL do portal acompanha (como no chat IA).
+8. O tema (claro/escuro/sistema) do menu da Minha DELPI é replicado no Controle MP via `DELPI_THEME` (`DelpiThemeBridge`).
 
 ## Configuração
 

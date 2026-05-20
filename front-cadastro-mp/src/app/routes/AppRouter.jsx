@@ -6,6 +6,7 @@ import { Layout } from "../ui/Layout";
 import { DelpiSsoBridge } from "../sso/DelpiSsoBridge";
 import { DelpiNavigateBridge } from "../sso/DelpiNavigateBridge";
 import { DelpiRouteSyncBridge } from "../sso/DelpiRouteSyncBridge";
+import { DelpiThemeBridge } from "../sso/DelpiThemeBridge";
 import { LogoutFromParentPage } from "../sso/LogoutFromParentPage";
 
 import LoginPage from "../../pages/LoginPage";
@@ -23,6 +24,7 @@ export function AppRouter() {
       <DelpiSsoBridge />
       <DelpiNavigateBridge />
       <DelpiRouteSyncBridge />
+      <DelpiThemeBridge />
 
       <Routes>
         <Route path="/sso/logout-from-parent" element={<LogoutFromParentPage />} />
