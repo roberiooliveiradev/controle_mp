@@ -84,6 +84,13 @@ Login direto em `https://controle-mp.minhadelpi.com.br/login` (email/senha local
 4. URL esperada no portal: `/controle-mp/conversations/{id}` (não só `/controle-mp`).
 5. Tutorial: `delpi-central/docs/10-guias-operacionais/conectar-aplicacao-iframe.md`.
 
+### Iframe com tema diferente do portal
+
+1. Confirme rebuild do **portal** e do **front** Controle MP (commits com `DELPI_THEME` / `DelpiThemeBridge`).
+2. No iframe, inspecione `<html>`: deve ter `data-theme="light"` ou `data-theme="dark"` após abrir o app no portal.
+3. Troque o tema no menu do portal; o iframe deve atualizar sem F5.
+4. Se abrir o Controle MP **direto** (sem portal), o tema segue o sistema operacional — comportamento esperado.
+
 ## “Conversa não encontrada” ao abrir pela notificação
 
 1. SSO no iframe redirecionava para `/conversations` antes do deep link — corrigido em `DelpiSsoBridge.jsx` (aguarda `DELPI_NAVIGATE` no iframe).

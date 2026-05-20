@@ -78,15 +78,26 @@ src/
 └── index.css
 ```
 
-## SSO Minha DELPI
+## SSO e integração Minha DELPI (iframe)
 
-Quando embutido em iframe:
+Quando embutido em iframe, o router monta bridges em `src/app/sso/`:
+
+| Bridge | Mensagem | Função |
+|--------|----------|--------|
+| `DelpiSsoBridge` | `DELPI_AUTH_READY` / `DELPI_AUTH` | SSO Keycloak → sessão local |
+| `DelpiNavigateBridge` | `DELPI_NAVIGATE` | Deep link do portal |
+| `DelpiRouteSyncBridge` | `DELPI_EMBEDDED_ROUTE` | URL do portal acompanha rota interna |
+| `DelpiThemeBridge` | `DELPI_THEME` | Tema claro/escuro/sistema do menu do portal |
+
+Fluxo SSO:
 
 1. `DelpiSsoBridge` envia `DELPI_AUTH_READY` ao pai
 2. Recebe `DELPI_AUTH` com token via `postMessage`
 3. Chama `POST /api/auth/sso-login`
 
 Configure `VITE_DELPI_PARENT_ORIGIN` com a origem exata do portal pai.
+
+Documentação: [../docs/integracao-notificacoes-delpi.md](../docs/integracao-notificacoes-delpi.md) e `delpi-central/docs/10-guias-operacionais/conectar-aplicacao-iframe.md`.
 
 ## Documentação detalhada
 

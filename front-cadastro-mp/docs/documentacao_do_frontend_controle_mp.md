@@ -43,7 +43,7 @@ front-cadastro-mp/
 │   │   ├── constants/     # roles, request status/types, message types
 │   │   ├── realtime/      # socket.js, RealtimeContext
 │   │   ├── routes/        # AppRouter, ProtectedRoute
-│   │   ├── sso/           # DelpiSsoBridge, LogoutFromParentPage
+│   │   ├── sso/           # Bridges Minha DELPI (iframe): SSO, navegação, rota, tema
 │   │   └── ui/
 │   │       ├── Layout.jsx, Topbar.jsx
 │   │       ├── chat/      # ChatComposer, MessageBubble, RequestComposerModal
@@ -184,6 +184,27 @@ Define as rotas da aplicação:
 
 - Verifica se o usuário está autenticado
 - Redireciona para `/login` caso não esteja
+
+---
+
+## 7.1 Integração iframe — Minha DELPI (`src/app/sso/`)
+
+Montados em `AppRouter.jsx` (sempre ativos; validam `event.origin`).
+
+| Arquivo | Contrato `postMessage` |
+|---------|------------------------|
+| `DelpiSsoBridge.jsx` | `DELPI_AUTH_READY` → pai; recebe `DELPI_AUTH`, `DELPI_LOGOUT` |
+| `DelpiNavigateBridge.jsx` | `DELPI_NAVIGATE` → `navigate(path)` + `delpiEmbeddedNavigation.js` |
+| `DelpiRouteSyncBridge.jsx` | envia `DELPI_EMBEDDED_ROUTE` ao mudar rota |
+| `DelpiThemeBridge.jsx` | `DELPI_THEME` → `data-theme` / `color-scheme` no `<html>` |
+| `delpiParentOrigins.js` | Lista de origens do portal permitidas |
+| `delpiTheme.js` | `applyDelpiTheme`, `clearDelpiThemeSync` |
+
+**Tema:** no iframe, o app segue claro/escuro/sistema do menu da Minha DELPI. Fora do iframe, `index.css` usa `prefers-color-scheme` (`:root:not([data-delpi-theme-synced])`).
+
+**SSO:** após login central, não redireciona para `/conversations` se houver rota pendente (`delpi.child.pending_navigate`) ou `DELPI_NAVIGATE`.
+
+Variável: `VITE_DELPI_PARENT_ORIGIN` (origem do portal pai).
 
 ---
 

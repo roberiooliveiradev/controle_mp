@@ -28,6 +28,7 @@ Eventos do Controle MP (mensagens, solicitações, conversas) podem gerar notifi
 | `DELPI_CORE_API_URL` | `https://minhadelpi.com.br/core-api` (fallback) |
 | `CORE_API_INTEGRATIONS_SERVICE_TOKEN` | **Copiar exatamente** de `delpi-central/infra/.env` → `CORE_API_INTEGRATIONS_SERVICE_TOKEN` |
 | `DELPI_PORTAL_CONTROLE_MP_ROUTE` | `basePath` do app no portal (ex.: `/controle-mp`) |
+| `DELPI_NOTIFICATIONS_BATCH_SIZE` | Opcional; e-mails por requisição à Core API (padrão `100`) |
 | `JWT_SECRET` | Chave **própria** do Controle MP — **não** reutilizar o token de integração |
 | `CENTRAL_JWKS_URL` | `https://minhadelpi.com.br/auth/realms/delpi/protocol/openid-connect/certs` |
 | `CORS_ORIGINS` | Incluir `https://minhadelpi.com.br` além de `https://controle-mp.minhadelpi.com.br` |
@@ -97,9 +98,22 @@ O portal trata qualquer notificação com `metadata.deepPath` como deep link de 
 |------|---------|-----|
 | `DELPI_AUTH` | Portal → MP | SSO |
 | `DELPI_NAVIGATE` | Portal → MP | Deep link `{ path: "/conversations/109" }` |
+| `DELPI_THEME` | Portal → MP | Tema `{ theme, resolved }` — claro/escuro/sistema do portal |
 | `DELPI_EMBEDDED_ROUTE` | MP → Portal | Sincronizar URL do portal com rota interna |
 | `DELPI_AUTH_READY` | MP → Portal | Pedir token |
-| `DELPI_LOGOUT` | Portal → MP | Encerrar sessão local |
+| `DELPI_LOGOUT` | Portal → MP | Encerrar sessão local; remove sync de tema |
+
+### Tema (claro / escuro / sistema)
+
+No iframe, o Controle MP **acompanha o menu da Minha DELPI** (`DelpiThemeBridge`):
+
+- Portal envia `DELPI_THEME` com `resolved` (`light` ou `dark`).
+- O front aplica `data-theme` em `<html>` e `data-delpi-theme-synced="true"`.
+- Aberto **fora** do portal (URL direta), continua usando `prefers-color-scheme` do navegador.
+
+### Envio de notificações em lote (API)
+
+O `DelpiNotificationClient` envia **todos os e-mails** de um evento numa única `POST /integrations/notifications` (chunks de até `DELPI_NOTIFICATIONS_BATCH_SIZE`, padrão 100). Evita uma requisição por destinatário quando vários admins/analistas recebem o mesmo alerta.
 
 ### URL na barra do navegador
 
@@ -117,7 +131,11 @@ O portal registra apps embedded com rota wildcard (`/controle-mp/*`), no mesmo e
 | `front-cadastro-mp/src/app/sso/DelpiSsoBridge.jsx` | SSO Keycloak → sessão local; no iframe **não** força `/conversations` após SSO |
 | `front-cadastro-mp/src/app/sso/DelpiNavigateBridge.jsx` | Escuta `DELPI_NAVIGATE` e navega |
 | `front-cadastro-mp/src/app/sso/DelpiRouteSyncBridge.jsx` | Envia `DELPI_EMBEDDED_ROUTE` ao mudar rota |
+| `front-cadastro-mp/src/app/sso/DelpiThemeBridge.jsx` | Escuta `DELPI_THEME` e aplica tema do portal |
+| `front-cadastro-mp/src/app/sso/delpiTheme.js` | `applyDelpiTheme` / `clearDelpiThemeSync` |
+| `front-cadastro-mp/src/app/sso/delpiParentOrigins.js` | Origens permitidas do `postMessage` |
 | `front-cadastro-mp/src/app/sso/delpiEmbeddedNavigation.js` | `delpi.child.pending_navigate` (rota pendente após SSO) |
+| `api-cadastro-mp/.../delpi_notification_client.py` | Cliente HTTP; envio em lote para Core API |
 | `front-cadastro-mp/src/pages/ConversationsPage.jsx` | Chat em tempo real (`message:new` + merge de payload) |
 
 Após SSO no iframe, o app aguarda `DELPI_NAVIGATE` ou rota pendente em `sessionStorage` — não redireciona para `/conversations` por padrão.
