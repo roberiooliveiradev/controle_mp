@@ -12,6 +12,18 @@ export const httpClient = axios.create({
   timeout: 20000,
 });
 
+const AUTH_PATHS_WITHOUT_REFRESH = [
+  "/auth/refresh",
+  "/auth/login",
+  "/auth/sso-login",
+  "/auth/logout",
+];
+
+function shouldSkipRefreshRetry(config) {
+  const url = String(config?.url || "");
+  return AUTH_PATHS_WITHOUT_REFRESH.some((path) => url.includes(path));
+}
+
 httpClient.interceptors.request.use((config) => {
   const token = authStorage.getActiveAccessToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -35,7 +47,7 @@ httpClient.interceptors.response.use(
     const originalRequest = err.config;
     const status = err?.response?.status;
 
-    if (status !== 401 || originalRequest?._retry) {
+    if (status !== 401 || originalRequest?._retry || shouldSkipRefreshRetry(originalRequest)) {
       return Promise.reject(err);
     }
 
@@ -82,6 +94,13 @@ httpClient.interceptors.response.use(
     } catch (refreshErr) {
       resolveQueue(refreshErr, null);
       authStorage.clearProfile(activeUserId);
+      authStorage.clearActiveUserId();
+      authStorage.clearLoginMode();
+
+      if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+        window.location.assign("/login");
+      }
+
       return Promise.reject(refreshErr);
     } finally {
       isRefreshing = false;

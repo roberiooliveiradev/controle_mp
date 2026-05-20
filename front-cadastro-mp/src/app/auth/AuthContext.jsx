@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { authStorage } from "./authStorage";
 import { decodeJwt } from "./jwt";
-import { loginApi, logoutApi, ssoLoginApi } from "../api/authApi";
+import { loginApi, logoutApi, refreshApi, ssoLoginApi } from "../api/authApi";
 
 import {
   connectSocket,
@@ -208,6 +208,42 @@ export function AuthProvider({ children }) {
     authStorage.setUser(uid, updatedUser);
     setUser(updatedUser);
   }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function bootstrapSession() {
+      const uid = authStorage.getActiveUserId();
+      const access = authStorage.getActiveAccessToken();
+      const refresh = authStorage.getActiveRefreshToken();
+
+      if (!uid || !access || !refresh) return;
+
+      const payload = decodeJwt(access);
+      if (!payload?.exp) return;
+
+      const now = Math.floor(Date.now() / 1000);
+      if (payload.exp > now + 30) return;
+
+      try {
+        const data = await refreshApi({ refresh_token: refresh });
+        if (cancelled) return;
+        applyTokenPair(data, authStorage.getLoginMode() || "local");
+      } catch {
+        if (cancelled) return;
+        authStorage.clearProfile(uid);
+        authStorage.clearActiveUserId();
+        authStorage.clearLoginMode();
+        refreshActiveFromStorage();
+      }
+    }
+
+    void bootstrapSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!token) {
