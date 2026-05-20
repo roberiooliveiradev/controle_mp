@@ -24,25 +24,64 @@ Se o `.env.production` mudou `JWT_SECRET` (ex.: de `uma_chave_bem_grande_e_secre
 
 Após restaurar PostgreSQL, a tabela `tbRefreshTokens` pode não bater com o que está no navegador. Solução: **novo login**.
 
-### Causa 3: SSO / JWKS incorreto
+### Causa 3: SSO (`sso-login` 500 ou 401) após mudar `.env.production`
 
-No Docker de produção, **não use** `host.docker.internal` se o Keycloak não estiver acessível por esse host. Prefira URL pública:
+No **srv-api**, o iframe na Minha DELPI costuma funcionar com JWKS via **host do Docker** (nginx do host na porta 80):
 
 ```env
-CENTRAL_JWKS_URL=https://minhadelpi.com.br/auth/realms/delpi/protocol/openid-connect/certs
+CENTRAL_JWKS_URL=http://host.docker.internal/auth/realms/delpi/protocol/openid-connect/certs
+CENTRAL_JWT_ISSUER=https://minhadelpi.com.br/auth/realms/delpi
+CENTRAL_JWT_AUDIENCE=delpi-central
 ```
 
-Login direto em `https://controle-mp.minhadelpi.com.br/login` (email/senha local) não depende do JWKS.
+Trocar só para URL HTTPS pública (`https://minhadelpi.com.br/auth/.../certs`) pode quebrar o SSO: alguns proxies retornam **403** para o User-Agent `Python-urllib` (usado pelo PyJWT ao buscar JWKS). O sintoma era `500 Internal server error` no `sso-login`. A API agora envia um User-Agent próprio; mesmo assim, no srv-api costuma ser mais estável usar `host.docker.internal`.
+
+**Diagnóstico:**
+
+```bash
+docker exec controle-mp-prod-api python -c "
+import urllib.request
+for u in [
+  'http://host.docker.internal/auth/realms/delpi/protocol/openid-connect/certs',
+  'https://minhadelpi.com.br/auth/realms/delpi/protocol/openid-connect/certs',
+]:
+  try:
+    r = urllib.request.urlopen(u, timeout=8)
+    print(u, '->', r.status)
+  except Exception as e:
+    print(u, '-> ERRO', e)
+"
+
+docker logs controle-mp-prod-api 2>&1 | tail -50
+```
+
+**Correção:** alinhe `CENTRAL_JWKS_URL` ao que o `docker exec` acima conseguir abrir, reinicie a API e teste o iframe em aba anônima.
+
+Login direto em `https://controle-mp.minhadelpi.com.br/login` (email/senha local) **não** depende do JWKS.
 
 ---
 
 ## Notificações não aparecem no sino da Minha DELPI
 
 1. Confirme na API: `DELPI_NOTIFICATIONS_ENABLED=true` e `CORE_API_INTEGRATIONS_SERVICE_TOKEN` igual ao `infra/.env` do delpi-central.
-2. O e-mail do usuário no Controle MP deve ser **o mesmo** do cadastro na Minha DELPI (Keycloak).
-3. Após deploy da correção de destinatários, **admin/analista** passam a receber alerta de mensagens mesmo sem ter aberto a conversa antes.
-4. Veja logs: `docker logs <container-api> 2>&1 | grep DELPI`
-5. `DELPI_PORTAL_CONTROLE_MP_ROUTE` deve ser o `basePath` real do app (ex. `/controle_mp`, não `/apps/controle-mp` se o portal usar outro path).
+2. No **srv-api**, use URL interna para a Core API (evita bloqueio do proxy no `urllib` do container):
+   ```env
+   DELPI_CORE_API_INTERNAL_URL=http://host.docker.internal/core-api
+   DELPI_CORE_API_URL=https://minhadelpi.com.br/core-api
+   ```
+3. O e-mail do destinatário no Controle MP (`tbUsers`) deve ser **o mesmo** do Keycloak na Minha DELPI.
+4. Quem **envia** a mensagem **não** recebe notificação — teste logado como **admin/analista** na Minha DELPI enquanto um **USER** envia no chat.
+5. Categoria **Controle MP** não pode estar silenciada em `/notifications` → Preferências.
+6. Logs: `docker logs controle-mp-prod-api 2>&1 | grep -i DELPI`
+7. `DELPI_PORTAL_CONTROLE_MP_ROUTE` = `basePath` real (ex. `/controle_mp`).
+
+## Mensagem enviada só aparece ao mandar a próxima
+
+Corrige com rebuild do **front** (corrida entre socket `message:new` e mensagem otimista). Atualize o código e:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build controle-mp-front controle-mp-api
+```
 
 ---
 
@@ -70,7 +109,7 @@ Se o login retorna `access_token`, a API e o proxy `/api` estão corretos; o pro
 | `JWT_ISSUER` / `JWT_AUDIENCE` | Devem ser `cadastro-mp-api` e `cadastro-mp-front` |
 | `VITE_PROD_API_BASE_URL` | Vazio = API relativa em `/api` (correto com nginx do front) |
 | `CORS_ORIGINS` | Incluir `https://controle-mp.minhadelpi.com.br` |
-| `CENTRAL_JWKS_URL` | URL pública do Keycloak em produção |
+| `CENTRAL_JWKS_URL` | No srv-api: preferir `host.docker.internal` (ver causa 3) |
 
 ---
 

@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     central_jwks_url: str | None = os.getenv("CENTRAL_JWKS_URL")
     central_jwt_issuer: str | None = os.getenv("CENTRAL_JWT_ISSUER")
     central_jwt_audience: str = os.getenv("CENTRAL_JWT_AUDIENCE", "delpi-central")
+    central_jwt_verify_audience: bool = (
+        os.getenv("CENTRAL_JWT_VERIFY_AUDIENCE", "true").strip().lower()
+        in ("1", "true", "yes", "on")
+    )
     central_default_role_id: int = int(os.getenv("CENTRAL_DEFAULT_ROLE_ID", "3"))
 
     # ✅ Whitelist de tipos permitidos

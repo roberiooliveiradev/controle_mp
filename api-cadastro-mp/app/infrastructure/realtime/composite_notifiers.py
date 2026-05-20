@@ -1,7 +1,11 @@
 # app/infrastructure/realtime/composite_notifiers.py
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.core.interfaces.conversation_notifier import (
     ConversationCreatedEvent,
@@ -31,7 +35,7 @@ class CompositeMessageNotifier(MessageNotifier):
         try:
             self._delpi.on_message_created(event)
         except Exception:
-            pass
+            logger.exception("DELPI on_message_created failed (message_id=%s)", event.message_id)
 
 
 class CompositeRequestNotifier(RequestNotifier):

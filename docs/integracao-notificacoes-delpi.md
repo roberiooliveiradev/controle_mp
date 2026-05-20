@@ -20,7 +20,8 @@ Eventos do Controle MP (mensagens, solicitações, conversas) podem gerar notifi
 | Variável | Valor em produção |
 |----------|-------------------|
 | `DELPI_NOTIFICATIONS_ENABLED` | `true` |
-| `DELPI_CORE_API_URL` | `https://minhadelpi.com.br/core-api` |
+| `DELPI_CORE_API_INTERNAL_URL` | `http://host.docker.internal/core-api` (srv-api, preferencial) |
+| `DELPI_CORE_API_URL` | `https://minhadelpi.com.br/core-api` (fallback) |
 | `CORE_API_INTEGRATIONS_SERVICE_TOKEN` | **Copiar exatamente** de `delpi-central/infra/.env` → `CORE_API_INTEGRATIONS_SERVICE_TOKEN` |
 | `DELPI_PORTAL_CONTROLE_MP_ROUTE` | `basePath` do app no portal (ex.: `/controle_mp`) |
 | `JWT_SECRET` | Chave **própria** do Controle MP — **não** reutilizar o token de integração |

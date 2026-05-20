@@ -30,7 +30,7 @@ class RefreshTokenService:
             user_id=user_id,
             token_hash=_sha256(refresh_token),
             jti=str(claims["jti"]),
-            issued_at=datetime.now(timezone.utc),
+            issued_at=datetime.now(timezone.utc).replace(tzinfo=None),
             expires_at=expires_at,
             revoked_at=None,
             replaced_by_jti=None,

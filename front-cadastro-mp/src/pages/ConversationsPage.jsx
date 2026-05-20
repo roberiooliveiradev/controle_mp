@@ -87,6 +87,42 @@ function startOfLocalDay(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function messageCreatedAtMs(message) {
+  const iso = message?.created_at ?? message?.created_at_iso ?? null;
+  const ts = iso ? new Date(iso).getTime() : 0;
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+/** Evita perder mensagem recém-enviada quando o socket dispara refetch antes do commit no DB. */
+function mergeMessagesWithPending(prev, serverItems) {
+  const server = Array.isArray(serverItems) ? serverItems : [];
+  const serverIds = new Set(server.map((m) => Number(m.id)));
+
+  const pending = (prev || []).filter((m) => {
+    const id = m?.id;
+    if (typeof id === "string" && id.startsWith("tmp-")) return true;
+    if (m?._status === "sending") return true;
+
+    const nid = Number(id);
+    if (!Number.isFinite(nid) || nid <= 0 || serverIds.has(nid)) return false;
+
+    return Date.now() - messageCreatedAtMs(m) < 20000;
+  });
+
+  const byId = new Map();
+  for (const m of server) {
+    byId.set(Number(m.id), m);
+  }
+  for (const m of pending) {
+    const key = typeof m.id === "string" ? m.id : Number(m.id);
+    if (!byId.has(key)) byId.set(key, m);
+  }
+
+  return Array.from(byId.values()).sort(
+    (a, b) => messageCreatedAtMs(a) - messageCreatedAtMs(b)
+  );
+}
+
 function formatMessageDateSeparator(date) {
   if (!date || Number.isNaN(date.getTime())) return "";
 
@@ -516,6 +552,14 @@ export default function ConversationsPage() {
         return;
       }
 
+      const senderId = Number(
+        payload?.sender_id ?? payload?.sender?.id ?? payload?.message?.sender?.id
+      );
+      const me = Number(myUserIdRef.current);
+      if (senderId && me && senderId === me) {
+        return;
+      }
+
       try {
         const container = messagesContainerRef.current;
         const shouldAutoScroll = isNearBottom(container, 180);
@@ -523,7 +567,7 @@ export default function ConversationsPage() {
         const m = await listMessagesApi(currentSelected);
         const items = Array.isArray(m) ? m : m?.items ?? [];
 
-        setMessages(items);
+        setMessages((prev) => mergeMessagesWithPending(prev, items));
         setUnreadCounts((prev) => ({ ...(prev ?? {}), [cid]: 0 }));
 
         const me = myUserIdRef.current;

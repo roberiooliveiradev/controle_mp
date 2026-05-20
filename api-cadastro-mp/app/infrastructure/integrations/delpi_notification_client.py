@@ -24,8 +24,9 @@ class DelpiNotificationClient:
             "yes",
             "on",
         )
-        base = (os.getenv("DELPI_CORE_API_URL") or "").strip().rstrip("/")
-        self._dispatch_url = f"{base}/integrations/notifications" if base else ""
+        internal = (os.getenv("DELPI_CORE_API_INTERNAL_URL") or "").strip().rstrip("/")
+        public = (os.getenv("DELPI_CORE_API_URL") or "").strip().rstrip("/")
+        self._api_bases = [b for b in (internal, public) if b]
         self._token = (os.getenv("CORE_API_INTEGRATIONS_SERVICE_TOKEN") or "").strip()
         self._portal_route = (
             os.getenv("DELPI_PORTAL_CONTROLE_MP_ROUTE", "/controle_mp").strip()
@@ -38,7 +39,7 @@ class DelpiNotificationClient:
             if self.is_configured():
                 logger.info(
                     "DELPI notifications enabled → %s (portal_route=%s)",
-                    self._dispatch_url,
+                    self._api_bases,
                     self._portal_route,
                 )
             else:
@@ -54,7 +55,10 @@ class DelpiNotificationClient:
         return self._portal_route
 
     def is_configured(self) -> bool:
-        return bool(self._enabled and self._dispatch_url and self._token)
+        return bool(self._enabled and self._api_bases and self._token)
+
+    def _dispatch_urls(self) -> list[str]:
+        return [f"{base}/integrations/notifications" for base in self._api_bases]
 
     def dispatch(
         self,
@@ -142,63 +146,81 @@ class DelpiNotificationClient:
         }
 
         data = json.dumps(body).encode("utf-8")
-        req = urllib.request.Request(
-            self._dispatch_url,
-            data=data,
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "X-Delpi-Service-Token": self._token,
-            },
-        )
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "ControleMP-Notifications/1.0",
+            "X-Delpi-Service-Token": self._token,
+        }
 
-        try:
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
-                if resp.status >= 400:
+        last_error: str | None = None
+
+        for dispatch_url in self._dispatch_urls():
+            req = urllib.request.Request(
+                dispatch_url,
+                data=data,
+                method="POST",
+                headers=headers,
+            )
+
+            try:
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    raw = resp.read().decode("utf-8", errors="replace")
+                    if resp.status >= 400:
+                        last_error = f"HTTP {resp.status}: {raw[:300]}"
+                        continue
+                    try:
+                        payload = json.loads(raw) if raw else {}
+                    except json.JSONDecodeError:
+                        payload = {}
+                    created = int(
+                        payload.get("createdCount") or payload.get("created_count") or 0
+                    )
+                    if created < 1:
+                        logger.warning(
+                            "DELPI notification accepted but createdCount=0 for %s (%s) "
+                            "via %s. Verifique e-mail na Minha DELPI e categoria controle_mp "
+                            "nas preferências.",
+                            email,
+                            event,
+                            dispatch_url,
+                        )
+                        return False
+                    return True
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")[:500]
+                last_error = f"HTTP {exc.code}: {detail}"
+                if exc.code == 400 and "user not found" in detail.lower():
                     logger.warning(
-                        "DELPI notification HTTP %s for %s (%s): %s",
-                        resp.status,
+                        "DELPI: e-mail %s não encontrado na Minha DELPI (%s) — "
+                        "use o mesmo e-mail do Keycloak/SSO no Controle MP",
                         email,
                         event,
-                        raw[:500],
                     )
                     return False
-                try:
-                    payload = json.loads(raw) if raw else {}
-                except json.JSONDecodeError:
-                    payload = {}
-                created = int(payload.get("createdCount") or payload.get("created_count") or 0)
-                if created < 1:
-                    logger.warning(
-                        "DELPI notification accepted but createdCount=0 for %s (%s). "
-                        "Verifique se o e-mail existe e está ativo na Minha DELPI e se a "
-                        "categoria controle_mp não está silenciada nas preferências.",
-                        email,
-                        event,
-                    )
-                    return False
-                return True
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:500]
-            if exc.code == 400 and "user not found" in detail.lower():
                 logger.warning(
-                    "DELPI: e-mail %s não encontrado na Minha DELPI (%s) — "
-                    "use o mesmo e-mail do Keycloak/SSO no Controle MP",
-                    email,
-                    event,
-                )
-            else:
-                logger.warning(
-                    "DELPI notification HTTP %s for %s (%s): %s",
+                    "DELPI notification HTTP %s for %s (%s) via %s: %s",
                     exc.code,
                     email,
                     event,
+                    dispatch_url,
                     detail,
                 )
-            return False
-        except Exception:
-            logger.exception(
-                "DELPI notification dispatch failed for %s (%s)", email, event
+            except Exception as exc:
+                last_error = str(exc)
+                logger.warning(
+                    "DELPI notification failed for %s (%s) via %s: %s",
+                    email,
+                    event,
+                    dispatch_url,
+                    exc,
+                )
+
+        if last_error:
+            logger.error(
+                "DELPI notification exhausted URLs for %s (%s): %s",
+                email,
+                event,
+                last_error,
             )
-            return False
+        return False
