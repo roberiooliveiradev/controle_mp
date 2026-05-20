@@ -93,6 +93,68 @@ function messageCreatedAtMs(message) {
   return Number.isFinite(ts) ? ts : 0;
 }
 
+/** Converte payload do socket (nested ou flat) para o shape da API. */
+function normalizeRealtimeMessage(payload) {
+  const nested = payload?.message;
+  if (nested?.msg) {
+    const msg = nested.msg;
+    return {
+      id: msg.id,
+      conversation_id: msg.conversation_id ?? payload.conversation_id,
+      body: msg.body,
+      message_type_id: msg.message_type_id,
+      created_at: msg.created_at ?? payload.created_at ?? payload.created_at_iso,
+      updated_at: msg.updated_at,
+      sender: nested.sender ?? payload.sender ?? null,
+      files: nested.files ?? [],
+      request: nested.request ?? null,
+      request_full: nested.request_full ?? null,
+      is_read: nested.is_read ?? false,
+    };
+  }
+
+  if (nested?.id) {
+    return nested;
+  }
+
+  const messageId = Number(payload?.message_id);
+  if (!Number.isFinite(messageId) || messageId <= 0) {
+    return null;
+  }
+
+  return {
+    id: messageId,
+    conversation_id: payload.conversation_id,
+    body: payload.body ?? payload.preview ?? null,
+    message_type_id: payload.message_type_id,
+    created_at: payload.created_at ?? payload.created_at_iso,
+    sender:
+      payload.sender ??
+      (payload.sender_id ? { id: payload.sender_id } : null),
+    files: payload.files ?? [],
+    request: payload.request ?? null,
+    request_full: payload.request_full ?? null,
+    is_read: false,
+  };
+}
+
+function appendUniqueMessage(prev, incoming) {
+  if (!incoming?.id) return prev ?? [];
+
+  const list = Array.isArray(prev) ? prev : [];
+  const incomingId = Number(incoming.id);
+
+  if (Number.isFinite(incomingId) && incomingId > 0) {
+    if (list.some((m) => Number(m.id) === incomingId)) {
+      return list.map((m) => (Number(m.id) === incomingId ? { ...m, ...incoming } : m));
+    }
+  }
+
+  return [...list, incoming].sort(
+    (a, b) => messageCreatedAtMs(a) - messageCreatedAtMs(b)
+  );
+}
+
 /** Evita perder mensagem recém-enviada quando o socket dispara refetch antes do commit no DB. */
 function mergeMessagesWithPending(prev, serverItems) {
   const server = Array.isArray(serverItems) ? serverItems : [];
@@ -564,10 +626,15 @@ export default function ConversationsPage() {
         return;
       }
 
-      try {
-        const container = messagesContainerRef.current;
-        const shouldAutoScroll = isNearBottom(container, 180);
+      const container = messagesContainerRef.current;
+      const shouldAutoScroll = isNearBottom(container, 180);
 
+      const incoming = normalizeRealtimeMessage(payload);
+      if (incoming) {
+        setMessages((prev) => appendUniqueMessage(prev, incoming));
+      }
+
+      const syncFromServer = async () => {
         const m = await listMessagesApi(currentSelected);
         const items = Array.isArray(m) ? m : m?.items ?? [];
 
@@ -599,9 +666,26 @@ export default function ConversationsPage() {
           setPendingNewMessages((prev) => prev + 1);
           setShowJumpToBottom(true);
         }
+      };
+
+      try {
+        await syncFromServer();
       } catch {
-        // Não quebra a tela se falhar uma sincronização pontual.
+        if (incoming) {
+          if (shouldAutoScroll) {
+            setPendingNewMessages(0);
+            setShowJumpToBottom(false);
+            scrollToBottom();
+          } else {
+            setPendingNewMessages((prev) => prev + 1);
+            setShowJumpToBottom(true);
+          }
+        }
       }
+
+      window.setTimeout(() => {
+        void syncFromServer().catch(() => {});
+      }, 450);
     };
 
     socket.on("message:new", onMessageNew);

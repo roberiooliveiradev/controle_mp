@@ -321,8 +321,7 @@ class MessageService:
             sender=message_payload.get("sender"),
         )
 
-        self._notifier.notify_message_created(event)
-        return msg
+        return msg, event
 
     def list_messages(self, *, conversation_id: int, user_id: int, role_id: int):
         """

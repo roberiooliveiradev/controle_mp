@@ -38,10 +38,13 @@ from app.repositories.totvs_product_repository import TotvsProductRepository
 from app.services.request_service import RequestService
 from app.services.message_service import MessageService
 
+from app.core.interfaces.message_notifier import MessageCreatedEvent
+from app.infrastructure.integrations.delpi_notification_service import DelpiNotificationService
 from app.infrastructure.realtime.composite_notifiers import (
     build_message_notifier,
     build_request_notifier,
 )
+from app.infrastructure.realtime.socketio_message_notifier import SocketIOMessageNotifier
 
 from app.services.audit_service import AuditService
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -267,11 +270,14 @@ def create_message(conversation_id: int):
     request_items_payload = [i.model_dump() for i in (
         payload.request_items or [])] if payload.request_items else None
 
+    message_event: MessageCreatedEvent | None = None
+    packed_item: dict | None = None
+
     with db_session() as session:
         svc = _build_service(session)
         audit = _build_audit(session)
 
-        msg = svc.create_message(
+        msg, message_event = svc.create_message(
             conversation_id=conversation_id,
             user_id=user_id,
             role_id=role_id,
@@ -296,14 +302,26 @@ def create_message(conversation_id: int):
             ),
         )
 
-        item = svc.get_message(
+        packed_item = svc.get_message(
             conversation_id=conversation_id,
             message_id=msg.id,
             user_id=user_id,
             role_id=role_id,
         )
 
-    return jsonify(_pack_response(item)), 201
+        # Commit antes do socket: clientes que refazem GET ao receber message:new
+        # precisam enxergar a mensagem já persistida.
+        session.commit()
+
+    if message_event is not None:
+        SocketIOMessageNotifier().notify_message_created(message_event)
+        try:
+            with db_session() as session:
+                DelpiNotificationService(session).on_message_created(message_event)
+        except Exception:
+            pass
+
+    return jsonify(_pack_response(packed_item)), 201
 
 
 @bp_msg.delete("/<int:message_id>")
