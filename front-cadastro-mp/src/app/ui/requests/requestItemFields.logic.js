@@ -41,6 +41,12 @@ export const TAGS = {
 	fornecedores: "fornecedores",
 };
 
+export const TEXT_FIELD_TAGS = Object.freeze(
+	Object.values(TAGS).filter((tag) => tag !== TAGS.fornecedores),
+);
+
+export { planTextFieldPersistence } from "./requestItemFieldPersistence";
+
 export function newSupplierRow() {
 	return {
 		supplier_code: "",
@@ -175,6 +181,7 @@ export function validateStructuredItem(it) {
 	if (isBlank(it.produto_terceiro))
 		fields.produto_terceiro = "Campo obrigatório.";
 	if (isBlank(it.cta_contabil)) fields.cta_contabil = "Campo obrigatório.";
+	if (isBlank(it.ref_cliente)) fields.ref_cliente = "Campo obrigatório.";
 
 	const rows = Array.isArray(it.fornecedores) ? it.fornecedores : [];
 	rows.forEach((r, idx) => {

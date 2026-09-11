@@ -25,6 +25,8 @@ import {
   validateStructuredItemFromTags,
   TAGS,
   FIELD_TYPE_ID_TEXT,
+  TEXT_FIELD_TAGS,
+  planTextFieldPersistence,
 } from "../app/ui/requests/requestItemFields.logic";
 
 import {
@@ -314,21 +316,23 @@ function RequestItemDetailsModal({ open, mode, row, onClose, onSaved }) {
 
     if (hasAnyError(v)) return false;
 
-    const fields = Array.isArray(item.fields) ? item.fields : [];
+    const skipTags = [];
+    if (isCreate && isReturned) skipTags.push(TAGS.novo_codigo);
 
-    for (const f of fields) {
-      if (f.field_tag === TAGS.fornecedores) continue;
+    const ops = planTextFieldPersistence({
+      textFieldTags: TEXT_FIELD_TAGS,
+      valuesByTag,
+      byTag,
+      skipTags,
+    });
 
-      if (isCreate && isReturned && f.field_tag === TAGS.novo_codigo) {
+    for (const op of ops) {
+      if (op.action === "update") {
+        await updateRequestFieldApi(op.fieldId, { field_value: op.field_value });
         continue;
       }
 
-      const nextVal = String(valuesByTag?.[f.field_tag] ?? "");
-      const prevVal = String(f.field_value ?? "");
-
-      if (nextVal !== prevVal) {
-        await updateRequestFieldApi(f.id, { field_value: nextVal });
-      }
+      await ensureTextFieldExists(op.tag, op.field_value);
     }
 
     const fornecedoresField = byTag?.[TAGS.fornecedores];
