@@ -61,6 +61,7 @@ class AdminUserResponse(BaseModel):
     email: EmailStr
     role_id: int
     is_deleted: bool
+    central_subject: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
     last_login: datetime | None = None
@@ -71,3 +72,17 @@ class AdminUsersListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class CentralSubjectConflictResponse(BaseModel):
+    user_id: int
+    email: str
+    reason: str
+
+
+class SyncCentralSubjectsResponse(BaseModel):
+    updated: int
+    unchanged: int
+    not_found: int
+    conflicts: list[CentralSubjectConflictResponse]
+    directory_count: int

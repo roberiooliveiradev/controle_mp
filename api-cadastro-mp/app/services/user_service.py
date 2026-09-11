@@ -6,6 +6,13 @@ from app.core.exceptions import ConflictError, NotFoundError, UnauthorizedError
 from app.infrastructure.security.password_hasher import PasswordHasher
 from app.infrastructure.database.models.user_model import UserModel
 from app.repositories.user_repository import UserRepository
+from app.services.central_subject_binding import (
+    OUTCOME_CONFLICT,
+    OUTCOME_NOT_FOUND,
+    OUTCOME_UNCHANGED,
+    OUTCOME_UPDATED,
+    decide_central_subject_bind,
+)
 
 ROLE_USER_ID = 3
 
@@ -145,6 +152,63 @@ class UserService:
 
         user.updated_at = datetime.utcnow()
         return user
+
+    def sync_central_subjects_from_directory(
+        self,
+        directory_by_email: dict[str, str],
+    ) -> dict:
+        now = datetime.utcnow()
+        updated = 0
+        unchanged = 0
+        not_found = 0
+        conflicts: list[dict] = []
+
+        for user in self._user_repository.list_all_unpaged():
+            email = (user.email or "").strip().lower()
+            incoming = directory_by_email.get(email)
+            occupied = None
+            if incoming:
+                other = self._user_repository.get_by_central_subject(incoming)
+                if other is not None:
+                    occupied = int(other.id)
+
+            decision = decide_central_subject_bind(
+                user_id=int(user.id),
+                current_subject=user.central_subject,
+                directory_subject=incoming,
+                occupied_by_other_user_id=occupied,
+            )
+
+            if decision.outcome == OUTCOME_UPDATED and decision.subject:
+                user.central_subject = decision.subject
+                user.updated_at = now
+                updated += 1
+                continue
+
+            if decision.outcome == OUTCOME_UNCHANGED:
+                unchanged += 1
+                continue
+
+            if decision.outcome == OUTCOME_NOT_FOUND:
+                not_found += 1
+                continue
+
+            if decision.outcome == OUTCOME_CONFLICT:
+                conflicts.append(
+                    {
+                        "user_id": int(user.id),
+                        "email": email,
+                        "reason": decision.reason or "Conflito ao vincular ID da Minha DELPI.",
+                    }
+                )
+
+        return {
+            "updated": updated,
+            "unchanged": unchanged,
+            "not_found": not_found,
+            "conflicts": conflicts,
+            "directory_count": len(directory_by_email),
+        }
 
     # -------------------------
     # SSO Minha DELPI / Keycloak

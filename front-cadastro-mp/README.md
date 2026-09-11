@@ -21,7 +21,7 @@ SPA **React 19** + **Vite 7** para o sistema de cadastro e fluxo de matérias-pr
 | `/requests` | Fila de solicitações MP | Autenticado |
 | `/products` | Catálogo de produtos | Autenticado |
 | `/account` | Minha conta | Autenticado |
-| `/admin/users` | Gestão de usuários | Admin |
+| `/admin/users` | Gestão de usuários, papéis, ativação e vínculo do ID da Minha DELPI | Admin |
 | `/audit` | Auditoria | Admin |
 
 Redirecionamento padrão: `/` → `/conversations`.
@@ -96,6 +96,8 @@ Fluxo SSO:
 3. Chama `POST /api/auth/sso-login`
 
 Configure `VITE_DELPI_PARENT_ORIGIN` com a origem exata do portal pai.
+
+Na tela **Admin · Usuários**, a coluna **ID Minha DELPI** mostra o `sub` do Keycloak já gravado. O botão **Atualizar IDs** consulta o diretório S2S da Core API (`GET /integrations/directory/users/by-app?app=controle-mp`) e vincula pelo e-mail, sem esperar cada pessoa entrar no iframe. Usuários só locais (ex.: `admin@local.com`) permanecem sem ID.
 
 Documentação: [../docs/integracao-notificacoes-delpi.md](../docs/integracao-notificacoes-delpi.md) e `delpi-central/docs/10-guias-operacionais/conectar-aplicacao-iframe.md`.
 

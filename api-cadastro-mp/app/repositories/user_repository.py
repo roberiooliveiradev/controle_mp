@@ -84,6 +84,10 @@ class UserRepository(BaseRepository[UserModel]):
             stmt = stmt.where(UserModel.is_deleted.is_(False))
         return int(self._session.execute(stmt).scalar_one())
 
+    def list_all_unpaged(self) -> list[UserModel]:
+        stmt = select(UserModel).order_by(UserModel.id.asc())
+        return list(self._session.execute(stmt).scalars().all())
+
     def add(self, model: UserModel) -> UserModel:
         self._session.add(model)
         self._session.flush()

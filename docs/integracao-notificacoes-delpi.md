@@ -182,6 +182,21 @@ Se o e-mail do Controle MP não existir na Core API, o log da API mostra:
 
 Se o usuário existir na Minha DELPI mas não tiver permissão para abrir o Controle MP, a notificação é descartada na Core API (mesma regra de `GET /me/apps`).
 
+## Vincular ID da Minha DELPI (admin)
+
+A tela **Admin · Usuários** mostra a coluna **ID Minha DELPI** (`tbUsers.central_subject`). O botão **Atualizar IDs** chama `POST /api/users/admin/central-subjects/sync` (somente ADMIN).
+
+A API consulta `GET /integrations/directory/users/by-app?app=controle-mp` com o mesmo token S2S das notificações e vincula pelo e-mail. Não é necessário esperar o login no iframe.
+
+| Resultado | Significado |
+|----------|-------------|
+| atualizado | e-mail encontrado no diretório e `central_subject` gravado |
+| já vinculado | já tinha o mesmo ID |
+| sem cadastro | e-mail local sem usuário ativo com acesso ao app no portal |
+| conflito | e-mail/ID já ligado a outro registro — nada é sobrescrito |
+
+Usa `DELPI_CORE_API_INTERNAL_URL` / `DELPI_CORE_API_URL` e `CORE_API_INTEGRATIONS_SERVICE_TOKEN`. Opcional: `DELPI_DIRECTORY_APP_ID` (padrão `controle-mp`).
+
 ## Teste manual
 
 1. Ativar variáveis no `.env` do Controle MP e reiniciar API + front + portal.

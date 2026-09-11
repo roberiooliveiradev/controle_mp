@@ -11,7 +11,9 @@ from app.api.schemas.user_schema import (
     AdminUpdateUserRequest,
     AdminUserResponse,
     AdminUsersListResponse,
+    SyncCentralSubjectsResponse,
 )
+from app.infrastructure.integrations.delpi_directory_client import DelpiDirectoryClient
 
 from app.infrastructure.database.session import db_session
 from app.repositories.user_repository import UserRepository
@@ -43,6 +45,20 @@ def _build_service(session) -> UserService:
 
 def _build_audit(session) -> AuditService:
     return AuditService(AuditLogRepository(session))
+
+
+def _admin_user_response(user) -> AdminUserResponse:
+    return AdminUserResponse(
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        role_id=user.role_id,
+        is_deleted=bool(user.is_deleted),
+        central_subject=(user.central_subject or "").strip() or None,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
+        last_login=user.last_login,
+    )
 
 
 # -------------------------
@@ -205,19 +221,7 @@ def admin_list_users():
             include_deleted=include_deleted,
         )
 
-    items = [
-        AdminUserResponse(
-            id=u.id,
-            full_name=u.full_name,
-            email=u.email,
-            role_id=u.role_id,
-            is_deleted=bool(u.is_deleted),
-            created_at=u.created_at,
-            updated_at=u.updated_at,
-            last_login=u.last_login,
-        )
-        for u in users
-    ]
+    items = [_admin_user_response(u) for u in users]
 
     return jsonify(
         AdminUsersListResponse(
@@ -262,15 +266,33 @@ def admin_update_user(user_id: int):
             details=f"admin_update; changed_keys={list(data.keys())}",
         )
 
-    return jsonify(
-        AdminUserResponse(
-            id=updated.id,
-            full_name=updated.full_name,
-            email=updated.email,
-            role_id=updated.role_id,
-            is_deleted=bool(updated.is_deleted),
-            created_at=updated.created_at,
-            updated_at=updated.updated_at,
-            last_login=updated.last_login,
-        ).model_dump()
-    ), 200
+    return jsonify(_admin_user_response(updated).model_dump()), 200
+
+
+@bp_users.post("/admin/central-subjects/sync")
+@require_auth
+@require_roles(1)
+def admin_sync_central_subjects():
+    admin_user_id, _ = _auth_user()
+    directory = DelpiDirectoryClient().list_subjects_by_email()
+
+    with db_session() as session:
+        service = _build_service(session)
+        audit = _build_audit(session)
+        result = service.sync_central_subjects_from_directory(directory)
+
+        audit.log(
+            entity_name=AuditEntity.USER,
+            entity_id=int(admin_user_id),
+            action_name=AuditAction.UPDATED,
+            user_id=int(admin_user_id),
+            details=(
+                "admin_sync_central_subjects;"
+                f" updated={result['updated']};"
+                f" unchanged={result['unchanged']};"
+                f" not_found={result['not_found']};"
+                f" conflicts={len(result['conflicts'])}"
+            ),
+        )
+
+    return jsonify(SyncCentralSubjectsResponse(**result).model_dump()), 200

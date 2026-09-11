@@ -75,7 +75,7 @@ front-cadastro-mp/
 | `/requests` | `RequestsPage` |
 | `/products` | `ProductsPage` |
 | `/account` | `AccountPage` |
-| `/admin/users` | `AdminUsersPage` |
+| `/admin/users` | `AdminUsersPage` (papéis, ativação e coluna ID Minha DELPI) |
 | `/audit` | `AuditPage` |
 
 ---

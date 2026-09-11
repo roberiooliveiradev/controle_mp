@@ -42,3 +42,8 @@ export async function adminUpdateUserApi({ user_id, role_id = null, is_deleted =
   const { data } = await httpClient.put(`/users/${user_id}/admin`, body);
   return data; // AdminUserResponse
 }
+
+export async function adminSyncCentralSubjectsApi() {
+  const { data } = await httpClient.post("/users/admin/central-subjects/sync");
+  return data; // { updated, unchanged, not_found, conflicts, directory_count }
+}
