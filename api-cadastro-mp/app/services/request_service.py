@@ -311,7 +311,33 @@ class RequestService:
 
         if int(item.request_status_id) != int(RequestStatus.RETURNED):
             raise ForbiddenError(
-                "Você só pode alterar quando a solicitação foi devolvida (RETURNED).")
+                "Você só pode alterar quando a solicitação foi devolvida (DEVOLVIDO).")
+
+    def _is_returned_creator(
+        self,
+        *,
+        req: RequestModel,
+        item: RequestItemModel,
+        user_id: int,
+    ) -> bool:
+        return (
+            int(req.created_by) == int(user_id)
+            and int(item.request_status_id) == int(RequestStatus.RETURNED)
+        )
+
+    def _ensure_returned_creator_can_edit(
+        self,
+        *,
+        req: RequestModel,
+        item: RequestItemModel,
+        user_id: int,
+    ) -> None:
+        if int(item.request_status_id) != int(RequestStatus.RETURNED):
+            raise ForbiddenError(
+                "Você só pode editar quando a solicitação foi devolvida (DEVOLVIDO).")
+        if int(req.created_by) != int(user_id):
+            raise ForbiddenError(
+                "Apenas o criador pode editar este item devolvido.")
 
     def _ensure_user_can_edit_field(
         self,
@@ -332,33 +358,27 @@ class RequestService:
             if role_id in (Role.ADMIN, Role.ANALYST):
                 if field_tag == "novo_codigo":
                     return
-                if (req.created_by == user_id and int(item.request_status_id) == int(RequestStatus.RETURNED)):
+                if self._is_returned_creator(req=req, item=item, user_id=user_id):
                     return
                 raise ForbiddenError(
                     "Em CREATE, ADMIN/ANALYST podem editar apenas 'novo_codigo'.")
 
             if (
                 role_id == Role.USER
-                and req.created_by == user_id
-                and int(item.request_status_id) == int(RequestStatus.RETURNED)
+                and self._is_returned_creator(req=req, item=item, user_id=user_id)
             ):
                 if field_tag == "novo_codigo":
                     raise ForbiddenError(
-                        "Em CREATE devolvido (RETURNED), o criador não pode editar 'novo_codigo'.")
+                        "Em CREATE devolvido (DEVOLVIDO), o criador não pode editar 'novo_codigo'.")
                 return
 
             raise ForbiddenError(
                 "Você não tem permissão para editar este campo em CREATE.")
 
         if self._is_update_item(item):
-            if (
-                req.created_by == user_id
-                and int(item.request_status_id) == int(RequestStatus.RETURNED)
-                and field_tag in ("novo_codigo", "codigo_atual")
-            ):
-                return
-            raise ForbiddenError(
-                "Você só pode editar quando o status for RETURNED.")
+            self._ensure_returned_creator_can_edit(
+                req=req, item=item, user_id=user_id)
+            return
 
         raise ForbiddenError("Você não tem permissão para editar este campo.")
 
@@ -543,7 +563,7 @@ class RequestService:
 
         if int(item.request_status_id) != int(RequestStatus.RETURNED):
             raise ConflictError(
-                "Só é possível resubmeter quando o status for RETURNED.")
+                "Só é possível reenviar quando a solicitação foi devolvida (DEVOLVIDO).")
 
         conversation_id = self._conversation_id_from_message(req.message_id)
         self._ensure_access_by_conversation(
