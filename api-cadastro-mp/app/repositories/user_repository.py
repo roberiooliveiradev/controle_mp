@@ -15,6 +15,13 @@ class UserRepository(BaseRepository[UserModel]):
         stmt = select(UserModel).where(UserModel.email == email, UserModel.is_deleted.is_(False))
         return self._session.execute(stmt).scalar_one_or_none()
 
+    def get_by_central_subject(self, central_subject: str) -> UserModel | None:
+        stmt = select(UserModel).where(
+            UserModel.central_subject == central_subject,
+            UserModel.is_deleted.is_(False),
+        )
+        return self._session.execute(stmt).scalar_one_or_none()
+
     def get_by_id(self, user_id: int) -> UserModel | None:
         stmt = select(UserModel).where(UserModel.id == user_id, UserModel.is_deleted.is_(False))
         return self._session.execute(stmt).scalar_one_or_none()

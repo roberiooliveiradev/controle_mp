@@ -15,6 +15,7 @@ class UserModel(BaseModel):
 
     full_name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(150), nullable=False, unique=True)
+    central_subject: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     password_algo: Mapped[str] = mapped_column(String(50), nullable=False)
     password_iterations: Mapped[int] = mapped_column(nullable=False)

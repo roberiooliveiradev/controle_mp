@@ -89,6 +89,10 @@ class CentralJwtValidator:
         if not email:
             raise UnauthorizedError("Token SSO sem e-mail.")
 
+        central_subject = str(claims.get("sub") or "").strip()
+        if not central_subject:
+            raise UnauthorizedError("Token SSO sem identificador central.")
+
         full_name = (
             claims.get("name")
             or claims.get("preferred_username")
@@ -96,7 +100,7 @@ class CentralJwtValidator:
         )
 
         return {
-            "sub": str(claims.get("sub")),
+            "sub": central_subject,
             "email": str(email).strip().lower(),
             "full_name": str(full_name).strip(),
             "claims": claims,

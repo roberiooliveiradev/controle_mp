@@ -9,6 +9,7 @@ class User:
     id: int
     full_name: str
     email: str
+    central_subject: Optional[str]
     role_id: int
     created_at: datetime
     updated_at: Optional[datetime]

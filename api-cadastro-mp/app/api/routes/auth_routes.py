@@ -76,6 +76,7 @@ def sso_login():
         user = user_service.get_or_create_from_sso(
             full_name=identity["full_name"],
             email=identity["email"],
+            central_subject=identity["sub"],
             role_id=settings.central_default_role_id,
         )
 
