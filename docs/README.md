@@ -11,6 +11,7 @@
 | [API_REFERENCE.md](API_REFERENCE.md) | Referência consolidada de endpoints REST |
 | [integracao-notificacoes-delpi.md](integracao-notificacoes-delpi.md) | Notificações DELPI, deep link, tema iframe, envio em lote |
 | [TROUBLESHOOTING-PRODUCAO.md](TROUBLESHOOTING-PRODUCAO.md) | SSO, notificações, mensagens no chat (produção) |
+| Evolução nativa (Minha DELPI) | `delpi-central/docs/12-roadmap-e-evolucao/controle-mp/EVOLUCAO.md` — documentação apenas, sem implementação |
 
 ## API (`api-cadastro-mp`)
 
